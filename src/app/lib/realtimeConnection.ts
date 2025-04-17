@@ -3,7 +3,7 @@ import { RefObject } from "react";
 export async function createRealtimeConnection(
   EPHEMERAL_KEY: string,
   audioElement: RefObject<HTMLAudioElement | null>
-): Promise<{ pc: RTCPeerConnection; dc: RTCDataChannel }> {
+): Promise<{ pc: RTCPeerConnection; dc: RTCDataChannel; audioTrack: MediaStreamTrack }> {
   const pc = new RTCPeerConnection();
 
   pc.ontrack = (e) => {
@@ -13,7 +13,8 @@ export async function createRealtimeConnection(
   };
 
   const ms = await navigator.mediaDevices.getUserMedia({ audio: true });
-  pc.addTrack(ms.getTracks()[0]);
+  const audioTrack = ms.getTracks()[0];
+  pc.addTrack(audioTrack);
 
   const dc = pc.createDataChannel("oai-events");
 
@@ -40,5 +41,5 @@ export async function createRealtimeConnection(
 
   await pc.setRemoteDescription(answer);
 
-  return { pc, dc };
+  return { pc, dc, audioTrack };
 } 

@@ -34,17 +34,17 @@ function Events({ isExpanded }: EventsProps) {
   return (
     <div
       className={
-        (isExpanded ? "w-1/2 overflow-auto" : "w-0 overflow-hidden opacity-0") +
+        (isExpanded ? "w-full h-full overflow-auto" : "w-0 overflow-hidden opacity-0") +
         " transition-all rounded-xl duration-200 ease-in-out flex flex-col bg-white"
       }
       ref={eventLogsContainerRef}
     >
       {isExpanded && (
-        <div>
+        <div className="h-full flex flex-col">
           <div className="font-semibold px-6 py-4 sticky top-0 z-10 text-base border-b bg-white">
             Logs
           </div>
-          <div>
+          <div className="overflow-auto flex-1">
             {loggedEvents.map((log) => {
               const arrowInfo = getDirectionArrow(log.direction);
               const isError =

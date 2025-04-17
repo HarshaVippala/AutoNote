@@ -67,8 +67,8 @@ function Transcript({
   };
 
   return (
-    <div className="flex flex-col flex-1 bg-white min-h-0 rounded-xl">
-      <div className="relative flex-1 min-h-0">
+    <div className="flex flex-col h-full bg-white rounded-xl">
+      <div className="relative flex-1 overflow-hidden">
         <button
           onClick={handleCopyTranscript}
           className={`absolute w-20 top-3 right-2 mr-1 z-10 text-sm px-3 py-2 rounded-full bg-gray-200 hover:bg-gray-300`}
