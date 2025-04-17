@@ -353,12 +353,12 @@ function Dashboard({ isExpanded }: DashboardProps) {
       }
       
       // Check for direct token usage information from OpenAI API
-      if (event.direction === "server" && event.eventData?.usage) {
+      if (event.eventData?.usage) {
         inputTokens += event.eventData.usage.prompt_tokens || 0;
         outputTokens += event.eventData.usage.completion_tokens || 0;
       }
       // Check for project_id in request
-      if (event.direction === "server" && event.eventData?.project_id === projectId) {
+      if (event.eventData?.project_id === projectId) {
         // Track specific project usage
         if (event.eventData?.usage) {
           inputTokens += event.eventData.usage.prompt_tokens || 0;
@@ -366,26 +366,38 @@ function Dashboard({ isExpanded }: DashboardProps) {
         }
       }
       // Alternative check for token usage in standard format
-      else if (event.direction === "server" && event.eventData?.type === "tokens.usage") {
+      else if (event.eventData?.type === "tokens.usage") {
         inputTokens += event.eventData.input_tokens || 0;
         outputTokens += event.eventData.output_tokens || 0;
       }
       
-      // Simulating token usage for demonstration
-      if (event.direction === "server" && event.eventData?.type === "response.done") {
+      // For completion events that don't provide usage stats, estimate from content
+      if (event.eventData?.type === "response.done" || event.eventData?.type === "completion.done") {
         // Estimate tokens based on content length if available
-        const content = event.eventData?.item?.content?.[0]?.text || "";
-        if (content) {
+        const content = event.eventData?.item?.content?.[0]?.text || event.eventData?.content || "";
+        if (content && typeof content === 'string') {
           // Rough estimate: 4 characters ~= 1 token
           outputTokens += Math.ceil(content.length / 4);
         }
       }
       
-      if (event.direction === "client" && event.eventData?.type === "conversation.item.create") {
-        const content = event.eventData?.item?.content?.[0]?.text || "";
-        if (content) {
+      // For user input events that don't provide usage stats, estimate from content
+      if (event.direction === "client" && 
+         (event.eventData?.type === "conversation.item.create" || event.eventName === "conversation.item.create")) {
+        const content = event.eventData?.item?.content?.[0]?.text || event.eventData?.content || "";
+        if (content && typeof content === 'string') {
           // Rough estimate: 4 characters ~= 1 token
           inputTokens += Math.ceil(content.length / 4);
+        }
+      }
+      
+      // Check for token info in response.created events which sometimes contain token usage
+      if (event.eventName === "response.created" || event.eventName === "response.content_part.added") {
+        if (event.eventData?.content_part?.content) {
+          const content = event.eventData.content_part.content;
+          if (typeof content === 'string') {
+            outputTokens += Math.ceil(content.length / 4);
+          }
         }
       }
     });
@@ -407,7 +419,7 @@ function Dashboard({ isExpanded }: DashboardProps) {
       resetTimeSeconds: tokenUsage.resetTimeSeconds
     });
     
-    // Calculate cost
+    // Calculate cost for internal tracking even though we're not displaying it
     const inputCost = (inputTokens / 1000) * TOKEN_RATES.input;
     const outputCost = (outputTokens / 1000) * TOKEN_RATES.output;
     const totalCost = inputCost + outputCost;
@@ -444,15 +456,18 @@ function Dashboard({ isExpanded }: DashboardProps) {
 
   const filteredEvents = useMemo(() => {
     return loggedEvents.filter(event => {
-      if (selectedAgent && event.eventData?.item?.name !== selectedAgent) {
-        return false;
-      }
       if (selectedEventType && event.eventName !== selectedEventType) {
         return false;
       }
       return true;
     });
-  }, [loggedEvents, selectedAgent, selectedEventType]);
+  }, [loggedEvents, selectedEventType]);
+
+  const [logsExpanded, setLogsExpanded] = useState<boolean>(false);
+
+  const toggleLogsExpanded = () => {
+    setLogsExpanded(!logsExpanded);
+  };
 
   const isNearingTpmLimit = tokenUsage.tpm / tokenUsage.tpmLimit > 0.8;
   const isNearingCostLimit = cost.total / cost.dailyLimit > 0.8;
@@ -507,42 +522,6 @@ function Dashboard({ isExpanded }: DashboardProps) {
           
           <div className="text-xs mt-2 text-gray-500">
             {apiKeyStatus.statusMessage}
-          </div>
-        </div>
-        
-        {/* Cost Explorer */}
-        <div className="px-4 py-3 border-b">
-          <div className="flex justify-between items-center mb-2">
-            <h2 className="font-semibold text-sm">Cost Explorer</h2>
-            <div className="text-xs text-gray-500 font-mono">
-              Project: {projectId.substring(0, 8)}...
-            </div>
-          </div>
-          <table className="w-full text-sm">
-            <tbody>
-              <tr>
-                <td className="py-1">Session Cost:</td>
-                <td className="py-1 text-right font-mono">$0.0000</td>
-              </tr>
-              <tr className="text-xs text-gray-600">
-                <td className="py-1">Input cost:</td>
-                <td className="py-1 text-right font-mono">$0.0000</td>
-              </tr>
-              <tr className="text-xs text-gray-600">
-                <td className="py-1">Output cost:</td>
-                <td className="py-1 text-right font-mono">$0.0000</td>
-              </tr>
-              <tr>
-                <td className="py-1 text-xs">Daily Limit:</td>
-                <td className="py-1 text-right font-mono text-xs">$5.00</td>
-              </tr>
-            </tbody>
-          </table>
-          <div className="w-full h-1.5 bg-gray-200 rounded-full mt-1">
-            <div 
-              className="h-1.5 rounded-full bg-green-500"
-              style={{ width: `${Math.min(100, (cost.total / cost.dailyLimit) * 100)}%` }}
-            ></div>
           </div>
         </div>
         
@@ -629,96 +608,82 @@ function Dashboard({ isExpanded }: DashboardProps) {
               </div>
             ))}
           </div>
-          
-          <div className="text-xs text-gray-500 mt-2 italic">
-            Each row represents an agent process flow. Circles show step status.
-          </div>
         </div>
         
-        {/* Logs Explorer */}
-        <div className="flex flex-col flex-1 overflow-hidden border-t">
-          <div className="flex justify-between items-center px-4 py-2 bg-gray-50 border-b">
+        {/* Logs Explorer - Moved to the bottom */}
+        <div className="flex flex-col overflow-hidden border-t mt-auto">
+          <div 
+            className="flex justify-between items-center px-4 py-2 bg-gray-50 border-b cursor-pointer"
+            onClick={toggleLogsExpanded}
+          >
             <span className="font-semibold text-sm">Logs Explorer</span>
-            <label className="flex items-center text-xs">
-              <input
-                type="checkbox"
-                checked={developerMode}
-                onChange={() => setDeveloperMode(!developerMode)}
-                className="mr-1 h-3 w-3"
-              />
-              Developer Mode
-            </label>
+            <button>
+              {logsExpanded ? '▼' : '▶'}
+            </button>
           </div>
           
-          <div className="px-3 py-2 border-b flex gap-2 items-center">
-            <select 
-              className="border rounded px-2 py-1 text-xs"
-              value={selectedAgent || ""}
-              onChange={(e) => setSelectedAgent(e.target.value || null)}
-            >
-              <option value="">All Agents</option>
-              {Object.keys(eventsByAgent).map(agent => (
-                <option key={agent} value={agent}>{agent}</option>
-              ))}
-            </select>
-            
-            <select 
-              className="border rounded px-2 py-1 text-xs"
-              value={selectedEventType || ""}
-              onChange={(e) => setSelectedEventType(e.target.value || null)}
-            >
-              <option value="">All Events</option>
-              {eventTypes.map(type => (
-                <option key={type} value={type}>{type}</option>
-              ))}
-            </select>
-          </div>
-          
-          <div className="overflow-auto flex-1">
-            <div className="divide-y">
-              {filteredEvents.map((log) => {
-                const isError = log.eventName.toLowerCase().includes("error");
-                const directionIcon = log.direction === "client" ? "▲" : "▼";
-                const directionColor = log.direction === "client" ? "text-purple-600" : "text-green-600";
-                const isProjectEvent = log.eventData?.project_id === projectId;
-                
-                return (
-                  <div
-                    key={log.id}
-                    className={`py-1 px-4 text-xs hover:bg-gray-50 cursor-pointer ${isProjectEvent ? 'bg-blue-50' : ''}`}
-                    onClick={() => toggleExpand(log.id)}
-                  >
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center">
-                        <span className={`mr-2 ${directionColor}`}>
-                          {directionIcon}
-                        </span>
-                        <span className={isError ? "text-red-600" : ""}>
-                          {log.eventName}
-                        </span>
-                        {isProjectEvent && (
-                          <span className="ml-2 text-xs bg-blue-100 text-blue-800 px-1 rounded">
-                            project
-                          </span>
+          {logsExpanded && (
+            <>
+              <div className="px-3 py-2 border-b flex gap-2 items-center">
+                <select 
+                  className="border rounded px-2 py-1 text-xs"
+                  value={selectedEventType || ""}
+                  onChange={(e) => setSelectedEventType(e.target.value || null)}
+                >
+                  <option value="">All Events</option>
+                  {eventTypes.map(type => (
+                    <option key={type} value={type}>{type}</option>
+                  ))}
+                </select>
+              </div>
+              
+              <div className="overflow-auto flex-1 max-h-96">
+                <div className="divide-y">
+                  {filteredEvents.map((log) => {
+                    const isError = log.eventName.toLowerCase().includes("error");
+                    const directionIcon = log.direction === "client" ? "▲" : "▼";
+                    const directionColor = log.direction === "client" ? "text-purple-600" : "text-green-600";
+                    const isProjectEvent = log.eventData?.project_id === projectId;
+                    
+                    return (
+                      <div
+                        key={log.id}
+                        className={`py-1 px-4 text-xs hover:bg-gray-50 cursor-pointer ${isProjectEvent ? 'bg-blue-50' : ''}`}
+                        onClick={() => toggleExpand(log.id)}
+                      >
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center">
+                            <span className={`mr-2 ${directionColor}`}>
+                              {directionIcon}
+                            </span>
+                            <span className={isError ? "text-red-600" : ""}>
+                              {log.eventName}
+                            </span>
+                            {isProjectEvent && (
+                              <span className="ml-2 text-xs bg-blue-100 text-blue-800 px-1 rounded">
+                                project
+                              </span>
+                            )}
+                          </div>
+                          <div className="text-xs text-gray-500">
+                            {log.timestamp}
+                          </div>
+                        </div>
+                        
+                        {log.expanded && (
+                          <div className="mt-1 border-t pt-1">
+                            <pre className="text-[10px] overflow-auto max-h-32 whitespace-pre-wrap text-gray-700 bg-gray-50 p-2 rounded">
+                              {JSON.stringify(log.eventData, null, 2)}
+                            </pre>
+                          </div>
                         )}
                       </div>
-                      <div className="text-xs text-gray-500">
-                        {log.timestamp}
-                      </div>
-                    </div>
-                    
-                    {log.expanded && (
-                      <div className="mt-1 border-t pt-1">
-                        <pre className="text-[10px] overflow-auto max-h-32 whitespace-pre-wrap text-gray-700 bg-gray-50 p-2 rounded">
-                          {JSON.stringify(log.eventData, null, 2)}
-                        </pre>
-                      </div>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
-          </div>
+                    );
+                  })}
+                </div>
+              </div>
+            </>
+          )}
         </div>
       </div>
       
