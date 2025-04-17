@@ -207,7 +207,7 @@ function App() {
 
   const sendSimulatedUserMessage = (text: string) => {
     const id = uuidv4().slice(0, 32);
-    addTranscriptMessage(id, "user", text, true);
+    addTranscriptMessage(id, "user", text, true, "user");
 
     sendClientEvent(
       {
@@ -300,10 +300,14 @@ function App() {
     if (!userText.trim()) return;
     cancelAssistantSpeech();
 
+    const messageId = uuidv4();
+    addTranscriptMessage(messageId, "user", userText.trim(), false, "user");
+
     sendClientEvent(
       {
         type: "conversation.item.create",
         item: {
+          id: messageId,
           type: "message",
           role: "user",
           content: [{ type: "input_text", text: userText.trim() }],

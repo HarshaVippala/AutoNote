@@ -15,14 +15,22 @@ function AgentAnswers({ isExpanded }: AgentAnswersProps) {
 
   const { transcriptItems } = useTranscript();
   
-  // Filter transcript items to get only assistant messages
+  // Filter transcript items to get only assistant messages from responseAgent
   const assistantMessages = transcriptItems.filter(
-    (item) => item.type === "MESSAGE" && item.role === "assistant" && !item.isHidden
+    (item) => 
+      item.type === "MESSAGE" && 
+      item.role === "assistant" && 
+      !item.isHidden && 
+      item.agentName === "responseAgent"
   );
 
   useEffect(() => {
     const hasNewMessage = assistantMessages.length > 
-      prevTranscriptItems.filter(item => item.type === "MESSAGE" && item.role === "assistant").length;
+      prevTranscriptItems.filter(item => 
+        item.type === "MESSAGE" && 
+        item.role === "assistant" && 
+        item.agentName === "responseAgent"
+      ).length;
 
     if (isExpanded && hasNewMessage && answersContainerRef.current) {
       answersContainerRef.current.scrollTop = answersContainerRef.current.scrollHeight;
@@ -42,7 +50,7 @@ function AgentAnswers({ isExpanded }: AgentAnswersProps) {
       {isExpanded && (
         <div className="h-full flex flex-col">
           <div className="font-semibold px-6 py-4 sticky top-0 z-10 text-base border-b bg-white">
-            Agent Answers
+            Response Agent Answers
           </div>
           <div className="overflow-auto p-4 flex-1 flex flex-col gap-y-4">
             {assistantMessages.map((item) => {

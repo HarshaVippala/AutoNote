@@ -125,6 +125,7 @@ export function useHandleServerEvent({
           "";
         const role = serverEvent.item?.role as "user" | "assistant";
         const itemId = serverEvent.item?.id;
+        const agentName = selectedAgentName;
 
         if (itemId && transcriptItems.some((item) => item.itemId === itemId)) {
           break;
@@ -134,7 +135,7 @@ export function useHandleServerEvent({
           if (role === "user" && !text) {
             text = "[Transcribing...]";
           }
-          addTranscriptMessage(itemId, role, text);
+          addTranscriptMessage(itemId, role, text, false, agentName);
         }
         break;
       }
