@@ -455,30 +455,81 @@ function Dashboard({ isExpanded, isDashboardEnabled, transcriptItems }: Dashboar
       </div>
 
       <div className="flex-1 overflow-hidden flex flex-col">
-        {/* TPM Usage Section with Progress Bar */}
-        <div className="px-3 sm:px-4 py-2 border-b bg-gray-50">
-          <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center mb-1">
-            <div className="font-semibold text-sm">TPM Usage:</div>
-            <div className="font-mono text-xs sm:text-sm">
-              {tokenUsage.tpm.toLocaleString()} / {tokenUsage.tpmLimit.toLocaleString()} | <span className="inline-block sm:ml-2">⏱️ Resets in: {tokenUsage.resetTimeSeconds}s</span>
+        {/* TPM Usage Section with Enhanced UI */}
+        <div className="px-4 py-3 border-b bg-white">
+          <div className="flex flex-col gap-2">
+            {/* Header with reset timer */}
+            <div className="flex justify-between items-center">
+              <div className="flex items-center gap-2">
+                <div className="font-bold text-gray-800 text-base">TPM Usage</div>
+                <div className={`text-xs px-2 py-0.5 rounded-full ${
+                  tokenUsage.tpm / tokenUsage.tpmLimit > 0.8
+                    ? 'bg-red-100 text-red-700'
+                    : tokenUsage.tpm / tokenUsage.tpmLimit > 0.5
+                      ? 'bg-yellow-100 text-yellow-700'
+                      : 'bg-green-100 text-green-700'
+                }`}>
+                  {Math.round((tokenUsage.tpm / tokenUsage.tpmLimit) * 100)}%
+                </div>
+              </div>
+              <div className="flex items-center gap-1 text-sm text-gray-500">
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+                  <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-12a1 1 0 10-2 0v4a1 1 0 00.293.707l2.828 2.829a1 1 0 101.415-1.415L11 9.586V6z" clipRule="evenodd" />
+                </svg>
+                <span>Resets in: <span className="font-mono font-semibold">{tokenUsage.resetTimeSeconds}s</span></span>
+              </div>
             </div>
-          </div>
-          <div className="h-2 bg-gray-200 rounded-full mb-2">
-            <div 
-              className="h-2 rounded-full"
-              style={{ 
-                width: `${Math.min(100, (tokenUsage.tpm / tokenUsage.tpmLimit) * 100)}%`,
-                backgroundImage: tokenUsage.tpm / tokenUsage.tpmLimit > 0.8 
-                  ? 'linear-gradient(to right, #ef4444, #f59e0b)' 
-                  : 'linear-gradient(to right, #3b82f6, #10b981)' 
-              }}
-            ></div>
-          </div>
-          <div className="grid grid-cols-2 sm:flex sm:justify-between text-xs font-mono gap-y-1">
-            <div>In: <span className="font-semibold">{tokenUsage.input.toLocaleString()}</span></div>
-            <div>Out: <span className="font-semibold">{tokenUsage.output.toLocaleString()}</span></div>
-            <div>Total: <span className="font-semibold">{tokenUsage.total.toLocaleString()}</span></div>
-            <div>Model: <span className="font-semibold truncate" title={activeModel}>{activeModel.length > 10 ? activeModel.substring(0, 10) + '...' : activeModel}</span></div>
+            
+            {/* Main usage display */}
+            <div className="flex items-center gap-2">
+              <div className="font-mono text-xl font-bold text-gray-800">
+                {tokenUsage.tpm.toLocaleString()}
+              </div>
+              <div className="text-gray-500 font-mono">
+                / {tokenUsage.tpmLimit.toLocaleString()}
+              </div>
+            </div>
+            
+            {/* Progress bar with improved styling */}
+            <div className="h-2.5 bg-gray-200 rounded-full relative overflow-hidden">
+              <div 
+                className="h-full rounded-full absolute top-0 left-0 transition-all duration-500"
+                style={{ 
+                  width: `${Math.min(100, (tokenUsage.tpm / tokenUsage.tpmLimit) * 100)}%`,
+                  backgroundImage: tokenUsage.tpm / tokenUsage.tpmLimit > 0.8 
+                    ? 'linear-gradient(to right, #ef4444, #f59e0b)' 
+                    : tokenUsage.tpm / tokenUsage.tpmLimit > 0.5
+                      ? 'linear-gradient(to right, #eab308, #3b82f6)'
+                      : 'linear-gradient(to right, #3b82f6, #10b981)' 
+                }}
+              ></div>
+            </div>
+            
+            {/* Detailed metrics */}
+            <div className="grid grid-cols-2 sm:flex sm:flex-wrap sm:gap-6 text-sm mt-1">
+              <div className="flex items-center gap-1.5 p-1">
+                <div className="w-2 h-2 rounded-full bg-blue-500"></div>
+                <span className="text-gray-600">In:</span>
+                <span className="font-mono font-semibold">{tokenUsage.input.toLocaleString()}</span>
+              </div>
+              <div className="flex items-center gap-1.5 p-1">
+                <div className="w-2 h-2 rounded-full bg-green-500"></div>
+                <span className="text-gray-600">Out:</span>
+                <span className="font-mono font-semibold">{tokenUsage.output.toLocaleString()}</span>
+              </div>
+              <div className="flex items-center gap-1.5 p-1">
+                <div className="w-2 h-2 rounded-full bg-purple-500"></div>
+                <span className="text-gray-600">Total:</span>
+                <span className="font-mono font-semibold">{tokenUsage.total.toLocaleString()}</span>
+              </div>
+              <div className="flex items-center gap-1.5 p-1 max-w-full">
+                <div className="w-2 h-2 rounded-full bg-gray-500"></div>
+                <span className="text-gray-600">Model:</span>
+                <span className="font-mono font-semibold truncate" title={activeModel}>
+                  {activeModel.length > 15 ? activeModel.substring(0, 15) + '...' : activeModel}
+                </span>
+              </div>
+            </div>
           </div>
         </div>
 
