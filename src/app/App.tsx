@@ -399,11 +399,20 @@ function App() {
     if (touchStart && e.targetTouches[0].clientX) {
       const difference = touchStart - e.targetTouches[0].clientX;
       const maxDiff = window.innerWidth * 0.15; // Limit drag effect
+      
+      // Determine max panel index based on if dashboard is enabled
+      const maxPanelIndex = isEventsPaneExpanded ? 2 : 1;
 
       // Only apply visual feedback if difference is within acceptable range
+      // and prevent rightward swipe past the maximum allowed panel
       if (Math.abs(difference) < maxDiff) {
         const swipePanels = document.querySelectorAll('.mobile-swipe-panel');
         const translateOffset = -activeMobilePanel * 100;
+
+        // Prevent rightward swipe to dashboard when it's disabled
+        if (!isEventsPaneExpanded && difference < 0 && activeMobilePanel >= maxPanelIndex) {
+          return;
+        }
 
         swipePanels.forEach((panel, index) => {
           const el = panel as HTMLElement;
@@ -434,16 +443,13 @@ function App() {
     setTouchStart(null);
     setTouchEnd(null);
 
-    if (isLeftSwipe && activeMobilePanel < 2) {
-      // Next panel
-      const nextPanel = Math.min(activeMobilePanel + 1, 2);
-      setActiveMobilePanel(nextPanel);
+    // Determine maximum panel index based on dashboard state
+    const maxPanelIndex = isEventsPaneExpanded ? 2 : 1;
 
-      // Enable dashboard if we're switching to it
-      if (nextPanel === 2) {
-        setIsEventsPaneExpanded(true);
-        localStorage.setItem("logsExpanded", "true");
-      }
+    if (isLeftSwipe && activeMobilePanel < maxPanelIndex) {
+      // Next panel - only allow swipe to dashboard (panel 2) if it's enabled
+      const nextPanel = Math.min(activeMobilePanel + 1, maxPanelIndex);
+      setActiveMobilePanel(nextPanel);
     } else if (isRightSwipe && activeMobilePanel > 0) {
       // Previous panel
       setActiveMobilePanel(prev => Math.max(prev - 1, 0));
@@ -705,16 +711,23 @@ function App() {
 
           {/* Mobile Panel Indicators */}
           <div className="absolute bottom-4 left-0 right-0 flex justify-center items-center gap-3 pointer-events-none">
-            {['Chat', 'Answers', 'Dashboard'].map((name, index) => (
-              <div 
-                key={index}
-                className={`h-1.5 rounded-full transition-all duration-300 ${
-                  activeMobilePanel === index 
-                    ? 'w-6 bg-blue-500' 
-                    : 'w-1.5 bg-gray-300'
-                }`}
-              />
-            ))}
+            {['Chat', 'Answers', 'Dashboard'].map((name, index) => {
+              // Only show Dashboard indicator if the dashboard is enabled
+              if (name === 'Dashboard' && !isEventsPaneExpanded) {
+                return null;
+              }
+              
+              return (
+                <div 
+                  key={index}
+                  className={`h-1.5 rounded-full transition-all duration-300 ${
+                    activeMobilePanel === index 
+                      ? 'w-6 bg-blue-500' 
+                      : 'w-1.5 bg-gray-300'
+                  }`}
+                />
+              );
+            })}
           </div>
         </div>
       )}
