@@ -491,9 +491,7 @@ function Dashboard({ isExpanded, isDashboardEnabled, transcriptItems }: Dashboar
             </div>
           </div>
 
-          <div className="text-xs mt-2 text-gray-500">
-            {apiKeyStatus.statusMessage}
-          </div>
+          
         </div>
 
         {/* Agent Process Timeline */}
