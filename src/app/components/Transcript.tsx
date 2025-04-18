@@ -22,7 +22,6 @@ function Transcript({
   const { transcriptItems, toggleTranscriptItemExpand } = useTranscript();
   const transcriptRef = useRef<HTMLDivElement | null>(null);
   const [prevLogs, setPrevLogs] = useState<TranscriptItem[]>([]);
-  const [justCopied, setJustCopied] = useState(false);
   const inputRef = useRef<HTMLInputElement | null>(null);
 
   function scrollToBottom() {
@@ -55,27 +54,9 @@ function Transcript({
     }
   }, [canSend]);
 
-  const handleCopyTranscript = async () => {
-    if (!transcriptRef.current) return;
-    try {
-      await navigator.clipboard.writeText(transcriptRef.current.innerText);
-      setJustCopied(true);
-      setTimeout(() => setJustCopied(false), 1500);
-    } catch (error) {
-      console.error("Failed to copy transcript:", error);
-    }
-  };
-
   return (
     <div className="flex flex-col h-full bg-white rounded-xl">
       <div className="relative flex-1 overflow-hidden">
-        <button
-          onClick={handleCopyTranscript}
-          className={`absolute w-20 top-3 right-2 mr-1 z-10 text-sm px-3 py-2 rounded-full bg-gray-200 hover:bg-gray-300`}
-        >
-          {justCopied ? "Copied!" : "Copy"}
-        </button>
-
         <div
           ref={transcriptRef}
           className="overflow-auto p-4 flex flex-col gap-y-4 h-full"
