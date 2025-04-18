@@ -466,20 +466,12 @@ function App() {
 
   // Top Controls Component
   const TopControls: React.FC = () => (
-    <div className="p-2 border-b border-gray-200 bg-white flex items-center justify-between overflow-hidden">
+    <div className="p-3 border-b border-gray-200 bg-white dark:bg-gray-900 backdrop-blur-sm bg-opacity-80 dark:bg-opacity-80 flex items-center justify-between overflow-hidden shadow-sm">
       <div className="flex items-center">
         <div onClick={() => window.location.reload()} style={{ cursor: 'pointer' }}>
-          {/* OpenAI Logo Removed */}
-          {/* <Image
-            src="/openai-logomark.svg"
-            alt="OpenAI Logo"
-            width={20}
-            height={20}
-            className="mr-2"
-          /> */}
-          <span className="block sm:hidden text-xl font-extrabold tracking-tight bg-gradient-to-r from-blue-600 to-cyan-500 bg-clip-text text-transparent">JARVIS</span>
+          <span className="block sm:hidden text-xl font-extrabold tracking-tight bg-gradient-to-r from-blue-600 via-indigo-500 to-cyan-400 bg-clip-text text-transparent animate-gradient-x">JARVIS</span>
         </div>
-        <div className="hidden sm:block text-2xl font-extrabold tracking-tight bg-gradient-to-r from-blue-600 to-cyan-500 bg-clip-text text-transparent ml-2">
+        <div className="hidden sm:block text-2xl font-extrabold tracking-tight bg-gradient-to-r from-blue-600 via-indigo-500 to-cyan-400 bg-clip-text text-transparent ml-2 animate-gradient-x">
           JARVIS
         </div>
       </div>
@@ -489,24 +481,24 @@ function App() {
         <button
           onClick={onToggleConnection}
           title={sessionStatus === "CONNECTED" ? "Disconnect" : "Connect"}
-          className={`flex items-center justify-center h-9 w-9 rounded-full ${
+          className={`flex items-center justify-center h-10 w-10 rounded-lg shadow-sm transition-all duration-200 ease-in-out ${
             sessionStatus === "CONNECTED"
-              ? "bg-red-600 hover:bg-red-700"
+              ? "bg-gradient-to-br from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 hover:shadow"
               : sessionStatus === "CONNECTING"
-              ? "bg-black hover:bg-gray-900 cursor-not-allowed"
-              : "bg-black hover:bg-gray-900"
+              ? "bg-gradient-to-br from-gray-700 to-gray-800 cursor-not-allowed opacity-80"
+              : "bg-gradient-to-br from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 hover:shadow"
           }`}
           disabled={sessionStatus === "CONNECTING"}
         >
           {sessionStatus === "CONNECTING" ? (
-            <div className="h-4 w-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+            <div className="h-5 w-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
           ) : sessionStatus === "CONNECTED" ? (
-            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="white" viewBox="0 0 16 16">
+            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" fill="white" viewBox="0 0 16 16">
               <path d="M13.854 2.146a.5.5 0 0 1 0 .708l-11 11a.5.5 0 0 1-.708-.708l11-11a.5.5 0 0 1 .708 0Z"/>
               <path d="M2.146 2.146a.5.5 0 0 0 0 .708l11 11a.5.5 0 0 0 .708-.708l-11-11a.5.5 0 0 0-.708 0Z"/>
             </svg>
           ) : (
-            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="white" viewBox="0 0 16 16">
+            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" fill="white" viewBox="0 0 16 16">
               <path d="M6.5 10.5a.5.5 0 0 1 .5.5h1.5a.5.5 0 0 1 0 1H6a.5.5 0 0 1-.5-.5v-2A.5.5 0 0 1 6 9h4a.5.5 0 0 1 0 1H6.5v.5z"/>
               <path d="M14 9.5a4.5 4.5 0 0 1-4.5 4.5h-5A4.5 4.5 0 0 1 0 9.5v-5A4.5 4.5 0 0 1 4.5 0h5A4.5 4.5 0 0 1 14 4.5v5zm-4.5 3.5a3.5 3.5 0 0 0 3.5-3.5v-5A3.5 3.5 0 0 0 9.5 1h-5A3.5 3.5 0 0 0 1 4.5v5A3.5 3.5 0 0 0 4.5 13h5z"/>
             </svg>
@@ -518,12 +510,12 @@ function App() {
           onClick={() => setIsMicrophoneMuted(!isMicrophoneMuted)}
           disabled={sessionStatus !== "CONNECTED"}
           title={isMicrophoneMuted ? "Unmute Microphone" : "Mute Microphone"}
-          className={`flex items-center justify-center h-9 w-9 rounded-full ${
+          className={`flex items-center justify-center h-10 w-10 rounded-lg shadow-sm transition-all duration-200 ease-in-out ${
             sessionStatus !== "CONNECTED"
-              ? "bg-gray-100 text-gray-400 cursor-not-allowed"
+              ? "bg-gray-100 text-gray-400 cursor-not-allowed dark:bg-gray-800 dark:text-gray-500"
               : isMicrophoneMuted
-              ? "bg-red-100 text-red-700 hover:bg-red-200 cursor-pointer"
-              : "bg-green-100 text-green-700 hover:bg-green-200 cursor-pointer"
+              ? "bg-gradient-to-br from-red-100 to-red-200 text-red-700 hover:shadow dark:from-red-900 dark:to-red-800 dark:text-red-300"
+              : "bg-gradient-to-br from-green-100 to-green-200 text-green-700 hover:shadow dark:from-green-900 dark:to-green-800 dark:text-green-300"
           }`}
         >
           {isMicrophoneMuted ? (
@@ -544,13 +536,13 @@ function App() {
           <button 
             onClick={() => handleDashboardToggle(!isEventsPaneExpanded)}
             title="Toggle Dashboard"
-            className={`flex items-center justify-center h-9 w-9 rounded-full ${
+            className={`flex items-center justify-center h-10 w-10 rounded-lg shadow-sm transition-all duration-200 ease-in-out ${
               isEventsPaneExpanded 
-                ? "bg-blue-100 text-blue-700" 
-                : "bg-gray-100 text-gray-600"
+                ? "bg-gradient-to-br from-indigo-100 to-blue-100 text-blue-700 hover:shadow dark:from-indigo-900 dark:to-blue-900 dark:text-blue-300" 
+                : "bg-gradient-to-br from-gray-100 to-gray-200 text-gray-600 hover:shadow dark:from-gray-800 dark:to-gray-700 dark:text-gray-300"
             }`}
           >
-            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16">
+            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" fill="currentColor" viewBox="0 0 16 16">
               <path d="M8 4a.5.5 0 0 1 .5.5V6a.5.5 0 0 1-1 0V4.5A.5.5 0 0 1 8 4zM3.732 5.732a.5.5 0 0 1 .707 0l.915.914a.5.5 0 1 1-.708.708l-.914-.915a.5.5 0 0 1 0-.707zM2 10a.5.5 0 0 1 .5-.5h1.586a.5.5 0 0 1 0 1H2.5A.5.5 0 0 1 2 10zm9.5 0a.5.5 0 0 1 .5-.5h1.5a.5.5 0 0 1 0 1H12a.5.5 0 0 1-.5-.5zm.754-4.246a.389.389 0 0 0-.527-.02L7.547 9.31a.91.91 0 1 0 1.302 1.258l3.434-4.297a.389.389 0 0 0-.029-.518z"/>
             </svg>
           </button>
@@ -591,12 +583,12 @@ function App() {
 
         {/* Agent Selection (only if multiple agents available) */}
         {selectedAgentConfigSet && selectedAgentConfigSet.length > 1 && (
-          <div className="relative inline-block ml-1">
+          <div className="relative inline-block ml-2">
             <select
               value={selectedAgentName}
               onChange={handleSelectedAgentChange}
               title="Select Agent"
-              className="appearance-none border border-gray-300 rounded-lg text-sm px-2 py-1 pr-6 cursor-pointer font-normal focus:outline-none"
+              className="appearance-none bg-gradient-to-r from-gray-50 to-gray-100 border border-gray-300 text-gray-700 rounded-lg text-sm px-3 py-2 pr-8 cursor-pointer font-medium shadow-sm transition-all duration-200 ease-in-out hover:shadow focus:outline-none focus:ring-2 focus:ring-blue-300 focus:border-blue-300 dark:from-gray-800 dark:to-gray-700 dark:border-gray-600 dark:text-gray-200"
             >
               {selectedAgentConfigSet?.map(agent => (
                 <option key={agent.name} value={agent.name}>
@@ -604,9 +596,9 @@ function App() {
                 </option>
               ))}
             </select>
-            <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center pr-1 text-gray-600">
+            <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center pr-2 text-gray-600 dark:text-gray-400">
               <svg
-                className="h-3 w-3"
+                className="h-4 w-4"
                 viewBox="0 0 20 20"
                 fill="currentColor"
               >
@@ -624,13 +616,13 @@ function App() {
   );
 
   return (
-    <div className="text-base flex flex-col h-screen bg-gray-100 text-gray-800 relative">
+    <div className="text-base flex flex-col h-screen bg-gray-50 dark:bg-gray-900 text-gray-800 dark:text-gray-200 relative">
       <TopControls />
 
       {!isMobileView ? (
         // Desktop layout
-        <div className="flex flex-1 gap-2 px-2 pb-2 pt-2 overflow-hidden">
-          <div className={`${(isAnswersPaneExpanded || isEventsPaneExpanded) ? 'w-1/3' : 'w-full'} transition-all duration-200 h-full`}>
+        <div className="flex flex-1 gap-3 p-3 overflow-hidden">
+          <div className={`${(isAnswersPaneExpanded || isEventsPaneExpanded) ? 'w-1/3' : 'w-full'} transition-all duration-300 ease-in-out h-full`}>
             <Transcript
               userText={userText}
               setUserText={setUserText}
