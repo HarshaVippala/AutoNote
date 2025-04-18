@@ -31,17 +31,7 @@ interface ApiKeyStatus {
   statusMessage: string;
 }
 
-interface AgentStep {
-  name: string;
-  status: "not_started" | "processing" | "completed" | "failed";
-  timestamp?: string;
-}
-
-interface AgentProcess {
-  name: string;
-  icon: string;
-  steps: AgentStep[];
-}
+// Agent status interfaces removed
 
 // Token pricing rates per 1000 tokens in USD
 const TOKEN_RATES = {
@@ -112,42 +102,7 @@ function Dashboard({ isExpanded, isDashboardEnabled, transcriptItems }: Dashboar
   const [projectId, setProjectId] = useState<string>(OPENAI_PROJECT_ID);
   const [activeModel, setActiveModel] = useState<string>("default");
 
-  // Sample agent processes for visualization - this would be dynamically generated from API data
-  const [agentProcesses, setAgentProcesses] = useState<AgentProcess[]>([
-    {
-      name: "conversationAgent",
-      icon: "🧠",
-      steps: [
-        { name: "audio.buffered", status: "completed", timestamp: "1:54:01 PM" },
-        { name: "transcript.created", status: "completed", timestamp: "1:54:01 PM" },
-        { name: "context.storing", status: "processing", timestamp: "1:54:01 PM" },
-        { name: "transfer.triggered", status: "not_started" }
-      ]
-    },
-    {
-      name: "responseAgent",
-      icon: "🤖",
-      steps: [
-        { name: "request.received", status: "not_started" },
-        { name: "completion.requested", status: "not_started" },
-        { name: "tokens.generated", status: "not_started" }
-      ]
-    },
-    {
-      name: "greeterAgent",
-      icon: "👋",
-      steps: [
-        { name: "greeting.initiated", status: "completed", timestamp: "1:53:45 PM" }
-      ]
-    },
-    {
-      name: "cuaAgent",
-      icon: "🛠️",
-      steps: [
-        { name: "action.ready", status: "completed", timestamp: "1:53:50 PM" }
-      ]
-    }
-  ]);
+  // Agent processes state removed
 
   const { tokenUsage: totalTokens, cost: totalCost } = useMemo(() => {
     let totalTokens = 0;
@@ -204,79 +159,7 @@ function Dashboard({ isExpanded, isDashboardEnabled, transcriptItems }: Dashboar
     return Array.from(types);
   }, [loggedEvents]);
 
-  // Update agent processes based on logged events
-  useEffect(() => {
-    if (!isDashboardEnabled) return;
-
-    // Map of agent steps configurations
-    const agentStepConfigs: Record<string, { icon: string, stepPatterns: string[] }> = {
-      "conversationAgent": { 
-        icon: "🧠", 
-        stepPatterns: ["audio.buffered", "transcript.created", "context.storing", "transfer.triggered"] 
-      },
-      "responseAgent": { 
-        icon: "🤖", 
-        stepPatterns: ["request.received", "completion.requested", "tokens.generated"] 
-      }
-    };
-
-    // Initialize agents with default steps (not_started status)
-    const initialAgentProcesses: AgentProcess[] = Object.entries(agentStepConfigs).map(([name, config]) => ({
-      name,
-      icon: config.icon,
-      steps: config.stepPatterns.map(pattern => ({ 
-        name: pattern, 
-        status: "not_started" 
-      }))
-    }));
-
-    // Process events to update step statuses
-    loggedEvents.forEach(event => {
-      if (event.direction === "server") {
-        // Extract event details
-        const eventType = event.eventName;
-        const agentName = event.eventData?.item?.name || "unknown";
-        const timestamp = event.timestamp;
-        const isError = eventType.toLowerCase().includes("error") || eventType.toLowerCase().includes("failed");
-
-        // Find matching agents and update their step statuses
-        initialAgentProcesses.forEach(agent => {
-          if (agent.name === agentName) {
-            agent.steps.forEach(step => {
-              // Match event type to step name patterns
-              if (eventType.includes(step.name) || step.name.includes(eventType)) {
-                // Update step status
-                if (isError) {
-                  step.status = "failed";
-                } else {
-                  // For simplicity, assume all matched events are completed
-                  step.status = "completed";
-                }
-                step.timestamp = timestamp;
-              }
-            });
-          }
-        });
-      }
-    });
-
-    // Find the latest active step for each agent and set it to "processing"
-    initialAgentProcesses.forEach(agent => {
-      // Find the first "not_started" step after any "completed" steps
-      const completedSteps = agent.steps.filter(step => step.status === "completed");
-      if (completedSteps.length > 0 && completedSteps.length < agent.steps.length) {
-        const nextStepIndex = completedSteps.length;
-        if (nextStepIndex < agent.steps.length && agent.steps[nextStepIndex].status === "not_started") {
-          agent.steps[nextStepIndex].status = "processing";
-        }
-      }
-    });
-
-    // Only update state if there are real changes
-    if (initialAgentProcesses.length > 0) {
-      setAgentProcesses(initialAgentProcesses);
-    }
-  }, [loggedEvents, isDashboardEnabled]);
+  // Agent processes update effect removed
 
   // Update time every second for session duration
   useEffect(() => {
@@ -559,49 +442,7 @@ function Dashboard({ isExpanded, isDashboardEnabled, transcriptItems }: Dashboar
           
         </div>
 
-        {/* Agent Status */}
-        <div className="px-4 py-3 border-b">
-          <div className="space-y-2">
-            {agentProcesses.map((agent, idx) => (
-              <div key={idx} className="flex items-center justify-between p-2 bg-gray-50 rounded-md">
-                <div className="flex items-center gap-2">
-                  <span>{agent.icon}</span>
-                  <span className="text-sm font-medium">{agent.name}</span>
-                </div>
-                <div className="flex items-center">
-                  {/* Calculate agent status based on steps */}
-                  {(() => {
-                    const hasError = agent.steps.some(step => step.status === "failed");
-                    const isWorking = agent.steps.some(step => step.status === "processing");
-                    const isReady = agent.steps.some(step => step.status === "completed") && !isWorking && !hasError;
-                    const isIdle = agent.steps.every(step => step.status === "not_started");
-                    
-                    if (hasError) {
-                      return (
-                        <span className="text-xs px-2 py-1 bg-red-100 text-red-800 rounded-full">Error</span>
-                      );
-                    } else if (isWorking) {
-                      return (
-                        <span className="text-xs px-2 py-1 bg-yellow-100 text-yellow-800 rounded-full flex items-center gap-1">
-                          <span className="h-1.5 w-1.5 bg-yellow-500 rounded-full animate-pulse"></span>
-                          Active
-                        </span>
-                      );
-                    } else if (isReady) {
-                      return (
-                        <span className="text-xs px-2 py-1 bg-green-100 text-green-800 rounded-full">Ready</span>
-                      );
-                    } else {
-                      return (
-                        <span className="text-xs px-2 py-1 bg-gray-100 text-gray-600 rounded-full">Idle</span>
-                      );
-                    }
-                  })()}
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
+        {/* Agent Status section removed */}
 
         {/* Breadcrumbs Section (moved from Transcript) */}
         <div className="px-4 py-3 border-b">
