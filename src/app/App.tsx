@@ -686,7 +686,7 @@ function App() {
 
           {/* Agent Answers Panel (middle panel) */}
           <div 
-            className="mobile-swipe-panel absolute top-0 left-0 w-full h-full transition-transform duration-300 ease-in-out"
+            className="mobile-swipe-panel absolute top-0 left-0 w-full h-full transition-transform duration-300 easein-out"
             style={{ transform: `translateX(${100 - (activeMobilePanel * 100)}%)` }}
           >
             {/* This panel is for agent answers only */}

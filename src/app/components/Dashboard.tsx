@@ -132,6 +132,20 @@ function Dashboard({ isExpanded, isDashboardEnabled, transcriptItems }: Dashboar
         { name: "completion.requested", status: "not_started" },
         { name: "tokens.generated", status: "not_started" }
       ]
+    },
+    {
+      name: "greeterAgent",
+      icon: "👋",
+      steps: [
+        { name: "greeting.initiated", status: "completed", timestamp: "1:53:45 PM" }
+      ]
+    },
+    {
+      name: "cuaAgent",
+      icon: "🛠️",
+      steps: [
+        { name: "action.ready", status: "completed", timestamp: "1:53:50 PM" }
+      ]
     }
   ]);
 
@@ -545,23 +559,48 @@ function Dashboard({ isExpanded, isDashboardEnabled, transcriptItems }: Dashboar
           
         </div>
 
-        {/* Agent Process Timeline */}
+        {/* Agent Status */}
         <div className="px-4 py-3 border-b">
-          <h2 className="font-semibold text-sm mb-2">Agent Process Timeline</h2>
-
-          <div className="space-y-4 max-h-64 overflow-auto pr-1">
+          <div className="space-y-2">
             {agentProcesses.map((agent, idx) => (
-              <div key={idx} className="border rounded-lg overflow-hidden">
-                <div className="flex items-center text-sm font-medium p-2 bg-gray-50 border-b">
-                  <span className="mr-2">{agent.icon}</span>
-                  {agent.name}
+              <div key={idx} className="flex items-center justify-between p-2 bg-gray-50 rounded-md">
+                <div className="flex items-center gap-2">
+                  <span>{agent.icon}</span>
+                  <span className="text-sm font-medium">{agent.name}</span>
                 </div>
-                <div className="p-4">
-                  <div className="flex items-center">
-                    {agent.steps.map((step, stepIdx) => {
-                      // Determine styling based on status
-                      let statusElement;
-                      let lineColor = "bg-blue-400";
+                <div className="flex items-center">
+                  {/* Calculate agent status based on steps */}
+                  {(() => {
+                    const hasError = agent.steps.some(step => step.status === "error");
+                    const isWorking = agent.steps.some(step => step.status === "processing");
+                    const isReady = agent.steps.some(step => step.status === "completed") && !isWorking && !hasError;
+                    const isIdle = agent.steps.every(step => step.status === "not_started");
+                    
+                    if (hasError) {
+                      return (
+                        <span className="text-xs px-2 py-1 bg-red-100 text-red-800 rounded-full">Error</span>
+                      );
+                    } else if (isWorking) {
+                      return (
+                        <span className="text-xs px-2 py-1 bg-yellow-100 text-yellow-800 rounded-full flex items-center gap-1">
+                          <span className="h-1.5 w-1.5 bg-yellow-500 rounded-full animate-pulse"></span>
+                          Active
+                        </span>
+                      );
+                    } else if (isReady) {
+                      return (
+                        <span className="text-xs px-2 py-1 bg-green-100 text-green-800 rounded-full">Ready</span>
+                      );
+                    } else {
+                      return (
+                        <span className="text-xs px-2 py-1 bg-gray-100 text-gray-600 rounded-full">Idle</span>
+                      );
+                    }
+                  })()}
+                </div>
+              </div>
+            ))}
+          </div>olor = "bg-blue-400";
 
                       if (step.status === "completed") {
                         statusElement = (
