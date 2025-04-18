@@ -499,19 +499,6 @@ function Dashboard({ isExpanded, isDashboardEnabled, transcriptItems }: Dashboar
         {/* Agent Process Timeline */}
         <div className="px-4 py-3 border-b">
           <h2 className="font-semibold text-sm mb-2">Agent Process Timeline</h2>
-
-          <div className="mb-2 text-xs flex space-x-3 bg-gray-50 p-2 rounded">
-            <div className="flex items-center">
-              <span className="inline-block w-4 h-4 bg-gray-200 rounded mr-1"></span> Not started
-            </div>
-            <div className="flex items-center">
-              <span className="inline-block w-4 h-4 bg-yellow-400 rounded-full mr-1"></span> Processing
-            </div>
-            <div className="flex items-center">
-              <span className="inline-block w-4 h-4 bg-green-500 rounded mr-1 flex items-center justify-center text-white text-xs">✓</span> Completed
-            </div>
-            <div className="flex items-center">
-              <span className="inline-block w-4 h-4 bg-red-500 rounded mr-1 flex items-center justify-center text-white text-xs">✕</span> Failed
             </div>
           </div>
 
