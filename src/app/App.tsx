@@ -50,6 +50,15 @@ function App() {
   const [isAnswersPaneExpanded, setIsAnswersPaneExpanded] = useState<boolean>(true);
   const [userText, setUserText] = useState<string>("");
   const [isMicrophoneMuted, setIsMicrophoneMuted] = useState<boolean>(false);
+  const [activeMobilePanel, setActiveMobilePanel] = useState<number>(0);
+  const [isMobileView, setIsMobileView] = useState<boolean>(false);
+  
+  // Touch event handlers
+  const [touchStart, setTouchStart] = useState<number | null>(null);
+  const [touchEnd, setTouchEnd] = useState<number | null>(null);
+  
+  // Minimum required distance between touchStart and touchEnd to be detected as swipe
+  const minSwipeDistance = 50;
 
   const sendClientEvent = (eventObj: any, eventNameSuffix = "") => {
     if (dcRef.current && dcRef.current.readyState === "open") {
@@ -370,6 +379,48 @@ function App() {
   useEffect(() => {
     localStorage.setItem("answersExpanded", isAnswersPaneExpanded.toString());
   }, [isAnswersPaneExpanded]);
+  
+  // Check if we're in mobile view
+  useEffect(() => {
+    const checkMobileView = () => {
+      setIsMobileView(window.innerWidth <= 640);
+    };
+    
+    checkMobileView();
+    window.addEventListener('resize', checkMobileView);
+    
+    return () => {
+      window.removeEventListener('resize', checkMobileView);
+    };
+  }, []);
+  
+  // Touch event handlers
+  const handleTouchStart = (e: React.TouchEvent) => {
+    setTouchEnd(null);
+    setTouchStart(e.targetTouches[0].clientX);
+  };
+  
+  const handleTouchMove = (e: React.TouchEvent) => {
+    setTouchEnd(e.targetTouches[0].clientX);
+  };
+  
+  const handleTouchEnd = () => {
+    if (!touchStart || !touchEnd) return;
+    
+    const distance = touchStart - touchEnd;
+    const isLeftSwipe = distance > minSwipeDistance;
+    const isRightSwipe = distance < -minSwipeDistance;
+    
+    if (isLeftSwipe) {
+      // Next panel (if not on the last one)
+      setActiveMobilePanel(prev => Math.min(prev + 1, 2));
+    }
+    
+    if (isRightSwipe) {
+      // Previous panel (if not on the first one)
+      setActiveMobilePanel(prev => Math.max(prev - 1, 0));
+    }
+  };
 
   const agentSetKey = searchParams.get("agentConfig") || "default";
 
@@ -453,33 +504,84 @@ function App() {
         </div>
       </div>
 
-      <div className="flex flex-1 gap-2 px-2 pb-2 overflow-hidden">
-        <div className={`${(isAnswersPaneExpanded || isEventsPaneExpanded) ? 'w-1/3' : 'w-full'} transition-all duration-200 h-full`}>
-          <Transcript
-            userText={userText}
-            setUserText={setUserText}
-            onSendMessage={handleSendTextMessage}
-            canSend={
-              sessionStatus === "CONNECTED" &&
-              dcRef.current?.readyState === "open"
-            }
-          />
-        </div>
+      {!isMobileView ? (
+        // Desktop layout
+        <div className="flex flex-1 gap-2 px-2 pb-2 overflow-hidden">
+          <div className={`${(isAnswersPaneExpanded || isEventsPaneExpanded) ? 'w-1/3' : 'w-full'} transition-all duration-200 h-full`}>
+            <Transcript
+              userText={userText}
+              setUserText={setUserText}
+              onSendMessage={handleSendTextMessage}
+              canSend={
+                sessionStatus === "CONNECTED" &&
+                dcRef.current?.readyState === "open"
+              }
+            />
+          </div>
 
-        <div className="flex flex-1 gap-2 h-full">
-          {isAnswersPaneExpanded && (
-            <div className={`${isEventsPaneExpanded ? 'w-1/2' : 'w-full'} transition-all duration-200 h-full`}>
-              <AgentAnswers isExpanded={true} />
-            </div>
-          )}
-          
-          {isEventsPaneExpanded && (
-            <div className={`${isAnswersPaneExpanded ? 'w-1/2' : 'w-full'} transition-all duration-200 h-full`}>
-              <Dashboard isExpanded={true} isDashboardEnabled={isEventsPaneExpanded} />
-            </div>
-          )}
+          <div className="flex flex-1 gap-2 h-full">
+            {isAnswersPaneExpanded && (
+              <div className={`${isEventsPaneExpanded ? 'w-1/2' : 'w-full'} transition-all duration-200 h-full`}>
+                <AgentAnswers isExpanded={true} />
+              </div>
+            )}
+            
+            {isEventsPaneExpanded && (
+              <div className={`${isAnswersPaneExpanded ? 'w-1/2' : 'w-full'} transition-all duration-200 h-full`}>
+                <Dashboard isExpanded={true} isDashboardEnabled={isEventsPaneExpanded} />
+              </div>
+            )}
+          </div>
         </div>
-      </div>
+      ) : (
+        // Mobile layout with swipe
+        <div 
+          className="mobile-swipe-container flex-1 overflow-hidden"
+          onTouchStart={handleTouchStart}
+          onTouchMove={handleTouchMove}
+          onTouchEnd={handleTouchEnd}
+        >
+          <div 
+            className="mobile-swipe-panel"
+            style={{ transform: `translateX(${(activeMobilePanel * -100)}%)` }}
+          >
+            <Transcript
+              userText={userText}
+              setUserText={setUserText}
+              onSendMessage={handleSendTextMessage}
+              canSend={
+                sessionStatus === "CONNECTED" &&
+                dcRef.current?.readyState === "open"
+              }
+            />
+          </div>
+          
+          <div 
+            className="mobile-swipe-panel"
+            style={{ transform: `translateX(${100 - (activeMobilePanel * 100)}%)` }}
+          >
+            <AgentAnswers isExpanded={true} />
+          </div>
+          
+          <div 
+            className="mobile-swipe-panel"
+            style={{ transform: `translateX(${200 - (activeMobilePanel * 100)}%)` }}
+          >
+            <Dashboard isExpanded={true} isDashboardEnabled={true} />
+          </div>
+          
+          {/* Panel indicators */}
+          <div className="mobile-indicators">
+            {[0, 1, 2].map((index) => (
+              <div 
+                key={index}
+                className={`mobile-indicator ${activeMobilePanel === index ? 'active' : ''}`}
+                onClick={() => setActiveMobilePanel(index)}
+              />
+            ))}
+          </div>
+        </div>
+      )}
 
       <BottomToolbar
         sessionStatus={sessionStatus}
@@ -490,6 +592,8 @@ function App() {
         setIsEventsPaneExpanded={handleDashboardToggle}
         isAnswersPaneExpanded={isAnswersPaneExpanded}
         setIsAnswersPaneExpanded={setIsAnswersPaneExpanded}
+        activeMobilePanel={activeMobilePanel}
+        setActiveMobilePanel={setActiveMobilePanel}
       />
     </div>
   );

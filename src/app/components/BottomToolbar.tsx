@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useEffect, useState } from "react";
 import { SessionStatus } from "@/app/types";
 
 interface BottomToolbarProps {
@@ -10,6 +10,8 @@ interface BottomToolbarProps {
   setIsEventsPaneExpanded: (val: boolean) => void;
   isAnswersPaneExpanded: boolean;
   setIsAnswersPaneExpanded: (val: boolean) => void;
+  activeMobilePanel?: number;
+  setActiveMobilePanel?: (panel: number) => void;
 }
 
 function BottomToolbar({
@@ -21,9 +23,25 @@ function BottomToolbar({
   setIsEventsPaneExpanded,
   isAnswersPaneExpanded,
   setIsAnswersPaneExpanded,
+  activeMobilePanel = 0,
+  setActiveMobilePanel = () => {},
 }: BottomToolbarProps) {
   const isConnected = sessionStatus === "CONNECTED";
   const isConnecting = sessionStatus === "CONNECTING";
+  const [isMobileView, setIsMobileView] = useState<boolean>(false);
+
+  useEffect(() => {
+    const checkMobileView = () => {
+      setIsMobileView(window.innerWidth <= 640);
+    };
+    
+    checkMobileView();
+    window.addEventListener('resize', checkMobileView);
+    
+    return () => {
+      window.removeEventListener('resize', checkMobileView);
+    };
+  }, []);
 
   function getConnectionButtonLabel() {
     if (isConnected) return "Disconnect";
@@ -59,6 +77,7 @@ function BottomToolbar({
 
   return (
     <div className="p-2 sm:p-4 flex flex-row flex-wrap items-center justify-center gap-2 sm:gap-x-8">
+      {/* Always show connection button */}
       <button
         onClick={onToggleConnection}
         className={getConnectionButtonClasses()}
@@ -67,6 +86,7 @@ function BottomToolbar({
         {getConnectionButtonLabel()}
       </button>
 
+      {/* Always show mic button */}
       <button
         onClick={() => setIsMicrophoneMuted(!isMicrophoneMuted)}
         disabled={!isConnected}
@@ -91,31 +111,53 @@ function BottomToolbar({
         )}
       </button>
 
-      <div className="mt-2 sm:mt-0 flex flex-row items-center gap-2">
-        <input
-          id="answers"
-          type="checkbox"
-          checked={isAnswersPaneExpanded}
-          onChange={e => setIsAnswersPaneExpanded(e.target.checked)}
-          className="w-4 h-4"
-        />
-        <label htmlFor="answers" className="flex items-center cursor-pointer text-sm sm:text-base">
-          Answers
-        </label>
-      </div>
+      {isMobileView ? (
+        // Mobile view: Show panel indicators
+        <div className="flex space-x-3 items-center">
+          {['Chat', 'Answers', 'Dashboard'].map((name, index) => (
+            <button
+              key={index}
+              className={`px-3 py-1 rounded-full text-xs ${
+                activeMobilePanel === index 
+                  ? 'bg-blue-500 text-white' 
+                  : 'bg-gray-200 text-gray-700'
+              }`}
+              onClick={() => setActiveMobilePanel(index)}
+            >
+              {name}
+            </button>
+          ))}
+        </div>
+      ) : (
+        // Desktop view: Show checkboxes
+        <>
+          <div className="mt-2 sm:mt-0 flex flex-row items-center gap-2">
+            <input
+              id="answers"
+              type="checkbox"
+              checked={isAnswersPaneExpanded}
+              onChange={e => setIsAnswersPaneExpanded(e.target.checked)}
+              className="w-4 h-4"
+            />
+            <label htmlFor="answers" className="flex items-center cursor-pointer text-sm sm:text-base">
+              Answers
+            </label>
+          </div>
 
-      <div className="mt-2 sm:mt-0 flex flex-row items-center gap-2">
-        <input
-          id="logs"
-          type="checkbox"
-          checked={isEventsPaneExpanded}
-          onChange={e => setIsEventsPaneExpanded(e.target.checked)}
-          className="w-4 h-4"
-        />
-        <label htmlFor="logs" className="flex items-center cursor-pointer text-sm sm:text-base">
-          Dashboard
-        </label>
-      </div>
+          <div className="mt-2 sm:mt-0 flex flex-row items-center gap-2">
+            <input
+              id="logs"
+              type="checkbox"
+              checked={isEventsPaneExpanded}
+              onChange={e => setIsEventsPaneExpanded(e.target.checked)}
+              className="w-4 h-4"
+            />
+            <label htmlFor="logs" className="flex items-center cursor-pointer text-sm sm:text-base">
+              Dashboard
+            </label>
+          </div>
+        </>
+      )}
     </div>
   );
 }

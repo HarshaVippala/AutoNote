@@ -34,4 +34,43 @@ body {
     white-space: pre-wrap;
     word-break: break-word;
   }
+  
+  .mobile-swipe-container {
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+    position: relative;
+  }
+  
+  .mobile-swipe-panel {
+    transition: transform 0.3s ease;
+    height: 100%;
+    width: 100%;
+    position: absolute;
+    top: 0;
+    left: 0;
+  }
+  
+  .mobile-indicators {
+    display: flex;
+    justify-content: center;
+    position: fixed;
+    bottom: 60px;
+    left: 0;
+    right: 0;
+    z-index: 20;
+  }
+  
+  .mobile-indicator {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background-color: rgba(156, 163, 175, 0.5);
+    margin: 0 4px;
+    transition: background-color 0.3s;
+  }
+  
+  .mobile-indicator.active {
+    background-color: rgba(37, 99, 235, 1);
+  }
 }
