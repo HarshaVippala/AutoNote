@@ -462,21 +462,16 @@ function Dashboard({ isExpanded, isDashboardEnabled }: DashboardProps) {
               {tokenUsage.tpm.toLocaleString()} / {tokenUsage.tpmLimit.toLocaleString()} | <span className="inline-block sm:ml-2">⏱️ Resets in: {tokenUsage.resetTimeSeconds}s</span>
             </div>
           </div>
-          <div className="h-2.5 bg-gray-200 rounded-full mb-2 overflow-hidden">
+          <div className="h-2 bg-gray-200 rounded-full mb-2">
             <div 
-              className="h-2.5 rounded-full transition-all duration-500 ease-in-out"
+              className="h-2 rounded-full"
               style={{ 
                 width: `${Math.min(100, (tokenUsage.tpm / tokenUsage.tpmLimit) * 100)}%`,
                 backgroundImage: tokenUsage.tpm / tokenUsage.tpmLimit > 0.8 
                   ? 'linear-gradient(to right, #ef4444, #f59e0b)' 
-                  : 'linear-gradient(to right, #3b82f6, #10b981)'
+                  : 'linear-gradient(to right, #3b82f6, #10b981)' 
               }}
-            >
-              <div className="h-full w-full opacity-30 bg-white" 
-                   style={{backgroundImage: 'linear-gradient(45deg, rgba(255,255,255,0.2) 25%, transparent 25%, transparent 50%, rgba(255,255,255,0.2) 50%, rgba(255,255,255,0.2) 75%, transparent 75%, transparent)', 
-                          backgroundSize: '15px 15px',
-                          animation: 'progress-animation 1s linear infinite'}}></div>
-            </div>
+            ></div>
           </div>
           <div className="grid grid-cols-2 sm:flex sm:justify-between text-xs font-mono gap-y-1">
             <div>In: <span className="font-semibold">{tokenUsage.input.toLocaleString()}</span></div>
@@ -535,31 +530,27 @@ function Dashboard({ isExpanded, isDashboardEnabled }: DashboardProps) {
 
                       if (step.status === "completed") {
                         statusElement = (
-                          <div className="w-8 h-8 rounded-full bg-gradient-to-br from-green-400 to-green-600 shadow-md flex items-center justify-center text-white transform transition-transform duration-200 hover:scale-110">
-                            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
-                              <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
-                            </svg>
+                          <div className="w-8 h-8 rounded-full bg-green-500 flex items-center justify-center text-white">
+                            ✓
                           </div>
                         );
                       } else if (step.status === "processing") {
                         statusElement = (
-                          <div className="w-8 h-8 rounded-full border-2 border-yellow-400 bg-white flex items-center justify-center shadow-md relative transform transition-transform duration-200 hover:scale-110">
-                            <div className="w-3 h-3 bg-yellow-400 rounded-full absolute animate-pulse"></div>
+                          <div className="w-8 h-8 rounded-full border-2 border-yellow-400 bg-white flex items-center justify-center text-yellow-400">
+                            ●
                           </div>
                         );
                         lineColor = "bg-yellow-400";
                       } else if (step.status === "failed") {
                         statusElement = (
-                          <div className="w-8 h-8 rounded-full bg-gradient-to-br from-red-400 to-red-600 shadow-md flex items-center justify-center text-white transform transition-transform duration-200 hover:scale-110">
-                            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
-                              <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
-                            </svg>
+                          <div className="w-8 h-8 rounded-full bg-red-500 flex items-center justify-center text-white">
+                            ✕
                           </div>
                         );
                         lineColor = "bg-gray-200";
                       } else {
                         statusElement = (
-                          <div className="w-8 h-8 rounded-full bg-gray-200 flex items-center justify-center text-gray-500 shadow-sm transform transition-transform duration-200 hover:scale-110">
+                          <div className="w-8 h-8 rounded-full bg-gray-200 flex items-center justify-center text-gray-500">
                             {stepIdx + 1}
                           </div>
                         );
@@ -681,13 +672,3 @@ function Dashboard({ isExpanded, isDashboardEnabled }: DashboardProps) {
 }
 
 export default Dashboard;
-<style jsx>{`
-  @keyframes progress-animation {
-    0% {
-      background-position: 0 0;
-    }
-    100% {
-      background-position: 15px 0;
-    }
-  }
-`}</style>
