@@ -304,18 +304,12 @@ function App() {
     );
   };
 
-  // Import capitalization utility
-  import { capitalizeFirstLetter } from "@/app/lib/textUtils";
-
   const handleSendTextMessage = () => {
     if (!userText.trim()) return;
     cancelAssistantSpeech();
 
-    // Ensure text is properly capitalized
-    const processedText = capitalizeFirstLetter(userText.trim());
-    
     const messageId = uuidv4();
-    addTranscriptMessage(messageId, "user", processedText, false, "user");
+    addTranscriptMessage(messageId, "user", userText.trim(), false, "user");
 
     sendClientEvent(
       {
@@ -324,7 +318,7 @@ function App() {
           id: messageId,
           type: "message",
           role: "user",
-          content: [{ type: "input_text", text: processedText }],
+          content: [{ type: "input_text", text: userText.trim() }],
         },
       },
       "(send user text message)"
