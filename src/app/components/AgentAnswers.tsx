@@ -50,7 +50,7 @@ function AgentAnswers({ isExpanded }: AgentAnswersProps) {
       {isExpanded && (
         <div className="h-full flex flex-col">
           <div className="font-semibold px-6 py-4 sticky top-0 z-10 text-base border-b bg-white">
-            Response Agent Answers
+            
           </div>
           <div className="overflow-auto p-4 flex-1 flex flex-col gap-y-4">
             {assistantMessages.map((item) => {
