@@ -79,8 +79,7 @@ function Transcript({
               const displayTitle = isBracketedMessage ? title.slice(1, -1) : title;
 
               // Get agent initials for assistant messages
-              const agentInitials = !isUser && item.agentName ? 
-                item.agentName.split(/(?=[A-Z])/).map(part => part[0]).join('') : '';
+              const agentInitials = !isUser ? 'GA' : '';
               
               return (
                 <div key={itemId} className={containerClasses}>
@@ -88,7 +87,7 @@ function Transcript({
                     {/* Agent initials bubble positioned outside at top left */}
                     {!isUser && agentInitials && (
                       <div className="absolute -left-3 -top-3 z-10">
-                        <div className="text-xs bg-blue-100 text-blue-800 rounded-full w-5 h-5 flex items-center justify-center shadow-sm">
+                        <div className="text-xs bg-teal-600 text-white rounded-full w-6 h-6 flex items-center justify-center shadow-sm">
                           {agentInitials}
                         </div>
                       </div>
