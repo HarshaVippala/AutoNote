@@ -155,7 +155,7 @@ function Transcript({
             ) : (
               <button
                 onClick={() => setIsInputExpanded(false)}
-                className="bg-gray-400 text-white rounded-r-full p-1.5 h-[34px] border border-gray-400 border-l-0 flex items-center justify-center"
+                className="bg-gray-400 text-gray-800 rounded-r-full p-1.5 h-[34px] border border-gray-400 border-l-0 flex items-center justify-center"
               >
                 <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="currentColor" viewBox="0 0 16 16">
                   <path fillRule="evenodd" d="M8 4a.5.5 0 0 1 .5.5v5.793l2.146-2.147a.5.5 0 0 1 .708.708l-3 3a.5.5 0 0 1-.708 0l-3-3a.5.5 0 1 1 .708-.708L7.5 10.293V4.5A.5.5 0 0 1 8 4z"/>
@@ -166,7 +166,7 @@ function Transcript({
         ) : (
           <button
             onClick={() => setIsInputExpanded(true)}
-            className="bg-gray-400 hover:bg-gray-500 text-white rounded-full p-2 absolute bottom-2 right-2"
+            className="bg-gray-400 hover:bg-gray-500 text-gray-800 rounded-full p-2 absolute bottom-2 right-2"
             title="Open keyboard"
           >
             <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" fill="currentColor" viewBox="0 0 16 16">
