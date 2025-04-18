@@ -32,7 +32,7 @@ function BottomToolbar({
   }
 
   function getConnectionButtonClasses() {
-    const baseClasses = "text-white text-base p-2 w-36 rounded-full h-full";
+    const baseClasses = "text-white text-sm sm:text-base p-2 w-32 sm:w-36 rounded-full h-full";
     const cursorClass = isConnecting ? "cursor-not-allowed" : "cursor-pointer";
 
     if (isConnected) {
@@ -44,7 +44,7 @@ function BottomToolbar({
   }
 
   function getMicButtonClasses() {
-    const baseClasses = "py-2 px-4 rounded-full flex items-center gap-2";
+    const baseClasses = "py-1 sm:py-2 px-3 sm:px-4 rounded-full flex items-center gap-1 sm:gap-2 text-sm sm:text-base";
     
     if (!isConnected) {
       return `${baseClasses} bg-gray-100 text-gray-400 cursor-not-allowed`;
@@ -58,7 +58,7 @@ function BottomToolbar({
   }
 
   return (
-    <div className="p-4 flex flex-row items-center justify-center gap-x-8">
+    <div className="p-2 sm:p-4 flex flex-row flex-wrap items-center justify-center gap-2 sm:gap-x-8">
       <button
         onClick={onToggleConnection}
         className={getConnectionButtonClasses()}
@@ -78,7 +78,7 @@ function BottomToolbar({
               <path d="M13 8c0 .564-.094 1.107-.266 1.613l-.814-.814A4.02 4.02 0 0 0 12 8V7a.5.5 0 0 1 1 0v1zm-5 4c.818 0 1.578-.245 2.212-.667l.718.719a4.973 4.973 0 0 1-2.43.923V15h3a.5.5 0 0 1 0 1h-7a.5.5 0 0 1 0-1h3v-2.025A5 5 0 0 1 3 8V7a.5.5 0 0 1 1 0v1a4 4 0 0 0 4 4zm3-9v4.879L5.158 2.037A3.001 3.001 0 0 1 11 3z"/>
               <path d="M9.486 10.607 5 6.12V8a3 3 0 0 0 4.486 2.607zm-7.84-9.253 12 12 .708-.708-12-12-.708.708z"/>
             </svg>
-            <span>Unmute</span>
+            <span className="ml-1">Unmute</span>
           </>
         ) : (
           <>
@@ -86,12 +86,12 @@ function BottomToolbar({
               <path d="M5 3a3 3 0 0 1 6 0v5a3 3 0 0 1-6 0V3z"/>
               <path d="M3.5 6.5A.5.5 0 0 1 4 7v1a4 4 0 0 0 8 0V7a.5.5 0 0 1 1 0v1a5 5 0 0 1-4.5 4.975V15h3a.5.5 0 0 1 0 1h-7a.5.5 0 0 1 0-1h3v-2.025A5 5 0 0 1 3 8V7a.5.5 0 0 1 .5-.5z"/>
             </svg>
-            <span>Mute</span>
+            <span className="ml-1">Mute</span>
           </>
         )}
       </button>
 
-      <div className="flex flex-row items-center gap-2">
+      <div className="mt-2 sm:mt-0 flex flex-row items-center gap-2">
         <input
           id="answers"
           type="checkbox"
@@ -99,12 +99,12 @@ function BottomToolbar({
           onChange={e => setIsAnswersPaneExpanded(e.target.checked)}
           className="w-4 h-4"
         />
-        <label htmlFor="answers" className="flex items-center cursor-pointer">
+        <label htmlFor="answers" className="flex items-center cursor-pointer text-sm sm:text-base">
           Answers
         </label>
       </div>
 
-      <div className="flex flex-row items-center gap-2">
+      <div className="mt-2 sm:mt-0 flex flex-row items-center gap-2">
         <input
           id="logs"
           type="checkbox"
@@ -112,7 +112,7 @@ function BottomToolbar({
           onChange={e => setIsEventsPaneExpanded(e.target.checked)}
           className="w-4 h-4"
         />
-        <label htmlFor="logs" className="flex items-center cursor-pointer">
+        <label htmlFor="logs" className="flex items-center cursor-pointer text-sm sm:text-base">
           Dashboard
         </label>
       </div>

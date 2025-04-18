@@ -90,19 +90,19 @@ function Dashboard({ isExpanded, isDashboardEnabled }: DashboardProps) {
     tpmLimit: DEFAULT_TPM_LIMIT,
     resetTimeSeconds: 60,
   });
-  
+
   const [cost, setCost] = useState<Cost>({
     input: 0,
     output: 0,
     total: 0,
     dailyLimit: 5, // $5 daily soft cap
   });
-  
+
   const [apiKeyStatus, setApiKeyStatus] = useState<ApiKeyStatus>({
     isPresent: false,
     statusMessage: "API Key Not Configured"
   });
-  
+
   const [sessionStartTime, setSessionStartTime] = useState<Date>(new Date());
   const [currentTime, setCurrentTime] = useState<Date>(new Date());
   const [selectedAgent, setSelectedAgent] = useState<string | null>(null);
@@ -137,7 +137,7 @@ function Dashboard({ isExpanded, isDashboardEnabled }: DashboardProps) {
   const { tokenUsage: totalTokens, cost: totalCost } = useMemo(() => {
     let totalTokens = 0;
     let totalCost = 0;
-    
+
     // Process events in reverse order until we find a token usage event
     for (let i = loggedEvents.length - 1; i >= 0; i--) {
       const event = loggedEvents[i];
@@ -150,7 +150,7 @@ function Dashboard({ isExpanded, isDashboardEnabled }: DashboardProps) {
         }
       }
     }
-    
+
     return { tokenUsage: totalTokens, cost: totalCost };
   }, [loggedEvents]);
 
@@ -192,7 +192,7 @@ function Dashboard({ isExpanded, isDashboardEnabled }: DashboardProps) {
   // Update agent processes based on logged events
   useEffect(() => {
     if (!isDashboardEnabled) return;
-    
+
     // Map of agent steps configurations
     const agentStepConfigs: Record<string, { icon: string, stepPatterns: string[] }> = {
       "conversationAgent": { 
@@ -204,7 +204,7 @@ function Dashboard({ isExpanded, isDashboardEnabled }: DashboardProps) {
         stepPatterns: ["request.received", "completion.requested", "tokens.generated"] 
       }
     };
-    
+
     // Initialize agents with default steps (not_started status)
     const initialAgentProcesses: AgentProcess[] = Object.entries(agentStepConfigs).map(([name, config]) => ({
       name,
@@ -214,7 +214,7 @@ function Dashboard({ isExpanded, isDashboardEnabled }: DashboardProps) {
         status: "not_started" 
       }))
     }));
-    
+
     // Process events to update step statuses
     loggedEvents.forEach(event => {
       if (event.direction === "server") {
@@ -223,7 +223,7 @@ function Dashboard({ isExpanded, isDashboardEnabled }: DashboardProps) {
         const agentName = event.eventData?.item?.name || "unknown";
         const timestamp = event.timestamp;
         const isError = eventType.toLowerCase().includes("error") || eventType.toLowerCase().includes("failed");
-        
+
         // Find matching agents and update their step statuses
         initialAgentProcesses.forEach(agent => {
           if (agent.name === agentName) {
@@ -244,7 +244,7 @@ function Dashboard({ isExpanded, isDashboardEnabled }: DashboardProps) {
         });
       }
     });
-    
+
     // Find the latest active step for each agent and set it to "processing"
     initialAgentProcesses.forEach(agent => {
       // Find the first "not_started" step after any "completed" steps
@@ -256,26 +256,26 @@ function Dashboard({ isExpanded, isDashboardEnabled }: DashboardProps) {
         }
       }
     });
-    
+
     // Only update state if there are real changes
     if (initialAgentProcesses.length > 0) {
       setAgentProcesses(initialAgentProcesses);
     }
   }, [loggedEvents, isDashboardEnabled]);
-  
+
   // Update time every second for session duration
   useEffect(() => {
     if (!isDashboardEnabled) return;
-    
+
     const timer = setInterval(() => {
       setCurrentTime(new Date());
-      
+
       // Decrement reset timer
       setTokenUsage(prev => ({
         ...prev,
         resetTimeSeconds: Math.max(0, prev.resetTimeSeconds - 1)
       }));
-      
+
       // Reset TPM counter when timer reaches 0
       if (tokenUsage.resetTimeSeconds === 0) {
         setTokenUsage(prev => ({
@@ -285,32 +285,32 @@ function Dashboard({ isExpanded, isDashboardEnabled }: DashboardProps) {
         }));
       }
     }, 1000);
-    
+
     return () => clearInterval(timer);
   }, [tokenUsage.resetTimeSeconds, isDashboardEnabled]);
 
   // Extract token usage from events
   useEffect(() => {
     if (!isDashboardEnabled) return;
-    
+
     let inputTokens = 0;
     let outputTokens = 0;
     let currentModel = "default";
-    
+
     loggedEvents.forEach(event => {
       // Check for model information
       if (event.direction === "server" && event.eventData?.model) {
         currentModel = event.eventData.model;
         setActiveModel(currentModel);
       }
-      
+
       // Track token metrics from response.done events
       if (event.eventName === "response.done" && event.direction === "server") {
         const usage = event.eventData?.response?.usage;
         if (usage) {
           // Get total tokens
           const totalTokens = usage.total_tokens || 0;
-          
+
           // Get input tokens
           const inputDetails = usage.input_token_details;
           if (inputDetails) {
@@ -320,7 +320,7 @@ function Dashboard({ isExpanded, isDashboardEnabled }: DashboardProps) {
               (inputDetails.cached_tokens || 0)
             );
           }
-          
+
           // Get output tokens
           const outputDetails = usage.output_token_details;
           if (outputDetails) {
@@ -329,7 +329,7 @@ function Dashboard({ isExpanded, isDashboardEnabled }: DashboardProps) {
               (outputDetails.audio_tokens || 0)
             );
           }
-          
+
           // If no details available, use the direct counts
           if (!inputDetails && !outputDetails) {
             inputTokens = Math.max(inputTokens, usage.input_tokens || 0);
@@ -338,15 +338,15 @@ function Dashboard({ isExpanded, isDashboardEnabled }: DashboardProps) {
         }
       }
     });
-    
+
     // Get the rate limit for the current model or use default
     const modelLimits = MODEL_RATE_LIMITS[currentModel] || MODEL_RATE_LIMITS.default;
     const tpmLimit = modelLimits.tpm;
-    
+
     // Update token usage
     const total = inputTokens + outputTokens;
     const tpm = Math.min(total, tpmLimit);
-    
+
     setTokenUsage({
       input: inputTokens,
       output: outputTokens,
@@ -355,12 +355,12 @@ function Dashboard({ isExpanded, isDashboardEnabled }: DashboardProps) {
       tpmLimit: tpmLimit,
       resetTimeSeconds: tokenUsage.resetTimeSeconds
     });
-    
+
     // Calculate cost
     const inputCost = (inputTokens / 1000) * TOKEN_RATES.input;
     const outputCost = (outputTokens / 1000) * TOKEN_RATES.output;
     const totalCost = inputCost + outputCost;
-    
+
     setCost({
       input: inputCost,
       output: outputCost,
@@ -372,12 +372,12 @@ function Dashboard({ isExpanded, isDashboardEnabled }: DashboardProps) {
   // Update API key status based on token events
   useEffect(() => {
     if (!isDashboardEnabled) return;
-    
+
     const tokenEvents = loggedEvents.filter(e => e.eventName === "fetch_session_token_response");
     if (tokenEvents.length > 0) {
       const latest = tokenEvents[tokenEvents.length - 1];
       const hasError = latest.eventData?.error || !latest.eventData?.client_secret?.value;
-      
+
       setApiKeyStatus({
         isPresent: !hasError,
         statusMessage: hasError ? (latest.eventData?.error || "Invalid API Key") : "API Key Valid"
@@ -393,7 +393,7 @@ function Dashboard({ isExpanded, isDashboardEnabled }: DashboardProps) {
     const seconds = Math.floor(diffSec % 60).toString().padStart(2, '0');
     return `${hours}:${minutes}:${seconds}`;
   }, [currentTime, sessionStartTime]);
-  
+
   const getStatusIcon = (status: string) => {
     switch (status) {
       case "completed":
@@ -452,14 +452,14 @@ function Dashboard({ isExpanded, isDashboardEnabled }: DashboardProps) {
       <div className="font-semibold text-base px-4 py-2 border-b bg-gray-50">
         Dashboard
       </div>
-      
+
       <div className="flex-1 overflow-hidden flex flex-col">
         {/* TPM Usage Section with Progress Bar */}
-        <div className="px-4 py-2 border-b bg-gray-50">
-          <div className="flex justify-between items-center mb-1">
+        <div className="px-3 sm:px-4 py-2 border-b bg-gray-50">
+          <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center mb-1">
             <div className="font-semibold text-sm">TPM Usage:</div>
-            <div className="font-mono text-sm">
-              {tokenUsage.tpm.toLocaleString()} / {tokenUsage.tpmLimit.toLocaleString()} | <span className="inline-block ml-2">⏱️ Resets in: {tokenUsage.resetTimeSeconds}s</span>
+            <div className="font-mono text-xs sm:text-sm">
+              {tokenUsage.tpm.toLocaleString()} / {tokenUsage.tpmLimit.toLocaleString()} | <span className="inline-block sm:ml-2">⏱️ Resets in: {tokenUsage.resetTimeSeconds}s</span>
             </div>
           </div>
           <div className="h-2 bg-gray-200 rounded-full mb-2">
@@ -473,14 +473,14 @@ function Dashboard({ isExpanded, isDashboardEnabled }: DashboardProps) {
               }}
             ></div>
           </div>
-          <div className="flex justify-between text-xs font-mono">
-            <div>Input: <span className="font-semibold">{tokenUsage.input.toLocaleString()}</span></div>
-            <div>Output: <span className="font-semibold">{tokenUsage.output.toLocaleString()}</span></div>
+          <div className="grid grid-cols-2 sm:flex sm:justify-between text-xs font-mono gap-y-1">
+            <div>In: <span className="font-semibold">{tokenUsage.input.toLocaleString()}</span></div>
+            <div>Out: <span className="font-semibold">{tokenUsage.output.toLocaleString()}</span></div>
             <div>Total: <span className="font-semibold">{tokenUsage.total.toLocaleString()}</span></div>
-            <div>Model: <span className="font-semibold">{activeModel}</span></div>
+            <div>Model: <span className="font-semibold truncate" title={activeModel}>{activeModel.length > 10 ? activeModel.substring(0, 10) + '...' : activeModel}</span></div>
           </div>
         </div>
-        
+
         {/* API Key Status */}
         <div className="px-4 py-3 border-b">
           <div className="flex justify-between items-center">
@@ -489,16 +489,16 @@ function Dashboard({ isExpanded, isDashboardEnabled }: DashboardProps) {
               {apiKeyStatus.isPresent ? 'Present' : 'Missing'}
             </div>
           </div>
-          
+
           <div className="text-xs mt-2 text-gray-500">
             {apiKeyStatus.statusMessage}
           </div>
         </div>
-        
+
         {/* Agent Process Timeline */}
         <div className="px-4 py-3 border-b">
           <h2 className="font-semibold text-sm mb-2">Agent Process Timeline</h2>
-          
+
           <div className="mb-2 text-xs flex space-x-3 bg-gray-50 p-2 rounded">
             <div className="flex items-center">
               <span className="inline-block w-4 h-4 bg-gray-200 rounded mr-1"></span> Not started
@@ -513,7 +513,7 @@ function Dashboard({ isExpanded, isDashboardEnabled }: DashboardProps) {
               <span className="inline-block w-4 h-4 bg-red-500 rounded mr-1 flex items-center justify-center text-white text-xs">✕</span> Failed
             </div>
           </div>
-          
+
           <div className="space-y-4 max-h-64 overflow-auto pr-1">
             {agentProcesses.map((agent, idx) => (
               <div key={idx} className="border rounded-lg overflow-hidden">
@@ -527,7 +527,7 @@ function Dashboard({ isExpanded, isDashboardEnabled }: DashboardProps) {
                       // Determine styling based on status
                       let statusElement;
                       let lineColor = "bg-blue-400";
-                      
+
                       if (step.status === "completed") {
                         statusElement = (
                           <div className="w-8 h-8 rounded-full bg-green-500 flex items-center justify-center text-white">
@@ -556,7 +556,7 @@ function Dashboard({ isExpanded, isDashboardEnabled }: DashboardProps) {
                         );
                         lineColor = "bg-gray-200";
                       }
-                      
+
                       return (
                         <React.Fragment key={stepIdx}>
                           <div className="flex flex-col items-center">
@@ -565,7 +565,7 @@ function Dashboard({ isExpanded, isDashboardEnabled }: DashboardProps) {
                               {step.name}
                             </div>
                           </div>
-                          
+
                           {/* Line between steps */}
                           {stepIdx < agent.steps.length - 1 && (
                             <div className={`h-0.5 flex-1 ${lineColor} mx-1`}></div>
@@ -579,7 +579,7 @@ function Dashboard({ isExpanded, isDashboardEnabled }: DashboardProps) {
             ))}
           </div>
         </div>
-        
+
         {/* Logs Explorer - Moved to the bottom */}
         <div className="flex flex-col overflow-hidden border-t mt-auto">
           <div 
@@ -591,7 +591,7 @@ function Dashboard({ isExpanded, isDashboardEnabled }: DashboardProps) {
               {logsExpanded ? '▼' : '▶'}
             </button>
           </div>
-          
+
           {logsExpanded && (
             <>
               <div className="px-3 py-2 border-b flex gap-2 items-center">
@@ -606,7 +606,7 @@ function Dashboard({ isExpanded, isDashboardEnabled }: DashboardProps) {
                   ))}
                 </select>
               </div>
-              
+
               <div className="overflow-auto flex-1 max-h-96">
                 <div className="divide-y">
                   {[...filteredEvents].map((log) => {
@@ -614,7 +614,7 @@ function Dashboard({ isExpanded, isDashboardEnabled }: DashboardProps) {
                     const directionIcon = log.direction === "client" ? "▲" : "▼";
                     const directionColor = log.direction === "client" ? "text-purple-600" : "text-green-600";
                     const isProjectEvent = log.eventData?.project_id === projectId;
-                    
+
                     return (
                       <div
                         key={log.id}
@@ -639,7 +639,7 @@ function Dashboard({ isExpanded, isDashboardEnabled }: DashboardProps) {
                             {log.timestamp}
                           </div>
                         </div>
-                        
+
                         {log.expanded && (
                           <div className="mt-1 border-t pt-1">
                             <pre className="text-[10px] overflow-auto whitespace-pre-wrap text-gray-700 bg-gray-50 p-2 rounded">
@@ -656,7 +656,7 @@ function Dashboard({ isExpanded, isDashboardEnabled }: DashboardProps) {
           )}
         </div>
       </div>
-      
+
       {/* Alert Banner */}
       {showAlert && (
         <div className={`px-4 py-2 text-white ${isNearingTpmLimit ? 'bg-red-500' : 'bg-orange-500'}`}>
