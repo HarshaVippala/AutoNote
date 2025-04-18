@@ -32,13 +32,53 @@ body {
 
 /* JARVIS title animation */
 .text-transparent.bg-gradient-to-r {
-  transition: background-position 0.3s ease;
+  transition: background-position 0.3s ease, transform 0.3s ease;
   background-size: 200% 100%;
   background-position: 0% 0%;
 }
 
 .text-transparent.bg-gradient-to-r:hover {
   background-position: 100% 0%;
+  transform: scale(1.03);
+}
+
+/* Modern UI Enhancements */
+.rounded-xl {
+  border-radius: 0.75rem;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03);
+  transition: box-shadow 0.2s ease-in-out, transform 0.2s ease-in-out;
+}
+
+.rounded-xl:hover {
+  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.08), 0 4px 6px -2px rgba(0, 0, 0, 0.04);
+}
+
+/* Button Improvements */
+button {
+  transition: all 0.2s ease;
+}
+
+button:hover:not(:disabled) {
+  transform: translateY(-1px);
+}
+
+button:active:not(:disabled) {
+  transform: translateY(1px);
+}
+
+/* Progress Bar Enhancement */
+.h-2.bg-gray-200.rounded-full .h-2.rounded-full {
+  transition: width 0.5s ease-in-out;
+}
+
+/* Input Field Improvements */
+input, textarea {
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+input:focus, textarea:focus {
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.3);
+  outline: none;
 }
 
 

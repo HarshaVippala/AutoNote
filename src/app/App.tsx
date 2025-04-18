@@ -469,14 +469,6 @@ function App() {
     <div className="p-2 border-b border-gray-200 bg-white flex items-center justify-between overflow-hidden">
       <div className="flex items-center">
         <div onClick={() => window.location.reload()} style={{ cursor: 'pointer' }}>
-          {/* OpenAI Logo Removed */}
-          {/* <Image
-            src="/openai-logomark.svg"
-            alt="OpenAI Logo"
-            width={20}
-            height={20}
-            className="mr-2"
-          /> */}
           <span className="block sm:hidden text-xl font-extrabold tracking-tight bg-gradient-to-r from-blue-600 to-cyan-500 bg-clip-text text-transparent">JARVIS</span>
         </div>
         <div className="hidden sm:block text-2xl font-extrabold tracking-tight bg-gradient-to-r from-blue-600 to-cyan-500 bg-clip-text text-transparent ml-2">
