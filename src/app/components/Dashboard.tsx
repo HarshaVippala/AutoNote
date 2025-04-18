@@ -571,7 +571,7 @@ function Dashboard({ isExpanded, isDashboardEnabled, transcriptItems }: Dashboar
                 <div className="flex items-center">
                   {/* Calculate agent status based on steps */}
                   {(() => {
-                    const hasError = agent.steps.some(step => step.status === "error");
+                    const hasError = agent.steps.some(step => step.status === "failed");
                     const isWorking = agent.steps.some(step => step.status === "processing");
                     const isReady = agent.steps.some(step => step.status === "completed") && !isWorking && !hasError;
                     const isIdle = agent.steps.every(step => step.status === "not_started");
@@ -597,57 +597,6 @@ function Dashboard({ isExpanded, isDashboardEnabled, transcriptItems }: Dashboar
                       );
                     }
                   })()}
-                </div>
-              </div>
-            ))}
-          </div>olor = "bg-blue-400";
-
-                      if (step.status === "completed") {
-                        statusElement = (
-                          <div className="w-8 h-8 rounded-full bg-green-500 flex items-center justify-center text-white">
-                            ✓
-                          </div>
-                        );
-                      } else if (step.status === "processing") {
-                        statusElement = (
-                          <div className="w-8 h-8 rounded-full border-2 border-yellow-400 bg-white flex items-center justify-center text-yellow-400">
-                            ●
-                          </div>
-                        );
-                        lineColor = "bg-yellow-400";
-                      } else if (step.status === "failed") {
-                        statusElement = (
-                          <div className="w-8 h-8 rounded-full bg-red-500 flex items-center justify-center text-white">
-                            ✕
-                          </div>
-                        );
-                        lineColor = "bg-gray-200";
-                      } else {
-                        statusElement = (
-                          <div className="w-8 h-8 rounded-full bg-gray-200 flex items-center justify-center text-gray-500">
-                            {stepIdx + 1}
-                          </div>
-                        );
-                        lineColor = "bg-gray-200";
-                      }
-
-                      return (
-                        <React.Fragment key={stepIdx}>
-                          <div className="flex flex-col items-center">
-                            {statusElement}
-                            <div className="text-xs mt-2 max-w-[120px] text-center truncate" title={step.name}>
-                              {step.name}
-                            </div>
-                          </div>
-
-                          {/* Line between steps */}
-                          {stepIdx < agent.steps.length - 1 && (
-                            <div className={`h-0.5 flex-1 ${lineColor} mx-1`}></div>
-                          )}
-                        </React.Fragment>
-                      );
-                    })}
-                  </div>
                 </div>
               </div>
             ))}
