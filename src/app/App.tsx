@@ -690,7 +690,8 @@ function App() {
           {/* Mobile Panel Indicators */}
           <div className="absolute bottom-4 left-0 right-0 flex justify-center items-center gap-3 pointer-events-none">
             {['Chat', 'Dashboard'].map((name, index) => {
-              // Only show Dashboard indicator if the dashboard is enabled              if (name === 'Dashboard' && !isEventsPaneExpanded) {
+              // Only show Dashboard indicator if the dashboard is enabled
+              if (name === 'Dashboard' && !isEventsPaneExpanded) {
                 return null;
               }
 
