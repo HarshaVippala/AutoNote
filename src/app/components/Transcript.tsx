@@ -56,8 +56,6 @@ function Transcript({
     }
   }, [canSend]);
 
-  const [isInputExpanded, setIsInputExpanded] = useState<boolean>(false);
-
   return (
     <div className="flex flex-col h-full bg-white rounded-xl">
       <div className="relative flex-1 overflow-hidden">
