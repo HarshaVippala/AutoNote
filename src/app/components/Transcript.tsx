@@ -54,6 +54,9 @@ function Transcript({
     }
   }, [canSend]);
 
+  // Import capitalization utility
+  import { capitalizeFirstLetter } from "@/app/lib/textUtils";
+  
   return (
     <div className="flex flex-col h-full bg-white rounded-xl">
       <div className="relative flex-1 overflow-hidden">
@@ -128,6 +131,8 @@ function Transcript({
           onChange={(e) => setUserText(e.target.value)}
           onKeyDown={(e) => {
             if (e.key === "Enter" && canSend) {
+              // Capitalize the text first
+              setUserText(capitalizeFirstLetter(userText.trim()));
               onSendMessage();
             }
           }}
@@ -135,7 +140,11 @@ function Transcript({
           placeholder="Type a message..."
         />
         <button
-          onClick={onSendMessage}
+          onClick={() => {
+            // Capitalize the text first
+            setUserText(capitalizeFirstLetter(userText.trim()));
+            onSendMessage();
+          }}
           disabled={!canSend || !userText.trim()}
           className="bg-gray-900 text-white rounded-full p-1.5 disabled:opacity-50"
         >
