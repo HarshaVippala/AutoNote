@@ -6,13 +6,15 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "build-check": "./scripts/build.sh"
   },
   "dependencies": {
     "next": "15.2.4",
     "openai": "^4.77.3",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
+    "react-draggable": "^4.4.6",
     "react-markdown": "^9.0.3",
     "uuid": "^11.0.4"
   },

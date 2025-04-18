@@ -8,7 +8,8 @@ import Image from "next/image";
 
 // UI components
 import Transcript from "./components/Transcript";
-import Events from "./components/Events";
+import Dashboard from "./components/Dashboard";
+import AgentAnswers from "./components/AgentAnswers";
 import BottomToolbar from "./components/BottomToolbar";
 
 // Types
@@ -36,20 +37,19 @@ function App() {
   const [selectedAgentConfigSet, setSelectedAgentConfigSet] =
     useState<AgentConfig[] | null>(null);
 
-  const [dataChannel, setDataChannel] = useState<RTCDataChannel | null>(null);
+  const [, setDataChannel] = useState<RTCDataChannel | null>(null);
   const pcRef = useRef<RTCPeerConnection | null>(null);
   const dcRef = useRef<RTCDataChannel | null>(null);
   const audioElementRef = useRef<HTMLAudioElement | null>(null);
+  const audioTrackRef = useRef<MediaStreamTrack | null>(null);
   const [sessionStatus, setSessionStatus] =
     useState<SessionStatus>("DISCONNECTED");
 
   const [isEventsPaneExpanded, setIsEventsPaneExpanded] =
     useState<boolean>(true);
+  const [isAnswersPaneExpanded, setIsAnswersPaneExpanded] = useState<boolean>(true);
   const [userText, setUserText] = useState<string>("");
-  const [isPTTActive, setIsPTTActive] = useState<boolean>(false);
-  const [isPTTUserSpeaking, setIsPTTUserSpeaking] = useState<boolean>(false);
-  const [isAudioPlaybackEnabled, setIsAudioPlaybackEnabled] =
-    useState<boolean>(true);
+  const [isMicrophoneMuted, setIsMicrophoneMuted] = useState<boolean>(false);
 
   const sendClientEvent = (eventObj: any, eventNameSuffix = "") => {
     if (dcRef.current && dcRef.current.readyState === "open") {
@@ -115,14 +115,12 @@ function App() {
     }
   }, [selectedAgentConfigSet, selectedAgentName, sessionStatus]);
 
+  // Update microphone state when mute status changes
   useEffect(() => {
-    if (sessionStatus === "CONNECTED") {
-      console.log(
-        `updatingSession, isPTTACtive=${isPTTActive} sessionStatus=${sessionStatus}`
-      );
-      updateSession();
+    if (audioTrackRef.current) {
+      audioTrackRef.current.enabled = !isMicrophoneMuted;
     }
-  }, [isPTTActive]);
+  }, [isMicrophoneMuted]);
 
   const fetchEphemeralKey = async (): Promise<string | null> => {
     logClientEvent({ url: "/session" }, "fetch_session_token_request");
@@ -153,14 +151,21 @@ function App() {
       if (!audioElementRef.current) {
         audioElementRef.current = document.createElement("audio");
       }
-      audioElementRef.current.autoplay = isAudioPlaybackEnabled;
+      audioElementRef.current.autoplay = true;
+      audioElementRef.current.volume = 0;
 
-      const { pc, dc } = await createRealtimeConnection(
+      const { pc, dc, audioTrack } = await createRealtimeConnection(
         EPHEMERAL_KEY,
         audioElementRef
       );
       pcRef.current = pc;
       dcRef.current = dc;
+      audioTrackRef.current = audioTrack;
+
+      // Apply initial mute state
+      if (audioTrackRef.current) {
+        audioTrackRef.current.enabled = !isMicrophoneMuted;
+      }
 
       dc.addEventListener("open", () => {
         logClientEvent({}, "data_channel.open");
@@ -193,16 +198,16 @@ function App() {
       pcRef.current.close();
       pcRef.current = null;
     }
+    audioTrackRef.current = null;
     setDataChannel(null);
     setSessionStatus("DISCONNECTED");
-    setIsPTTUserSpeaking(false);
 
     logClientEvent({}, "disconnected");
   };
 
   const sendSimulatedUserMessage = (text: string) => {
     const id = uuidv4().slice(0, 32);
-    addTranscriptMessage(id, "user", text, true);
+    addTranscriptMessage(id, "user", text, true, "user");
 
     sendClientEvent(
       {
@@ -232,15 +237,14 @@ function App() {
       (a) => a.name === selectedAgentName
     );
 
-    const turnDetection = isPTTActive
-      ? null
-      : {
-          type: "server_vad",
-          threshold: 0.5,
-          prefix_padding_ms: 300,
-          silence_duration_ms: 200,
-          create_response: true,
-        };
+    // Always use server voice activity detection regardless of microphone mute state
+    const turnDetection = {
+      type: "server_vad",
+      threshold: 0.5,
+      prefix_padding_ms: 300,
+      silence_duration_ms: 200,
+      create_response: true,
+    };
 
     const instructions = currentAgent?.instructions || "";
     const tools = currentAgent?.tools || [];
@@ -296,10 +300,14 @@ function App() {
     if (!userText.trim()) return;
     cancelAssistantSpeech();
 
+    const messageId = uuidv4();
+    addTranscriptMessage(messageId, "user", userText.trim(), false, "user");
+
     sendClientEvent(
       {
         type: "conversation.item.create",
         item: {
+          id: messageId,
           type: "message",
           role: "user",
           content: [{ type: "input_text", text: userText.trim() }],
@@ -310,28 +318,6 @@ function App() {
     setUserText("");
 
     sendClientEvent({ type: "response.create" }, "trigger response");
-  };
-
-  const handleTalkButtonDown = () => {
-    if (sessionStatus !== "CONNECTED" || dataChannel?.readyState !== "open")
-      return;
-    cancelAssistantSpeech();
-
-    setIsPTTUserSpeaking(true);
-    sendClientEvent({ type: "input_audio_buffer.clear" }, "clear PTT buffer");
-  };
-
-  const handleTalkButtonUp = () => {
-    if (
-      sessionStatus !== "CONNECTED" ||
-      dataChannel?.readyState !== "open" ||
-      !isPTTUserSpeaking
-    )
-      return;
-
-    setIsPTTUserSpeaking(false);
-    sendClientEvent({ type: "input_audio_buffer.commit" }, "commit PTT");
-    sendClientEvent({ type: "response.create" }, "trigger response PTT");
   };
 
   const onToggleConnection = () => {
@@ -357,49 +343,33 @@ function App() {
     setSelectedAgentName(newAgentName);
   };
 
+  const handleDashboardToggle = (checked: boolean) => {
+    setIsEventsPaneExpanded(checked);
+    localStorage.setItem("logsExpanded", checked.toString());
+  };
+
   useEffect(() => {
-    const storedPushToTalkUI = localStorage.getItem("pushToTalkUI");
-    if (storedPushToTalkUI) {
-      setIsPTTActive(storedPushToTalkUI === "true");
+    const storedMicMuted = localStorage.getItem("microphoneMuted");
+    if (storedMicMuted) {
+      setIsMicrophoneMuted(storedMicMuted === "true");
     }
     const storedLogsExpanded = localStorage.getItem("logsExpanded");
     if (storedLogsExpanded) {
       setIsEventsPaneExpanded(storedLogsExpanded === "true");
     }
-    const storedAudioPlaybackEnabled = localStorage.getItem(
-      "audioPlaybackEnabled"
-    );
-    if (storedAudioPlaybackEnabled) {
-      setIsAudioPlaybackEnabled(storedAudioPlaybackEnabled === "true");
+    const storedAnswersExpanded = localStorage.getItem("answersExpanded");
+    if (storedAnswersExpanded) {
+      setIsAnswersPaneExpanded(storedAnswersExpanded === "true");
     }
   }, []);
 
   useEffect(() => {
-    localStorage.setItem("pushToTalkUI", isPTTActive.toString());
-  }, [isPTTActive]);
+    localStorage.setItem("microphoneMuted", isMicrophoneMuted.toString());
+  }, [isMicrophoneMuted]);
 
   useEffect(() => {
-    localStorage.setItem("logsExpanded", isEventsPaneExpanded.toString());
-  }, [isEventsPaneExpanded]);
-
-  useEffect(() => {
-    localStorage.setItem(
-      "audioPlaybackEnabled",
-      isAudioPlaybackEnabled.toString()
-    );
-  }, [isAudioPlaybackEnabled]);
-
-  useEffect(() => {
-    if (audioElementRef.current) {
-      if (isAudioPlaybackEnabled) {
-        audioElementRef.current.play().catch((err) => {
-          console.warn("Autoplay may be blocked by browser:", err);
-        });
-      } else {
-        audioElementRef.current.pause();
-      }
-    }
-  }, [isAudioPlaybackEnabled]);
+    localStorage.setItem("answersExpanded", isAnswersPaneExpanded.toString());
+  }, [isAnswersPaneExpanded]);
 
   const agentSetKey = searchParams.get("agentConfig") || "default";
 
@@ -483,32 +453,43 @@ function App() {
         </div>
       </div>
 
-      <div className="flex flex-1 gap-2 px-2 overflow-hidden relative">
-        <Transcript
-          userText={userText}
-          setUserText={setUserText}
-          onSendMessage={handleSendTextMessage}
-          canSend={
-            sessionStatus === "CONNECTED" &&
-            dcRef.current?.readyState === "open"
-          }
-        />
+      <div className="flex flex-1 gap-2 px-2 pb-2 overflow-hidden">
+        <div className={`${(isAnswersPaneExpanded || isEventsPaneExpanded) ? 'w-1/3' : 'w-full'} transition-all duration-200 h-full`}>
+          <Transcript
+            userText={userText}
+            setUserText={setUserText}
+            onSendMessage={handleSendTextMessage}
+            canSend={
+              sessionStatus === "CONNECTED" &&
+              dcRef.current?.readyState === "open"
+            }
+          />
+        </div>
 
-        <Events isExpanded={isEventsPaneExpanded} />
+        <div className="flex flex-1 gap-2 h-full">
+          {isAnswersPaneExpanded && (
+            <div className={`${isEventsPaneExpanded ? 'w-1/2' : 'w-full'} transition-all duration-200 h-full`}>
+              <AgentAnswers isExpanded={true} />
+            </div>
+          )}
+          
+          {isEventsPaneExpanded && (
+            <div className={`${isAnswersPaneExpanded ? 'w-1/2' : 'w-full'} transition-all duration-200 h-full`}>
+              <Dashboard isExpanded={true} isDashboardEnabled={isEventsPaneExpanded} />
+            </div>
+          )}
+        </div>
       </div>
 
       <BottomToolbar
         sessionStatus={sessionStatus}
         onToggleConnection={onToggleConnection}
-        isPTTActive={isPTTActive}
-        setIsPTTActive={setIsPTTActive}
-        isPTTUserSpeaking={isPTTUserSpeaking}
-        handleTalkButtonDown={handleTalkButtonDown}
-        handleTalkButtonUp={handleTalkButtonUp}
+        isMicrophoneMuted={isMicrophoneMuted}
+        setIsMicrophoneMuted={setIsMicrophoneMuted}
         isEventsPaneExpanded={isEventsPaneExpanded}
-        setIsEventsPaneExpanded={setIsEventsPaneExpanded}
-        isAudioPlaybackEnabled={isAudioPlaybackEnabled}
-        setIsAudioPlaybackEnabled={setIsAudioPlaybackEnabled}
+        setIsEventsPaneExpanded={handleDashboardToggle}
+        isAnswersPaneExpanded={isAnswersPaneExpanded}
+        setIsAnswersPaneExpanded={setIsAnswersPaneExpanded}
       />
     </div>
   );
