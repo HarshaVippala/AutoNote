@@ -473,6 +473,16 @@ function App() {
     });
     
     useEffect(() => {
+      // Consider active connection as valid API key
+      if (sessionStatus === "CONNECTED") {
+        setApiKeyStatus({
+          isPresent: true,
+          statusMessage: "API Key Valid"
+        });
+        return;
+      }
+      
+      // Check token events if not connected
       const tokenEvents = loggedEvents.filter(e => e.eventName === "fetch_session_token_response");
       if (tokenEvents.length > 0) {
         const latest = tokenEvents[tokenEvents.length - 1];
@@ -483,7 +493,7 @@ function App() {
           statusMessage: hasError ? (latest.eventData?.error || "Invalid API Key") : "API Key Valid"
         });
       }
-    }, [loggedEvents]);
+    }, [loggedEvents, sessionStatus]);
     
     return (
       <div className="p-2 border-b border-gray-200 bg-white flex items-center justify-between overflow-hidden">
