@@ -9,7 +9,7 @@ import Image from "next/image";
 // UI components
 import Transcript from "./components/Transcript";
 import Dashboard from "./components/Dashboard";
-import AgentAnswers from "./components/AgentAnswers";
+// import AgentAnswers from "./components/AgentAnswers"; // Removed AgentAnswers component
 
 // Types
 import { AgentConfig, SessionStatus } from "@/app/types";
@@ -49,7 +49,7 @@ function App() {
   const [isAnswersPaneExpanded, setIsAnswersPaneExpanded] = useState<boolean>(true);
   const [userText, setUserText] = useState<string>("");
   const [isMicrophoneMuted, setIsMicrophoneMuted] = useState<boolean>(false);
-  const [activeMobilePanel, setActiveMobilePanel] = useState<number>(1); // Default to AgentAnswers
+  const [activeMobilePanel, setActiveMobilePanel] = useState<number>(1); // Default to Transcript
   const [isMobileView, setIsMobileView] = useState<boolean>(false);
 
   // Touch event handlers
@@ -399,7 +399,7 @@ function App() {
     if (touchStart && e.targetTouches[0].clientX) {
       const difference = touchStart - e.targetTouches[0].clientX;
       const maxDiff = window.innerWidth * 0.15; // Limit drag effect
-      
+
       // Determine max panel index based on if dashboard is enabled
       const maxPanelIndex = isEventsPaneExpanded ? 2 : 1;
 
@@ -555,23 +555,6 @@ function App() {
           </button>
         )}
 
-        {/* Answers Toggle */}
-        {!isMobileView && (
-          <button 
-            onClick={() => setIsAnswersPaneExpanded(!isAnswersPaneExpanded)}
-            title="Toggle Answers"
-            className={`flex items-center justify-center h-9 w-9 rounded-full ${
-              isAnswersPaneExpanded 
-                ? "bg-blue-100 text-blue-700" 
-                : "bg-gray-100 text-gray-600"
-            }`}
-          >
-            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16">
-              <path d="M5 8a1 1 0 1 1-2 0 1 1 0 0 1 2 0zm4 0a1 1 0 1 1-2 0 1 1 0 0 1 2 0zm3 1a1 1 0 1 0 0-2 1 1 0 0 0 0 2z"/>
-              <path d="m2.165 15.803.02-.004c1.83-.363 2.948-.842 3.468-1.105A9.06 9.06 0 0 0 8 15c4.418 0 8-3.134 8-7s-3.582-7-8-7-8 3.134-8 7c0 1.76.743 3.37 1.97 4.6a10.437 10.437 0 0 1-.524 2.318l-.003.011a10.722 10.722 0 0 1-.244.637c-.079.186.074.394.273.362a21.673 21.673 0 0 0 .693-.125zm.8-3.108a1 1 0 0 0-.287-.801C1.618 10.83 1 9.468 1 8c0-3.192 3.004-6 7-6s7 2.808 7 6c0 3.193-3.004 6-7 6a8.06 8.06 0 0 1-2.088-.272 1 1 0 0 0-.711.074c-.387.196-1.24.57-2.634.893a10.97 10.97 0 0 0 .398-2z"/>
-            </svg>
-          </button>
-        )}
 
         {/* Mobile View Buttons */}
         {isMobileView && (
@@ -582,7 +565,7 @@ function App() {
                 const newState = !isEventsPaneExpanded;
                 setIsEventsPaneExpanded(newState);
                 localStorage.setItem("logsExpanded", newState.toString());
-                
+
                 // Only switch to dashboard panel if we're enabling it
                 if (newState) {
                   setActiveMobilePanel(2);
@@ -661,7 +644,7 @@ function App() {
           <div className="flex flex-1 gap-2 h-full">
             {isAnswersPaneExpanded && (
               <div className={`${isEventsPaneExpanded ? 'w-1/2' : 'w-full'} transition-all duration-200 h-full`}>
-                <AgentAnswers isExpanded={true} />
+                {/* AgentAnswers is removed for mobile */}
               </div>
             )}
 
@@ -681,7 +664,7 @@ function App() {
           onTouchEnd={handleTouchEnd}
         >
           <div 
-            className="mobile-swipe-panel transition-transform duration-300 ease-in-out"
+            className="mobile-swipe-panel transition-transform duration-300 ease-in-out flex-1" // Added flex-1 to occupy full space
             style={{ transform: `translateX(${(activeMobilePanel * -100)}%)` }}
           >
             <Transcript
@@ -695,15 +678,9 @@ function App() {
             />
           </div>
 
-          <div 
-            className="mobile-swipe-panel transition-transform duration-300 ease-in-out"
-            style={{ transform: `translateX(${100 - (activeMobilePanel * 100)}%)` }}
-          >
-            <AgentAnswers isExpanded={true} />
-          </div>
 
           <div 
-            className="mobile-swipe-panel transition-transform duration-300 ease-in-out"
+            className="mobile-swipe-panel transition-transform duration-300 ease-in-out flex-1" // Added flex-1 to occupy full space
             style={{ transform: `translateX(${200 - (activeMobilePanel * 100)}%)` }}
           >
             <Dashboard isExpanded={true} isDashboardEnabled={isEventsPaneExpanded} />
@@ -711,12 +688,11 @@ function App() {
 
           {/* Mobile Panel Indicators */}
           <div className="absolute bottom-4 left-0 right-0 flex justify-center items-center gap-3 pointer-events-none">
-            {['Chat', 'Answers', 'Dashboard'].map((name, index) => {
-              // Only show Dashboard indicator if the dashboard is enabled
-              if (name === 'Dashboard' && !isEventsPaneExpanded) {
+            {['Chat', 'Dashboard'].map((name, index) => {
+              // Only show Dashboard indicator if the dashboard is enabled              if (name === 'Dashboard' && !isEventsPaneExpanded) {
                 return null;
               }
-              
+
               return (
                 <div 
                   key={index}

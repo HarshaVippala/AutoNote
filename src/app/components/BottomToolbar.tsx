@@ -10,8 +10,6 @@ interface BottomToolbarProps {
   setIsEventsPaneExpanded: (val: boolean) => void;
   isAnswersPaneExpanded: boolean;
   setIsAnswersPaneExpanded: (val: boolean) => void;
-  activeMobilePanel?: number;
-  setActiveMobilePanel?: (panel: number) => void;
 }
 
 function BottomToolbar({
@@ -112,21 +110,9 @@ function BottomToolbar({
       </button>
 
       {isMobileView ? (
-        // Mobile view: Show panel indicators
-        <div className="flex space-x-3 items-center">
-          {['Chat', 'Answers', 'Dashboard'].map((name, index) => (
-            <button
-              key={index}
-              className={`px-3 py-1 rounded-full text-xs ${
-                activeMobilePanel === index 
-                  ? 'bg-blue-500 text-white' 
-                  : 'bg-gray-200 text-gray-700'
-              }`}
-              onClick={() => setActiveMobilePanel(index)}
-            >
-              {name}
-            </button>
-          ))}
+        // Mobile view: No panel indicators needed
+        <div className="flex items-center">
+          {/* Empty div to maintain toolbar layout */}
         </div>
       ) : (
         // Desktop view: Show checkboxes
