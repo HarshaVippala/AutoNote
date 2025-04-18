@@ -37,7 +37,7 @@ function App() {
   const [selectedAgentConfigSet, setSelectedAgentConfigSet] =
     useState<AgentConfig[] | null>(null);
 
-  const [dataChannel, setDataChannel] = useState<RTCDataChannel | null>(null);
+  const [, setDataChannel] = useState<RTCDataChannel | null>(null);
   const pcRef = useRef<RTCPeerConnection | null>(null);
   const dcRef = useRef<RTCDataChannel | null>(null);
   const audioElementRef = useRef<HTMLAudioElement | null>(null);

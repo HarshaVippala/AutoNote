@@ -37,4 +37,4 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
-todo.md
+todo.md.cursor/
