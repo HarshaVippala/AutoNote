@@ -5,6 +5,7 @@ import ReactMarkdown from "react-markdown";
 import { TranscriptItem } from "@/app/types";
 import Image from "next/image";
 import { useTranscript } from "@/app/contexts/TranscriptContext";
+import { capitalizeFirstLetter } from "@/app/lib/textUtils";
 
 export interface TranscriptProps {
   userText: string;
@@ -128,6 +129,8 @@ function Transcript({
           onChange={(e) => setUserText(e.target.value)}
           onKeyDown={(e) => {
             if (e.key === "Enter" && canSend) {
+              // Capitalize text before sending
+              setUserText(capitalizeFirstLetter(userText.trim()));
               onSendMessage();
             }
           }}
@@ -135,7 +138,11 @@ function Transcript({
           placeholder="Type a message..."
         />
         <button
-          onClick={onSendMessage}
+          onClick={() => {
+            // Capitalize text before sending
+            setUserText(capitalizeFirstLetter(userText.trim()));
+            onSendMessage();
+          }}
           disabled={!canSend || !userText.trim()}
           className="bg-gray-900 text-white rounded-full p-1.5 disabled:opacity-50"
         >
