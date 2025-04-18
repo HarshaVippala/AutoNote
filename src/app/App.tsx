@@ -465,162 +465,164 @@ function App() {
   };
 
   // Top Controls Component
-  const TopControls = () => (
-    <div className="p-2 border-b border-gray-200 bg-white flex items-center justify-between overflow-hidden">
-      <div className="flex items-center">
-        <div onClick={() => window.location.reload()} style={{ cursor: 'pointer' }}>
-          {/* OpenAI Logo Removed */}
-          {/* <Image
-            src="/openai-logomark.svg"
-            alt="OpenAI Logo"
-            width={20}
-            height={20}
-            className="mr-2"
-          /> */}
+  const TopControls = () => {
+    return (
+      <div className="p-2 border-b border-gray-200 bg-white flex items-center justify-between overflow-hidden">
+        <div className="flex items-center">
+          <div onClick={() => window.location.reload()} style={{ cursor: 'pointer' }}>
+            {/* OpenAI Logo Removed */}
+            {/* <Image
+              src="/openai-logomark.svg"
+              alt="OpenAI Logo"
+              width={20}
+              height={20}
+              className="mr-2"
+            /> */}
+          </div>
+          <div className="hidden sm:block">
+            Realtime API <span className="text-gray-500">Agents</span>
+          </div>
         </div>
-        <div className="hidden sm:block">
-          Realtime API <span className="text-gray-500">Agents</span>
-        </div>
-      </div>
 
-      <div className="flex space-x-3 items-center">
-        {/* Connection Button */}
-        <button
-          onClick={onToggleConnection}
-          title={sessionStatus === "CONNECTED" ? "Disconnect" : "Connect"}
-          className={`flex items-center justify-center h-9 w-9 rounded-full ${
-            sessionStatus === "CONNECTED"
-              ? "bg-red-600 hover:bg-red-700"
-              : sessionStatus === "CONNECTING"
-              ? "bg-black hover:bg-gray-900 cursor-not-allowed"
-              : "bg-black hover:bg-gray-900"
-          }`}
-          disabled={sessionStatus === "CONNECTING"}
-        >
-          {sessionStatus === "CONNECTING" ? (
-            <div className="h-4 w-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-          ) : sessionStatus === "CONNECTED" ? (
-            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="white" viewBox="0 0 16 16">
-              <path d="M13.854 2.146a.5.5 0 0 1 0 .708l-11 11a.5.5 0 0 1-.708-.708l11-11a.5.5 0 0 1 .708 0Z"/>
-              <path d="M2.146 2.146a.5.5 0 0 0 0 .708l11 11a.5.5 0 0 0 .708-.708l-11-11a.5.5 0 0 0-.708 0Z"/>
-            </svg>
-          ) : (
-            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="white" viewBox="0 0 16 16">
-              <path d="M6.5 10.5a.5.5 0 0 1 .5.5h1.5a.5.5 0 0 1 0 1H6a.5.5 0 0 1-.5-.5v-2A.5.5 0 0 1 6 9h4a.5.5 0 0 1 0 1H6.5v.5z"/>
-              <path d="M14 9.5a4.5 4.5 0 0 1-4.5 4.5h-5A4.5 4.5 0 0 1 0 9.5v-5A4.5 4.5 0 0 1 4.5 0h5A4.5 4.5 0 0 1 14 4.5v5zm-4.5 3.5a3.5 3.5 0 0 0 3.5-3.5v-5A3.5 3.5 0 0 0 9.5 1h-5A3.5 3.5 0 0 0 1 4.5v5A3.5 3.5 0 0 0 4.5 13h5z"/>
-            </svg>
-          )}
-        </button>
-
-        {/* Microphone Button */}
-        <button
-          onClick={() => setIsMicrophoneMuted(!isMicrophoneMuted)}
-          disabled={sessionStatus !== "CONNECTED"}
-          title={isMicrophoneMuted ? "Unmute Microphone" : "Mute Microphone"}
-          className={`flex items-center justify-center h-9 w-9 rounded-full ${
-            sessionStatus !== "CONNECTED"
-              ? "bg-gray-100 text-gray-400 cursor-not-allowed"
-              : isMicrophoneMuted
-              ? "bg-red-100 text-red-700 hover:bg-red-200 cursor-pointer"
-              : "bg-green-100 text-green-700 hover:bg-green-200 cursor-pointer"
-          }`}
-        >
-          {isMicrophoneMuted ? (
-            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16">
-              <path d="M13 8c0 .564-.094 1.107-.266 1.613l-.814-.814A4.02 4.02 0 0 0 12 8V7a.5.5 0 0 1 1 0v1zm-5 4c.818 0 1.578-.245 2.212-.667l.718.719a4.973 4.973 0 0 1-2.43.923V15h3a.5.5 0 0 1 0 1h-7a.5.5 0 0 1 0-1h3v-2.025A5 5 0 0 1 3 8V7a.5.5 0 0 1 1 0v1a4 4 0 0 0 4 4zm3-9v4.879L5.158 2.037A3.001 3.001 0 0 1 11 3z"/>
-              <path d="M9.486 10.607 5 6.12V8a3 3 0 0 0 4.486 2.607zm-7.84-9.253 12 12 .708-.708-12-12-.708.708z"/>
-            </svg>
-          ) : (
-            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16">
-              <path d="M5 3a3 3 0 0 1 6 0v5a3 3 0 0 1-6 0V3z"/>
-              <path d="M3.5 6.5A.5.5 0 0 1 4 7v1a4 4 0 0 0 8 0V7a.5.5 0 0 1 1 0v1a5 5 0 0 1-4.5 4.975V15h3a.5.5 0 0 1 0 1h-7a.5.5 0 0 1 0-1h3v-2.025A5 5 0 0 1 3 8V7a.5.5 0 0 1 .5-.5z"/>
-            </svg>
-          )}
-        </button>
-
-        {/* Dashboard Toggle */}
-        {!isMobileView && (
-          <button 
-            onClick={() => handleDashboardToggle(!isEventsPaneExpanded)}
-            title="Toggle Dashboard"
+        <div className="flex space-x-3 items-center">
+          {/* Connection Button */}
+          <button
+            onClick={onToggleConnection}
+            title={sessionStatus === "CONNECTED" ? "Disconnect" : "Connect"}
             className={`flex items-center justify-center h-9 w-9 rounded-full ${
-              isEventsPaneExpanded 
-                ? "bg-blue-100 text-blue-700" 
-                : "bg-gray-100 text-gray-600"
+              sessionStatus === "CONNECTED"
+                ? "bg-red-600 hover:bg-red-700"
+                : sessionStatus === "CONNECTING"
+                ? "bg-black hover:bg-gray-900 cursor-not-allowed"
+                : "bg-black hover:bg-gray-900"
+            }`}
+            disabled={sessionStatus === "CONNECTING"}
+          >
+            {sessionStatus === "CONNECTING" ? (
+              <div className="h-4 w-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+            ) : sessionStatus === "CONNECTED" ? (
+              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="white" viewBox="0 0 16 16">
+                <path d="M13.854 2.146a.5.5 0 0 1 0 .708l-11 11a.5.5 0 0 1-.708-.708l11-11a.5.5 0 0 1 .708 0Z"/>
+                <path d="M2.146 2.146a.5.5 0 0 0 0 .708l11 11a.5.5 0 0 0 .708-.708l-11-11a.5.5 0 0 0-.708 0Z"/>
+              </svg>
+            ) : (
+              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="white" viewBox="0 0 16 16">
+                <path d="M6.5 10.5a.5.5 0 0 1 .5.5h1.5a.5.5 0 0 1 0 1H6a.5.5 0 0 1-.5-.5v-2A.5.5 0 0 1 6 9h4a.5.5 0 0 1 0 1H6.5v.5z"/>
+                <path d="M14 9.5a4.5 4.5 0 0 1-4.5 4.5h-5A4.5 4.5 0 0 1 0 9.5v-5A4.5 4.5 0 0 1 4.5 0h5A4.5 4.5 0 0 1 14 4.5v5zm-4.5 3.5a3.5 3.5 0 0 0 3.5-3.5v-5A3.5 3.5 0 0 0 9.5 1h-5A3.5 3.5 0 0 0 1 4.5v5A3.5 3.5 0 0 0 4.5 13h5z"/>
+              </svg>
+            )}
+          </button>
+
+          {/* Microphone Button */}
+          <button
+            onClick={() => setIsMicrophoneMuted(!isMicrophoneMuted)}
+            disabled={sessionStatus !== "CONNECTED"}
+            title={isMicrophoneMuted ? "Unmute Microphone" : "Mute Microphone"}
+            className={`flex items-center justify-center h-9 w-9 rounded-full ${
+              sessionStatus !== "CONNECTED"
+                ? "bg-gray-100 text-gray-400 cursor-not-allowed"
+                : isMicrophoneMuted
+                ? "bg-red-100 text-red-700 hover:bg-red-200 cursor-pointer"
+                : "bg-green-100 text-green-700 hover:bg-green-200 cursor-pointer"
             }`}
           >
-            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16">
-              <path d="M8 4a.5.5 0 0 1 .5.5V6a.5.5 0 0 1-1 0V4.5A.5.5 0 0 1 8 4zM3.732 5.732a.5.5 0 0 1 .707 0l.915.914a.5.5 0 1 1-.708.708l-.914-.915a.5.5 0 0 1 0-.707zM2 10a.5.5 0 0 1 .5-.5h1.586a.5.5 0 0 1 0 1H2.5A.5.5 0 0 1 2 10zm9.5 0a.5.5 0 0 1 .5-.5h1.5a.5.5 0 0 1 0 1H12a.5.5 0 0 1-.5-.5zm.754-4.246a.389.389 0 0 0-.527-.02L7.547 9.31a.91.91 0 1 0 1.302 1.258l3.434-4.297a.389.389 0 0 0-.029-.518z"/>
-            </svg>
+            {isMicrophoneMuted ? (
+              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16">
+                <path d="M13 8c0 .564-.094 1.107-.266 1.613l-.814-.814A4.02 4.02 0 0 0 12 8V7a.5.5 0 0 1 1 0v1zm-5 4c.818 0 1.578-.245 2.212-.667l.718.719a4.973 4.973 0 0 1-2.43.923V15h3a.5.5 0 0 1 0 1h-7a.5.5 0 0 1 0-1h3v-2.025A5 5 0 0 1 3 8V7a.5.5 0 0 1 1 0v1a4 4 0 0 0 4 4zm3-9v4.879L5.158 2.037A3.001 3.001 0 0 1 11 3z"/>
+                <path d="M9.486 10.607 5 6.12V8a3 3 0 0 0 4.486 2.607zm-7.84-9.253 12 12 .708-.708-12-12-.708.708z"/>
+              </svg>
+            ) : (
+              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16">
+                <path d="M5 3a3 3 0 0 1 6 0v5a3 3 0 0 1-6 0V3z"/>
+                <path d="M3.5 6.5A.5.5 0 0 1 4 7v1a4 4 0 0 0 8 0V7a.5.5 0 0 1 1 0v1a5 5 0 0 1-4.5 4.975V15h3a.5.5 0 0 1 0 1h-7a.5.5 0 0 1 0-1h3v-2.025A5 5 0 0 1 3 8V7a.5.5 0 0 1 .5-.5z"/>
+              </svg>
+            )}
           </button>
-        )}
 
-
-        {/* Mobile View Buttons */}
-        {isMobileView && (
-          <div className="flex">
+          {/* Dashboard Toggle */}
+          {!isMobileView && (
             <button 
-              onClick={() => {
-                // Toggle dashboard functionality, similar to desktop behavior
-                const newState = !isEventsPaneExpanded;
-                setIsEventsPaneExpanded(newState);
-                localStorage.setItem("logsExpanded", newState.toString());
-
-                // Only switch to dashboard panel if we're enabling it
-                if (newState) {
-                  setActiveMobilePanel(2);
-                } else if (activeMobilePanel === 2) {
-                  // If we're disabling it and currently on dashboard, switch to agent answers
-                  setActiveMobilePanel(1);
-                }
-              }}
+              onClick={() => handleDashboardToggle(!isEventsPaneExpanded)}
               title="Toggle Dashboard"
-              className={`flex items-center justify-center h-8 w-8 rounded-full ${
+              className={`flex items-center justify-center h-9 w-9 rounded-full ${
                 isEventsPaneExpanded 
                   ? "bg-blue-100 text-blue-700" 
                   : "bg-gray-100 text-gray-600"
               }`}
             >
-              <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" fill="currentColor" viewBox="0 0 16 16">
+              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16">
                 <path d="M8 4a.5.5 0 0 1 .5.5V6a.5.5 0 0 1-1 0V4.5A.5.5 0 0 1 8 4zM3.732 5.732a.5.5 0 0 1 .707 0l.915.914a.5.5 0 1 1-.708.708l-.914-.915a.5.5 0 0 1 0-.707zM2 10a.5.5 0 0 1 .5-.5h1.586a.5.5 0 0 1 0 1H2.5A.5.5 0 0 1 2 10zm9.5 0a.5.5 0 0 1 .5-.5h1.5a.5.5 0 0 1 0 1H12a.5.5 0 0 1-.5-.5zm.754-4.246a.389.389 0 0 0-.527-.02L7.547 9.31a.91.91 0 1 0 1.302 1.258l3.434-4.297a.389.389 0 0 0-.029-.518z"/>
               </svg>
             </button>
-          </div>
-        )}
+          )}
 
-        {/* Agent Selection (only if multiple agents available) */}
-        {selectedAgentConfigSet && selectedAgentConfigSet.length > 1 && (
-          <div className="relative inline-block ml-1">
-            <select
-              value={selectedAgentName}
-              onChange={handleSelectedAgentChange}
-              title="Select Agent"
-              className="appearance-none border border-gray-300 rounded-lg text-sm px-2 py-1 pr-6 cursor-pointer font-normal focus:outline-none"
-            >
-              {selectedAgentConfigSet?.map(agent => (
-                <option key={agent.name} value={agent.name}>
-                  {agent.name}
-                </option>
-              ))}
-            </select>
-            <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center pr-1 text-gray-600">
-              <svg
-                className="h-3 w-3"
-                viewBox="0 0 20 20"
-                fill="currentColor"
+
+          {/* Mobile View Buttons */}
+          {isMobileView && (
+            <div className="flex">
+              <button 
+                onClick={() => {
+                  // Toggle dashboard functionality, similar to desktop behavior
+                  const newState = !isEventsPaneExpanded;
+                  setIsEventsPaneExpanded(newState);
+                  localStorage.setItem("logsExpanded", newState.toString());
+
+                  // Only switch to dashboard panel if we're enabling it
+                  if (newState) {
+                    setActiveMobilePanel(2);
+                  } else if (activeMobilePanel === 2) {
+                    // If we're disabling it and currently on dashboard, switch to agent answers
+                    setActiveMobilePanel(1);
+                  }
+                }}
+                title="Toggle Dashboard"
+                className={`flex items-center justify-center h-8 w-8 rounded-full ${
+                  isEventsPaneExpanded 
+                    ? "bg-blue-100 text-blue-700" 
+                    : "bg-gray-100 text-gray-600"
+                }`}
               >
-                <path
-                  fillRule="evenodd"
-                  d="M5.23 7.21a.75.75 0 011.06.02L10 10.44l3.71-3.21a.75.75 0 111.04 1.08l-4.25 3.65a.75.75 0 01-1.04 0L5.21 8.27a.75.75 0 01.02-1.06z"
-                  clipRule="evenodd"
-                />
-              </svg>
+                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" fill="currentColor" viewBox="0 0 16 16">
+                  <path d="M8 4a.5.5 0 0 1 .5.5V6a.5.5 0 0 1-1 0V4.5A.5.5 0 0 1 8 4zM3.732 5.732a.5.5 0 0 1 .707 0l.915.914a.5.5 0 1 1-.708.708l-.914-.915a.5.5 0 0 1 0-.707zM2 10a.5.5 0 0 1 .5-.5h1.586a.5.5 0 0 1 0 1H2.5A.5.5 0 0 1 2 10zm9.5 0a.5.5 0 0 1 .5-.5h1.5a.5.5 0 0 1 0 1H12a.5.5 0 0 1-.5-.5zm.754-4.246a.389.389 0 0 0-.527-.02L7.547 9.31a.91.91 0 1 0 1.302 1.258l3.434-4.297a.389.389 0 0 0-.029-.518z"/>
+                </svg>
+              </button>
             </div>
-          </div>
-        )}
+          )}
+
+          {/* Agent Selection (only if multiple agents available) */}
+          {selectedAgentConfigSet && selectedAgentConfigSet.length > 1 && (
+            <div className="relative inline-block ml-1">
+              <select
+                value={selectedAgentName}
+                onChange={handleSelectedAgentChange}
+                title="Select Agent"
+                className="appearance-none border border-gray-300 rounded-lg text-sm px-2 py-1 pr-6 cursor-pointer font-normal focus:outline-none"
+              >
+                {selectedAgentConfigSet?.map(agent => (
+                  <option key={agent.name} value={agent.name}>
+                    {agent.name}
+                  </option>
+                ))}
+              </select>
+              <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center pr-1 text-gray-600">
+                <svg
+                  className="h-3 w-3"
+                  viewBox="0 0 20 20"
+                  fill="currentColor"
+                >
+                  <path
+                    fillRule="evenodd"
+                    d="M5.23 7.21a.75.75 0 011.06.02L10 10.44l3.71-3.21a.75.75 0 111.04 1.08l-4.25 3.65a.75.75 0 01-1.04 0L5.21 8.27a.75.75 0 01.02-1.06z"
+                    clipRule="evenodd"
+                  />
+                </svg>
+              </div>
+            </div>
+          )}
+        </div>
       </div>
-    </div>
-  );
+    );
+  };
 
   return (
     <div className="text-base flex flex-col h-screen bg-gray-100 text-gray-800 relative">
