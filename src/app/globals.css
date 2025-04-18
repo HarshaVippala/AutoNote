@@ -43,16 +43,11 @@ body {
   }
 
   .mobile-swipe-panel {
-    transition: transform 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94);
-    height: 100%;
-    width: 100%;
     position: absolute;
-    top: 0;
-    left: 0;
+    width: 100%;
+    height: 100%;
+    transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1);
     will-change: transform;
-    -webkit-backface-visibility: hidden;
-    backface-visibility: hidden;
-    overscroll-behavior: contain;
   }
 
   .mobile-indicators {

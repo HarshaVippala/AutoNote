@@ -436,7 +436,14 @@ function App() {
 
     if (isLeftSwipe && activeMobilePanel < 2) {
       // Next panel
-      setActiveMobilePanel(prev => Math.min(prev + 1, 2));
+      const nextPanel = Math.min(activeMobilePanel + 1, 2);
+      setActiveMobilePanel(nextPanel);
+
+      // Enable dashboard if we're switching to it
+      if (nextPanel === 2) {
+        setIsEventsPaneExpanded(true);
+        localStorage.setItem("logsExpanded", "true");
+      }
     } else if (isRightSwipe && activeMobilePanel > 0) {
       // Previous panel
       setActiveMobilePanel(prev => Math.max(prev - 1, 0));
@@ -456,13 +463,14 @@ function App() {
     <div className="p-2 border-b border-gray-200 bg-white flex items-center justify-between overflow-hidden">
       <div className="flex items-center">
         <div onClick={() => window.location.reload()} style={{ cursor: 'pointer' }}>
-          <Image
+          {/* OpenAI Logo Removed */}
+          {/* <Image
             src="/openai-logomark.svg"
             alt="OpenAI Logo"
             width={20}
             height={20}
             className="mr-2"
-          />
+          /> */}
         </div>
         <div className="hidden sm:block">
           Realtime API <span className="text-gray-500">Agents</span>
@@ -586,11 +594,16 @@ function App() {
               }`}
             >
               <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" fill="currentColor" viewBox="0 0 16 16">
-                <path d="M1 2.828c.885-.37 2.154-.769 3.388-.893 1.33-.134 2.458.063 3.112.752v9.746c-.935-.53-2.12-.603-3.213-.493-1.18.12-2.37.461-3.287.811V2.828zm7.5-.141c.654-.689 1.782-.886 3.112-.752 1.234.124 2.503.523 3.388.893v9.923c-.918-.35-2.107-.692-3.287-.81-1.094-.111-2.278-.039-3.213.492V2.687zM8 1.783C7.015.936 5.587.81 4.287.94c-1.514.153-3.042.672-3.994 1.105A.5.5 0 0 0 0 2.5v11a.5.5 0 0 0 .707.455c.882-.4 2.303-.881 3.68-1.02 1.409-.142 2.59.087 3.223.877a.5.5 0 0 0 .78 0c.633-.79 1.814-1.019 3.222-.877 1.378.139 2.8.62 3.681 1.02A.5 0 0 0 16 13.5v-11a.5.5 0 0 0-.293-.455c-.952-.433-2.48-.952-3.994-1.105C10.413.809 8.985.936 8 1.783z"/>
+                <path d="M1 2.828c.885-.37 2.154-.769 3.388-.893 1.33-.134 2.458.063 3.112.752v9.746c-.935-.53-2.12-.603-3.213-.493-1.18.12-2.37.461-3.287.811V2.828zm7.5-.141c.654-.689 1.782-.886 3.112-.752 1.234.124 2.503.523 3.388.893v9.923c-.918-.35-2.107-.692-3.287-.81-1.094-.111-2.278-.039-3.213.492V2.687zM8 1.783C7.015.936 5.587.81 4.287.94c-1.514.153-3.042.672-3.994 1.105A.5.5 0 0 0 0 2.5v11a.5.5 0 0 0 .707.455c.882-.4 2.303-.881 3.68-1.02 1.409-.142 2.59.087 3.223.877a.5.5 0 0 0 .78 0c.633-.79 1.814-1.019 3.222-.877 1.378.139 2.8.62 3.681 1.02A.5.5 0 0 0 16 13.5v-11a.5.5 0 0 0-.293-.455c-.952-.433-2.48-.952-3.994-1.105C10.413.809 8.985.936 8 1.783z"/>
               </svg>
             </button>
             <button 
-              onClick={() => setActiveMobilePanel(2)}
+              onClick={() => {
+                setActiveMobilePanel(2);
+                // Also set dashboard to enabled
+                setIsEventsPaneExpanded(true);
+                localStorage.setItem("logsExpanded", "true");
+              }}
               title="Dashboard"
               className={`flex items-center justify-center h-8 w-8 rounded-full ${
                 activeMobilePanel === 2 
@@ -681,7 +694,7 @@ function App() {
           onTouchEnd={handleTouchEnd}
         >
           <div 
-            className="mobile-swipe-panel"
+            className="mobile-swipe-panel transition-transform duration-300 ease-in-out"
             style={{ transform: `translateX(${(activeMobilePanel * -100)}%)` }}
           >
             <Transcript
@@ -696,14 +709,14 @@ function App() {
           </div>
 
           <div 
-            className="mobile-swipe-panel"
+            className="mobile-swipe-panel transition-transform duration-300 ease-in-out"
             style={{ transform: `translateX(${100 - (activeMobilePanel * 100)}%)` }}
           >
             <AgentAnswers isExpanded={true} />
           </div>
 
           <div 
-            className="mobile-swipe-panel"
+            className="mobile-swipe-panel transition-transform duration-300 ease-in-out"
             style={{ transform: `translateX(${200 - (activeMobilePanel * 100)}%)` }}
           >
             <Dashboard isExpanded={true} isDashboardEnabled={true} />
