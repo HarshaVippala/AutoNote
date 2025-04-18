@@ -40,6 +40,7 @@ body {
     height: 100%;
     overflow: hidden;
     position: relative;
+    touch-action: pan-x; /* Enable horizontal swiping, disable vertical */
   }
 
   .mobile-swipe-panel {
@@ -48,6 +49,9 @@ body {
     height: 100%;
     transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1);
     will-change: transform;
+    overflow-y: auto; /* Allow vertical scrolling within panels */
+    overflow-x: hidden; /* Prevent horizontal scrolling within panels */
+    -webkit-overflow-scrolling: touch; /* Smooth scrolling on iOS */
   }
 
   .mobile-indicators {
@@ -71,5 +75,15 @@ body {
 
   .mobile-indicator.active {
     background-color: rgba(37, 99, 235, 1);
+  }
+  
+  /* Prevent text selection during swipe */
+  .mobile-swipe-container * {
+    user-select: none;
+  }
+  
+  /* Re-enable text selection for content areas */
+  .mobile-swipe-panel .text-content {
+    user-select: text;
   }
 }

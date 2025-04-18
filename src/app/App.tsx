@@ -49,7 +49,7 @@ function App() {
   const [isAnswersPaneExpanded, setIsAnswersPaneExpanded] = useState<boolean>(true);
   const [userText, setUserText] = useState<string>("");
   const [isMicrophoneMuted, setIsMicrophoneMuted] = useState<boolean>(false);
-  const [activeMobilePanel, setActiveMobilePanel] = useState<number>(1); // Default to Transcript
+  const [activeMobilePanel, setActiveMobilePanel] = useState<number>(0); // Default to Transcript
   const [isMobileView, setIsMobileView] = useState<boolean>(false);
 
   // Touch event handlers
@@ -663,8 +663,9 @@ function App() {
           onTouchMove={handleTouchMove}
           onTouchEnd={handleTouchEnd}
         >
+          {/* Conversation Panel */}
           <div 
-            className="mobile-swipe-panel transition-transform duration-300 ease-in-out flex-1" // Added flex-1 to occupy full space
+            className="mobile-swipe-panel absolute top-0 left-0 w-full h-full transition-transform duration-300 ease-in-out"
             style={{ transform: `translateX(${(activeMobilePanel * -100)}%)` }}
           >
             <Transcript
@@ -678,9 +679,43 @@ function App() {
             />
           </div>
 
-
+          {/* Agent Answers Panel (middle panel) */}
           <div 
-            className="mobile-swipe-panel transition-transform duration-300 ease-in-out flex-1" // Added flex-1 to occupy full space
+            className="mobile-swipe-panel absolute top-0 left-0 w-full h-full transition-transform duration-300 ease-in-out"
+            style={{ transform: `translateX(${100 - (activeMobilePanel * 100)}%)` }}
+          >
+            {/* This panel is for agent answers only */}
+            <div className="w-full h-full overflow-auto flex flex-col bg-white rounded-xl">
+              <div className="font-semibold text-base px-4 py-2 border-b bg-gray-50">
+                Agent Answers
+              </div>
+              <div className="flex-1 overflow-auto p-4 flex flex-col gap-y-4">
+                {transcriptItems
+                  .filter(item => item.type === "MESSAGE" && item.role === "assistant" && !item.isHidden)
+                  .map((item) => (
+                    <div key={item.itemId} className="border-b border-gray-200 py-3 px-4">
+                      <div className="flex flex-col">
+                        <div className="text-xs text-gray-500 font-mono mb-2">
+                          {item.timestamp}
+                        </div>
+                        <div className="whitespace-pre-wrap text-gray-800">
+                          {item.title}
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                {transcriptItems.filter(item => item.type === "MESSAGE" && item.role === "assistant" && !item.isHidden).length === 0 && (
+                  <div className="text-gray-500 text-center italic p-4 flex-1 flex items-center justify-center">
+                    No agent answers yet
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+
+          {/* Dashboard Panel */}
+          <div 
+            className="mobile-swipe-panel absolute top-0 left-0 w-full h-full transition-transform duration-300 ease-in-out"
             style={{ transform: `translateX(${200 - (activeMobilePanel * 100)}%)` }}
           >
             <Dashboard isExpanded={true} isDashboardEnabled={isEventsPaneExpanded} />
@@ -688,7 +723,7 @@ function App() {
 
           {/* Mobile Panel Indicators */}
           <div className="absolute bottom-4 left-0 right-0 flex justify-center items-center gap-3 pointer-events-none">
-            {['Chat', 'Dashboard'].map((name, index) => {
+            {['Chat', 'Answers', 'Dashboard'].map((name, index) => {
               // Only show Dashboard indicator if the dashboard is enabled
               if (name === 'Dashboard' && !isEventsPaneExpanded) {
                 return null;
