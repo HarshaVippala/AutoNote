@@ -466,7 +466,7 @@ function App() {
 
   // Top Controls Component
   const TopControls = () => {
-    // Get API key status from logged events
+    const { loggedEvents } = useEvent();
     const [apiKeyStatus, setApiKeyStatus] = useState<{ isPresent: boolean; statusMessage: string }>({
       isPresent: false,
       statusMessage: "API Key Not Configured"
