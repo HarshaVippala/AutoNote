@@ -658,13 +658,13 @@ function App() {
       ) : (
         // Mobile layout with swipe
         <div 
-          className="mobile-swipe-container flex-1 overflow-hidden"
+          className="mobile-swipe-container flex-1 overflow-hidden relative"
           onTouchStart={handleTouchStart}
           onTouchMove={handleTouchMove}
           onTouchEnd={handleTouchEnd}
         >
           <div 
-            className="mobile-swipe-panel transition-transform duration-300 ease-in-out flex-1" // Added flex-1 to occupy full space
+            className="mobile-swipe-panel transition-transform duration-300 ease-in-out absolute inset-0 w-full h-full"
             style={{ transform: `translateX(${(activeMobilePanel * -100)}%)` }}
           >
             <Transcript
@@ -680,7 +680,7 @@ function App() {
 
 
           <div 
-            className="mobile-swipe-panel transition-transform duration-300 ease-in-out flex-1" // Added flex-1 to occupy full space
+            className="mobile-swipe-panel transition-transform duration-300 ease-in-out absolute inset-0 w-full h-full"
             style={{ transform: `translateX(${200 - (activeMobilePanel * 100)}%)` }}
           >
             <Dashboard isExpanded={true} isDashboardEnabled={isEventsPaneExpanded} />
