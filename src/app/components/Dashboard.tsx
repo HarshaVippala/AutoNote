@@ -7,6 +7,7 @@ import { ServerEvent, LoggedEvent } from "../types";
 export interface DashboardProps {
   isExpanded: boolean;
   isDashboardEnabled: boolean;
+  transcriptItems: any[]; // Added transcriptItems prop
 }
 
 interface TokenUsage {
@@ -80,7 +81,7 @@ const MODEL_RATE_LIMITS: Record<string, { tpm: number; rpm: number }> = {
 // OpenAI Project ID
 const OPENAI_PROJECT_ID = "proj_iwQ4RJz8jIk9GD62jdsDIfZE";
 
-function Dashboard({ isExpanded, isDashboardEnabled }: DashboardProps) {
+function Dashboard({ isExpanded, isDashboardEnabled, transcriptItems }: DashboardProps) {
   const { loggedEvents, toggleExpand } = useEvent();
   const [tokenUsage, setTokenUsage] = useState<TokenUsage>({
     input: 0,
@@ -577,6 +578,38 @@ function Dashboard({ isExpanded, isDashboardEnabled }: DashboardProps) {
                 </div>
               </div>
             ))}
+          </div>
+        </div>
+
+        {/* Breadcrumbs Section (moved from Transcript) */}
+        <div className="px-4 py-3 border-b">
+          <h2 className="font-semibold text-sm mb-2">Agent Breadcrumbs</h2>
+          <div className="max-h-64 overflow-auto">
+            {transcriptItems
+              .filter(item => item.type === "BREADCRUMB" && !item.isHidden)
+              .map(item => (
+                <div key={item.itemId} className="mb-3 border-b pb-2">
+                  <div className="flex items-center justify-between">
+                    <div className="text-xs font-medium">{item.title}</div>
+                    <div className="text-xs text-gray-500">{item.timestamp}</div>
+                  </div>
+                  {item.data && (
+                    <div className="mt-1">
+                      <details className="text-xs">
+                        <summary className="cursor-pointer text-blue-600">View Details</summary>
+                        <pre className="mt-1 text-[10px] bg-gray-50 p-2 rounded overflow-auto max-h-32">
+                          {JSON.stringify(item.data, null, 2)}
+                        </pre>
+                      </details>
+                    </div>
+                  )}
+                </div>
+              ))}
+            {transcriptItems.filter(item => item.type === "BREADCRUMB" && !item.isHidden).length === 0 && (
+              <div className="text-gray-500 text-xs italic text-center py-4">
+                No breadcrumbs available
+              </div>
+            )}
           </div>
         </div>
 

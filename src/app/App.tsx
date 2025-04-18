@@ -651,7 +651,11 @@ function App() {
 
             {isEventsPaneExpanded && (
               <div className={`${isAnswersPaneExpanded ? 'w-1/2' : 'w-full'} transition-all duration-200 h-full`}>
-                <Dashboard isExpanded={true} isDashboardEnabled={isEventsPaneExpanded} />
+                <Dashboard 
+                  isExpanded={true} 
+                  isDashboardEnabled={isEventsPaneExpanded} 
+                  transcriptItems={transcriptItems}
+                />
               </div>
             )}
           </div>
@@ -719,7 +723,7 @@ function App() {
             className="mobile-swipe-panel absolute top-0 left-0 w-full h-full transition-transform duration-300 ease-in-out"
             style={{ transform: `translateX(${200 - (activeMobilePanel * 100)}%)` }}
           >
-            <Dashboard isExpanded={true} isDashboardEnabled={isEventsPaneExpanded} />
+            <Dashboard isExpanded={true} isDashboardEnabled={isEventsPaneExpanded} transcriptItems={transcriptItems} />
           </div>
 
           {/* Mobile Panel Indicators */}

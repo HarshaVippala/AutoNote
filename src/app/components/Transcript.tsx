@@ -77,51 +77,32 @@ function Transcript({
               const messageStyle = isBracketedMessage ? "italic text-gray-400" : "";
               const displayTitle = isBracketedMessage ? title.slice(1, -1) : title;
 
+              // Get agent initials for assistant messages
+              const agentInitials = !isUser && item.agentName ? 
+                item.agentName.split(/(?=[A-Z])/).map(part => part[0]).join('') : '';
+              
               return (
                 <div key={itemId} className={containerClasses}>
                   <div className={bubbleBase}>
-                    <div className={`text-xs ${isUser ? "text-gray-400" : "text-gray-500"} font-mono`}>
-                      {timestamp}
-                    </div>
                     <div className={`whitespace-pre-wrap ${messageStyle}`}>
                       <ReactMarkdown>{displayTitle}</ReactMarkdown>
                     </div>
+                    
+                    {/* Add agent indicator for assistant messages */}
+                    {!isUser && agentInitials && (
+                      <div className="flex justify-end mt-1">
+                        <div className="text-xs bg-blue-100 text-blue-800 rounded-full w-5 h-5 flex items-center justify-center">
+                          {agentInitials}
+                        </div>
+                      </div>
+                    )}
                   </div>
                 </div>
               );
             } else if (type === "BREADCRUMB") {
-              return (
-                <div
-                  key={itemId}
-                  className="flex flex-col justify-start items-start text-gray-500 text-sm"
-                >
-                  <span className="text-xs font-mono">{timestamp}</span>
-                  <div
-                    className={`whitespace-pre-wrap flex items-center font-mono text-sm text-gray-800 ${
-                      data ? "cursor-pointer" : ""
-                    }`}
-                    onClick={() => data && toggleTranscriptItemExpand(itemId)}
-                  >
-                    {data && (
-                      <span
-                        className={`text-gray-400 mr-1 transform transition-transform duration-200 select-none font-mono ${
-                          expanded ? "rotate-90" : "rotate-0"
-                        }`}
-                      >
-                        ▶
-                      </span>
-                    )}
-                    {title}
-                  </div>
-                  {expanded && data && (
-                    <div className="text-gray-800 text-left">
-                      <pre className="border-l-2 ml-1 border-gray-200 whitespace-pre-wrap break-words font-mono text-xs mb-2 mt-2 pl-2">
-                        {JSON.stringify(data, null, 2)}
-                      </pre>
-                    </div>
-                  )}
-                </div>
-              );
+              // We're not showing breadcrumbs in the conversation window anymore
+              // They will be displayed in the Dashboard component instead
+              return null;
             } else {
               // Fallback if type is neither MESSAGE nor BREADCRUMB
               return (
