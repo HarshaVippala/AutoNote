@@ -430,17 +430,7 @@ function Dashboard({ isExpanded, isDashboardEnabled, transcriptItems }: Dashboar
           </div>
         </div>
 
-        {/* API Key Status */}
-        <div className="px-4 py-3 border-b">
-          <div className="flex justify-between items-center">
-            <h2 className="font-semibold text-sm">API Key Status</h2>
-            <div className={`text-xs px-2 py-0.5 rounded-full ${apiKeyStatus.isPresent ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
-              {apiKeyStatus.isPresent ? 'Present' : 'Missing'}
-            </div>
-          </div>
-
-          
-        </div>
+        {/* API Key Status section removed - moved to top bar */}
 
         {/* Agent Status section removed */}
 
