@@ -30,6 +30,18 @@ body {
     font-size: 16px; /* Prevents iOS zoom on focus */
   }
 
+/* JARVIS title animation */
+.text-transparent.bg-gradient-to-r {
+  transition: background-position 0.3s ease;
+  background-size: 200% 100%;
+  background-position: 0% 0%;
+}
+
+.text-transparent.bg-gradient-to-r:hover {
+  background-position: 100% 0%;
+}
+
+
   pre {
     white-space: pre-wrap;
     word-break: break-word;

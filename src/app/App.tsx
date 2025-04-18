@@ -477,9 +477,9 @@ function App() {
             height={20}
             className="mr-2"
           /> */}
-          <span className="block sm:hidden font-bold text-lg">JARVIS</span>
+          <span className="block sm:hidden text-xl font-extrabold tracking-tight bg-gradient-to-r from-blue-600 to-cyan-500 bg-clip-text text-transparent">JARVIS</span>
         </div>
-        <div className="hidden sm:block font-bold text-lg">
+        <div className="hidden sm:block text-2xl font-extrabold tracking-tight bg-gradient-to-r from-blue-600 to-cyan-500 bg-clip-text text-transparent ml-2">
           JARVIS
         </div>
       </div>
