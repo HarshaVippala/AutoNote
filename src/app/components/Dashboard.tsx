@@ -499,8 +499,6 @@ function Dashboard({ isExpanded, isDashboardEnabled, transcriptItems }: Dashboar
         {/* Agent Process Timeline */}
         <div className="px-4 py-3 border-b">
           <h2 className="font-semibold text-sm mb-2">Agent Process Timeline</h2>
-            </div>
-          </div>
 
           <div className="space-y-4 max-h-64 overflow-auto pr-1">
             {agentProcesses.map((agent, idx) => (
