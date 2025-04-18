@@ -394,73 +394,28 @@ function App() {
 
   const handleTouchMove = (e: React.TouchEvent) => {
     setTouchEnd(e.targetTouches[0].clientX);
-
-    // For smoother visual feedback during swipe
-    if (touchStart && e.targetTouches[0].clientX) {
-      const difference = touchStart - e.targetTouches[0].clientX;
-      const maxDiff = window.innerWidth * 0.15; // Limit drag effect
-
-      // Determine max panel index based on if dashboard is enabled
-      const maxPanelIndex = isEventsPaneExpanded ? 2 : 1;
-
-      // Only apply visual feedback if difference is within acceptable range
-      // and prevent rightward swipe past the maximum allowed panel
-      if (Math.abs(difference) < maxDiff) {
-        const swipePanels = document.querySelectorAll('.mobile-swipe-panel');
-        const translateOffset = -activeMobilePanel * 100;
-
-        // Prevent rightward swipe to dashboard when it's disabled
-        if (!isEventsPaneExpanded && difference < 0 && activeMobilePanel >= maxPanelIndex) {
-          return;
-        }
-
-        swipePanels.forEach((panel, index) => {
-          const el = panel as HTMLElement;
-          const panelTranslate = translateOffset + (index * 100) - (difference / window.innerWidth * 20);
-          el.style.transform = `translateX(${panelTranslate}%)`;
-        });
-      }
-    }
   };
 
   const handleTouchEnd = () => {
-    if (!touchStart || !touchEnd) {
-      // Reset to original positions if no complete swipe detected
-      const swipePanels = document.querySelectorAll('.mobile-swipe-panel');
-      swipePanels.forEach((panel, index) => {
-        const el = panel as HTMLElement;
-        const translateOffset = activeMobilePanel * -100;
-        el.style.transform = `translateX(${100 * index + translateOffset}%)`;
-      });
-      return;
-    }
-
+    if (!touchStart || !touchEnd) return;
+    
     const distance = touchStart - touchEnd;
     const isLeftSwipe = distance > minSwipeDistance;
     const isRightSwipe = distance < -minSwipeDistance;
-
+    
     // Reset touch values
     setTouchStart(null);
     setTouchEnd(null);
-
-    // Determine maximum panel index based on dashboard state
-    const maxPanelIndex = isEventsPaneExpanded ? 2 : 1;
-
+    
+    // Maximum available panel index
+    const maxPanelIndex = isEventsPaneExpanded ? 1 : 0;
+    
     if (isLeftSwipe && activeMobilePanel < maxPanelIndex) {
-      // Next panel - only allow swipe to dashboard (panel 2) if it's enabled
-      const nextPanel = Math.min(activeMobilePanel + 1, maxPanelIndex);
-      setActiveMobilePanel(nextPanel);
+      // Next panel
+      setActiveMobilePanel(activeMobilePanel + 1);
     } else if (isRightSwipe && activeMobilePanel > 0) {
       // Previous panel
-      setActiveMobilePanel(prev => Math.max(prev - 1, 0));
-    } else {
-      // Reset to original positions if no change
-      const swipePanels = document.querySelectorAll('.mobile-swipe-panel');
-      swipePanels.forEach((panel, index) => {
-        const el = panel as HTMLElement;
-        const translateOffset = activeMobilePanel * -100;
-        el.style.transform = `translateX(${100 * index + translateOffset}%)`;
-      });
+      setActiveMobilePanel(activeMobilePanel - 1);
     }
   };
 
@@ -658,14 +613,15 @@ function App() {
       ) : (
         // Mobile layout with swipe
         <div 
-          className="mobile-swipe-container flex-1 overflow-hidden relative"
+          className="flex-1 overflow-hidden relative"
           onTouchStart={handleTouchStart}
           onTouchMove={handleTouchMove}
           onTouchEnd={handleTouchEnd}
         >
+          {/* Transcript Panel */}
           <div 
-            className="mobile-swipe-panel transition-transform duration-300 ease-in-out absolute inset-0 w-full h-full"
-            style={{ transform: `translateX(${(activeMobilePanel * -100)}%)` }}
+            className="absolute inset-0 w-full h-full transition-transform duration-300 ease-in-out"
+            style={{ transform: `translateX(${activeMobilePanel === 0 ? '0%' : '-100%'})` }}
           >
             <Transcript
               userText={userText}
@@ -678,16 +634,16 @@ function App() {
             />
           </div>
 
-
+          {/* Dashboard Panel */}
           <div 
-            className="mobile-swipe-panel transition-transform duration-300 ease-in-out absolute inset-0 w-full h-full"
-            style={{ transform: `translateX(${200 - (activeMobilePanel * 100)}%)` }}
+            className="absolute inset-0 w-full h-full transition-transform duration-300 ease-in-out"
+            style={{ transform: `translateX(${activeMobilePanel === 1 ? '0%' : '100%'})` }}
           >
             <Dashboard isExpanded={true} isDashboardEnabled={isEventsPaneExpanded} />
           </div>
 
           {/* Mobile Panel Indicators */}
-          <div className="absolute bottom-4 left-0 right-0 flex justify-center items-center gap-3 pointer-events-none">
+          <div className="absolute bottom-4 left-0 right-0 flex justify-center items-center gap-3 z-10">
             {['Chat', 'Dashboard'].map((name, index) => {
               // Only show Dashboard indicator if the dashboard is enabled
               if (name === 'Dashboard' && !isEventsPaneExpanded) {
@@ -695,14 +651,17 @@ function App() {
               }
 
               return (
-                <div 
+                <button 
                   key={index}
-                  className={`h-1.5 rounded-full transition-all duration-300 ${
+                  onClick={() => setActiveMobilePanel(index)}
+                  className={`px-3 py-1 rounded-full transition-all duration-300 ${
                     activeMobilePanel === index 
-                      ? 'w-6 bg-blue-500' 
-                      : 'w-1.5 bg-gray-300'
+                      ? 'bg-blue-500 text-white' 
+                      : 'bg-gray-200 text-gray-600'
                   }`}
-                />
+                >
+                  {name}
+                </button>
               );
             })}
           </div>
