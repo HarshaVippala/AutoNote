@@ -18,17 +18,20 @@ export const EventProvider: FC<PropsWithChildren> = ({ children }) => {
 
   function addLoggedEvent(direction: "client" | "server", eventName: string, eventData: Record<string, any>) {
     const id = eventData.event_id || uuidv4();
-    setLoggedEvents((prev) => [
-      ...prev,
-      {
-        id,
-        direction,
-        eventName,
-        eventData,
-        timestamp: new Date().toLocaleTimeString(),
-        expanded: false,
-      },
-    ]);
+    setLoggedEvents((prev) => {
+      const newEvents = [
+        ...prev,
+        {
+          id,
+          direction,
+          eventName,
+          eventData,
+          timestamp: new Date().toLocaleTimeString(),
+          expanded: false,
+        },
+      ];
+      return newEvents.slice(-50); // Keep only the most recent 50 events
+    });
   }
 
   const logClientEvent: EventContextValue["logClientEvent"] = (eventObj, eventNameSuffix = "") => {

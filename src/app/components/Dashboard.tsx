@@ -1,11 +1,12 @@
 "use client";
 
 import React, { useState, useEffect, useMemo } from "react";
-import { useEvent } from "@/app/contexts/EventContext";
-import { ServerEvent } from "@/app/types";
+import { useEvent } from "../contexts/EventContext";
+import { ServerEvent, LoggedEvent } from "../types";
 
 export interface DashboardProps {
   isExpanded: boolean;
+  isDashboardEnabled: boolean;
 }
 
 interface TokenUsage {
@@ -48,7 +49,7 @@ const TOKEN_RATES = {
 };
 
 // Default TPM limit - using gpt-3.5-turbo as default (2M TPM)
-const DEFAULT_TPM_LIMIT = 90000;
+const DEFAULT_TPM_LIMIT = 200000;
 
 // OpenAI Rate Limits by model
 const MODEL_RATE_LIMITS: Record<string, { tpm: number; rpm: number }> = {
@@ -73,13 +74,13 @@ const MODEL_RATE_LIMITS: Record<string, { tpm: number; rpm: number }> = {
   "claude-3-sonnet": { tpm: 450000, rpm: 5000 },
   "claude-3-haiku": { tpm: 2000000, rpm: 5000 },
   "gemini-1.0-pro": { tpm: 450000, rpm: 5000 }, // example for Gemini models
-  "default": { tpm: 90000, rpm: 3500 }
+  "default": { tpm: 200000, rpm: 400 }
 };
 
 // OpenAI Project ID
 const OPENAI_PROJECT_ID = "proj_iwQ4RJz8jIk9GD62jdsDIfZE";
 
-function Dashboard({ isExpanded }: DashboardProps) {
+function Dashboard({ isExpanded, isDashboardEnabled }: DashboardProps) {
   const { loggedEvents, toggleExpand } = useEvent();
   const [tokenUsage, setTokenUsage] = useState<TokenUsage>({
     input: 0,
@@ -133,24 +134,53 @@ function Dashboard({ isExpanded }: DashboardProps) {
     }
   ]);
 
-  // Group events by agent name
-  const eventsByAgent = useMemo(() => {
-    const groupedEvents: Record<string, Record<string, any>[]> = {};
+  const { tokenUsage: totalTokens, cost: totalCost } = useMemo(() => {
+    let totalTokens = 0;
+    let totalCost = 0;
     
-    loggedEvents.forEach(event => {
-      if (event.direction === "server") {
-        const agentName = event.eventData?.item?.name || "unknown";
-        if (!groupedEvents[agentName]) {
-          groupedEvents[agentName] = [];
+    // Process events in reverse order until we find a token usage event
+    for (let i = loggedEvents.length - 1; i >= 0; i--) {
+      const event = loggedEvents[i];
+      if (event.eventName === "response.done" && event.direction === "server") {
+        const usage = event.eventData?.response?.usage;
+        if (usage) {
+          totalTokens = usage.total_tokens || 0;
+          totalCost = usage.total_cost || 0;
+          break; // Exit once we find the latest token usage
         }
-        groupedEvents[agentName].push(event.eventData);
       }
-    });
+    }
     
-    return groupedEvents;
+    return { tokenUsage: totalTokens, cost: totalCost };
   }, [loggedEvents]);
-  
-  // Extract unique event types for filtering
+
+  const eventsByAgent = useMemo(() => {
+    const events: Record<string, LoggedEvent[]> = {};
+    // Process events in reverse order to get latest agent events first
+    for (let i = loggedEvents.length - 1; i >= 0; i--) {
+      const event = loggedEvents[i];
+      if (event.direction === "server") {
+        const agentId = event.eventData?.agent_id;
+        if (agentId) {
+          if (!events[agentId]) {
+            events[agentId] = [];
+          }
+          events[agentId].push(event);
+        }
+      }
+    }
+    return events;
+  }, [loggedEvents]);
+
+  const currentApiKeyStatus = useMemo(() => {
+    const tokenEvents = loggedEvents.filter(e => e.eventName === "fetch_session_token_response");
+    if (tokenEvents.length > 0) {
+      const latest = tokenEvents[tokenEvents.length - 1];
+      return latest.eventData?.status || "unknown";
+    }
+    return "unknown";
+  }, [loggedEvents]);
+
   const eventTypes = useMemo(() => {
     const types = new Set<string>();
     loggedEvents.forEach(event => {
@@ -158,9 +188,11 @@ function Dashboard({ isExpanded }: DashboardProps) {
     });
     return Array.from(types);
   }, [loggedEvents]);
-  
+
   // Update agent processes based on logged events
   useEffect(() => {
+    if (!isDashboardEnabled) return;
+    
     // Map of agent steps configurations
     const agentStepConfigs: Record<string, { icon: string, stepPatterns: string[] }> = {
       "conversationAgent": { 
@@ -229,94 +261,12 @@ function Dashboard({ isExpanded }: DashboardProps) {
     if (initialAgentProcesses.length > 0) {
       setAgentProcesses(initialAgentProcesses);
     }
-  }, [loggedEvents]);
-  
-  // Simple function to check for API key status
-  const checkApiKeyStatus = (events: any[]) => {
-    // Look for the specific fetch_session_token_response event
-    const tokenEvents = events.filter(e => e.eventName === "fetch_session_token_response");
-    
-    if (tokenEvents.length > 0) {
-      // Get the latest event
-      const latest = tokenEvents[tokenEvents.length - 1];
-      const hasError = latest.eventData?.error !== undefined;
-      const hasToken = latest.eventData?.client_secret?.value !== undefined;
-      
-      return {
-        isPresent: !hasError && hasToken,
-        statusMessage: !hasError && hasToken 
-          ? "API Key Configured" 
-          : hasError
-            ? "API Key Error: " + (latest.eventData?.message || "Authentication failed")
-            : "API Key Not Configured"
-      };
-    }
-    
-    // Default state when no token events found
-    return {
-      isPresent: false,
-      statusMessage: "API Key Not Configured"
-    };
-  };
-  
-  // Update API key status whenever logged events change
-  useEffect(() => {
-    // Filter for fetch_session_token_response events
-    const tokenEvents = loggedEvents.filter(e => e.eventName === "fetch_session_token_response");
-    
-    if (tokenEvents.length > 0) {
-      // Get the latest event and check its status
-      const latest = tokenEvents[tokenEvents.length - 1];
-      const hasError = latest.eventData?.error !== undefined;
-      const hasToken = latest.eventData?.client_secret?.value !== undefined;
-      
-      setApiKeyStatus({
-        isPresent: !hasError && hasToken,
-        statusMessage: !hasError && hasToken 
-          ? "API Key Configured" 
-          : hasError
-            ? "API Key Error: " + (latest.eventData?.message || "Authentication failed")
-            : "API Key Not Configured"
-      });
-      
-      // Dispatch a custom event that event listeners can use
-      const event = new CustomEvent("session_token_response", { 
-        detail: { 
-          eventName: "fetch_session_token_response",
-          eventData: latest.eventData
-        } 
-      });
-      window.dispatchEvent(event);
-    }
-  }, [loggedEvents]);
-  
-  // Monitor for real-time session token events to update API key status immediately
-  useEffect(() => {
-    const handleSessionTokenEvent = (event: CustomEvent) => {
-      const eventData = event.detail?.eventData || {};
-      const hasError = eventData.error !== undefined;
-      const hasToken = eventData.client_secret?.value !== undefined;
-      
-      setApiKeyStatus({
-        isPresent: !hasError && hasToken,
-        statusMessage: !hasError && hasToken 
-          ? "API Key Configured" 
-          : hasError 
-            ? "API Key Error: " + (eventData.message || "Authentication failed")
-            : "API Key Not Configured"
-      });
-    };
-    
-    // Add event listener for session token responses
-    window.addEventListener("session_token_response", handleSessionTokenEvent as EventListener);
-    
-    return () => {
-      window.removeEventListener("session_token_response", handleSessionTokenEvent as EventListener);
-    };
-  }, []);
+  }, [loggedEvents, isDashboardEnabled]);
   
   // Update time every second for session duration
   useEffect(() => {
+    if (!isDashboardEnabled) return;
+    
     const timer = setInterval(() => {
       setCurrentTime(new Date());
       
@@ -337,10 +287,12 @@ function Dashboard({ isExpanded }: DashboardProps) {
     }, 1000);
     
     return () => clearInterval(timer);
-  }, [tokenUsage.resetTimeSeconds]);
+  }, [tokenUsage.resetTimeSeconds, isDashboardEnabled]);
 
   // Extract token usage from events
   useEffect(() => {
+    if (!isDashboardEnabled) return;
+    
     let inputTokens = 0;
     let outputTokens = 0;
     let currentModel = "default";
@@ -352,51 +304,36 @@ function Dashboard({ isExpanded }: DashboardProps) {
         setActiveModel(currentModel);
       }
       
-      // Check for direct token usage information from OpenAI API
-      if (event.eventData?.usage) {
-        inputTokens += event.eventData.usage.prompt_tokens || 0;
-        outputTokens += event.eventData.usage.completion_tokens || 0;
-      }
-      // Check for project_id in request
-      if (event.eventData?.project_id === projectId) {
-        // Track specific project usage
-        if (event.eventData?.usage) {
-          inputTokens += event.eventData.usage.prompt_tokens || 0;
-          outputTokens += event.eventData.usage.completion_tokens || 0;
-        }
-      }
-      // Alternative check for token usage in standard format
-      else if (event.eventData?.type === "tokens.usage") {
-        inputTokens += event.eventData.input_tokens || 0;
-        outputTokens += event.eventData.output_tokens || 0;
-      }
-      
-      // For completion events that don't provide usage stats, estimate from content
-      if (event.eventData?.type === "response.done" || event.eventData?.type === "completion.done") {
-        // Estimate tokens based on content length if available
-        const content = event.eventData?.item?.content?.[0]?.text || event.eventData?.content || "";
-        if (content && typeof content === 'string') {
-          // Rough estimate: 4 characters ~= 1 token
-          outputTokens += Math.ceil(content.length / 4);
-        }
-      }
-      
-      // For user input events that don't provide usage stats, estimate from content
-      if (event.direction === "client" && 
-         (event.eventData?.type === "conversation.item.create" || event.eventName === "conversation.item.create")) {
-        const content = event.eventData?.item?.content?.[0]?.text || event.eventData?.content || "";
-        if (content && typeof content === 'string') {
-          // Rough estimate: 4 characters ~= 1 token
-          inputTokens += Math.ceil(content.length / 4);
-        }
-      }
-      
-      // Check for token info in response.created events which sometimes contain token usage
-      if (event.eventName === "response.created" || event.eventName === "response.content_part.added") {
-        if (event.eventData?.content_part?.content) {
-          const content = event.eventData.content_part.content;
-          if (typeof content === 'string') {
-            outputTokens += Math.ceil(content.length / 4);
+      // Track token metrics from response.done events
+      if (event.eventName === "response.done" && event.direction === "server") {
+        const usage = event.eventData?.response?.usage;
+        if (usage) {
+          // Get total tokens
+          const totalTokens = usage.total_tokens || 0;
+          
+          // Get input tokens
+          const inputDetails = usage.input_token_details;
+          if (inputDetails) {
+            inputTokens = Math.max(inputTokens, 
+              (inputDetails.text_tokens || 0) + 
+              (inputDetails.audio_tokens || 0) + 
+              (inputDetails.cached_tokens || 0)
+            );
+          }
+          
+          // Get output tokens
+          const outputDetails = usage.output_token_details;
+          if (outputDetails) {
+            outputTokens = Math.max(outputTokens,
+              (outputDetails.text_tokens || 0) + 
+              (outputDetails.audio_tokens || 0)
+            );
+          }
+          
+          // If no details available, use the direct counts
+          if (!inputDetails && !outputDetails) {
+            inputTokens = Math.max(inputTokens, usage.input_tokens || 0);
+            outputTokens = Math.max(outputTokens, usage.output_tokens || 0);
           }
         }
       }
@@ -408,7 +345,7 @@ function Dashboard({ isExpanded }: DashboardProps) {
     
     // Update token usage
     const total = inputTokens + outputTokens;
-    const tpm = Math.min(total, tpmLimit); // Simulated TPM based on session tokens
+    const tpm = Math.min(total, tpmLimit);
     
     setTokenUsage({
       input: inputTokens,
@@ -419,7 +356,7 @@ function Dashboard({ isExpanded }: DashboardProps) {
       resetTimeSeconds: tokenUsage.resetTimeSeconds
     });
     
-    // Calculate cost for internal tracking even though we're not displaying it
+    // Calculate cost
     const inputCost = (inputTokens / 1000) * TOKEN_RATES.input;
     const outputCost = (outputTokens / 1000) * TOKEN_RATES.output;
     const totalCost = inputCost + outputCost;
@@ -430,7 +367,23 @@ function Dashboard({ isExpanded }: DashboardProps) {
       total: totalCost,
       dailyLimit: 5
     });
-  }, [loggedEvents, projectId, tokenUsage.resetTimeSeconds]);
+  }, [loggedEvents, projectId, tokenUsage.resetTimeSeconds, isDashboardEnabled]);
+
+  // Update API key status based on token events
+  useEffect(() => {
+    if (!isDashboardEnabled) return;
+    
+    const tokenEvents = loggedEvents.filter(e => e.eventName === "fetch_session_token_response");
+    if (tokenEvents.length > 0) {
+      const latest = tokenEvents[tokenEvents.length - 1];
+      const hasError = latest.eventData?.error || !latest.eventData?.client_secret?.value;
+      
+      setApiKeyStatus({
+        isPresent: !hasError,
+        statusMessage: hasError ? (latest.eventData?.error || "Invalid API Key") : "API Key Valid"
+      });
+    }
+  }, [loggedEvents, isDashboardEnabled]);
 
   const sessionDuration = useMemo(() => {
     const diffMs = currentTime.getTime() - sessionStartTime.getTime();
@@ -455,12 +408,14 @@ function Dashboard({ isExpanded }: DashboardProps) {
   };
 
   const filteredEvents = useMemo(() => {
-    return loggedEvents.filter(event => {
-      if (selectedEventType && event.eventName !== selectedEventType) {
-        return false;
-      }
-      return true;
-    });
+    return loggedEvents
+      .filter(event => {
+        if (selectedEventType && event.eventName !== selectedEventType) {
+          return false;
+        }
+        return true;
+      })
+      .reverse();
   }, [loggedEvents, selectedEventType]);
 
   const [logsExpanded, setLogsExpanded] = useState<boolean>(false);
@@ -473,8 +428,23 @@ function Dashboard({ isExpanded }: DashboardProps) {
   const isNearingCostLimit = cost.total / cost.dailyLimit > 0.8;
   const showAlert = isNearingTpmLimit || isNearingCostLimit;
 
-  if (!isExpanded) {
+  // Early return if dashboard is not enabled and not expanded
+  if (!isDashboardEnabled && !isExpanded) {
     return null;
+  }
+
+  // Return a disabled state message if expanded but not enabled
+  if (!isDashboardEnabled && isExpanded) {
+    return (
+      <div className="w-full h-full flex flex-col bg-white rounded-xl overflow-hidden">
+        <div className="font-semibold text-base px-4 py-2 border-b bg-gray-50">
+          Dashboard (Disabled)
+        </div>
+        <div className="flex-1 flex items-center justify-center text-gray-500">
+          Dashboard features are currently disabled
+        </div>
+      </div>
+    );
   }
 
   return (
@@ -639,7 +609,7 @@ function Dashboard({ isExpanded }: DashboardProps) {
               
               <div className="overflow-auto flex-1 max-h-96">
                 <div className="divide-y">
-                  {filteredEvents.map((log) => {
+                  {[...filteredEvents].map((log) => {
                     const isError = log.eventName.toLowerCase().includes("error");
                     const directionIcon = log.direction === "client" ? "▲" : "▼";
                     const directionColor = log.direction === "client" ? "text-purple-600" : "text-green-600";
@@ -672,7 +642,7 @@ function Dashboard({ isExpanded }: DashboardProps) {
                         
                         {log.expanded && (
                           <div className="mt-1 border-t pt-1">
-                            <pre className="text-[10px] overflow-auto max-h-32 whitespace-pre-wrap text-gray-700 bg-gray-50 p-2 rounded">
+                            <pre className="text-[10px] overflow-auto whitespace-pre-wrap text-gray-700 bg-gray-50 p-2 rounded">
                               {JSON.stringify(log.eventData, null, 2)}
                             </pre>
                           </div>

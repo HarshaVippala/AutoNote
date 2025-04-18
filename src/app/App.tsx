@@ -343,6 +343,11 @@ function App() {
     setSelectedAgentName(newAgentName);
   };
 
+  const handleDashboardToggle = (checked: boolean) => {
+    setIsEventsPaneExpanded(checked);
+    localStorage.setItem("logsExpanded", checked.toString());
+  };
+
   useEffect(() => {
     const storedMicMuted = localStorage.getItem("microphoneMuted");
     if (storedMicMuted) {
@@ -361,10 +366,6 @@ function App() {
   useEffect(() => {
     localStorage.setItem("microphoneMuted", isMicrophoneMuted.toString());
   }, [isMicrophoneMuted]);
-
-  useEffect(() => {
-    localStorage.setItem("logsExpanded", isEventsPaneExpanded.toString());
-  }, [isEventsPaneExpanded]);
 
   useEffect(() => {
     localStorage.setItem("answersExpanded", isAnswersPaneExpanded.toString());
@@ -474,7 +475,7 @@ function App() {
           
           {isEventsPaneExpanded && (
             <div className={`${isAnswersPaneExpanded ? 'w-1/2' : 'w-full'} transition-all duration-200 h-full`}>
-              <Dashboard isExpanded={true} />
+              <Dashboard isExpanded={true} isDashboardEnabled={isEventsPaneExpanded} />
             </div>
           )}
         </div>
@@ -486,7 +487,7 @@ function App() {
         isMicrophoneMuted={isMicrophoneMuted}
         setIsMicrophoneMuted={setIsMicrophoneMuted}
         isEventsPaneExpanded={isEventsPaneExpanded}
-        setIsEventsPaneExpanded={setIsEventsPaneExpanded}
+        setIsEventsPaneExpanded={handleDashboardToggle}
         isAnswersPaneExpanded={isAnswersPaneExpanded}
         setIsAnswersPaneExpanded={setIsAnswersPaneExpanded}
       />
