@@ -465,7 +465,7 @@ function App() {
   };
 
   // Top Controls Component
-  const TopControls = () => {
+  const TopControls: React.FC = () => {
     const { loggedEvents } = useEvent();
     const [apiKeyStatus, setApiKeyStatus] = useState<{ isPresent: boolean; statusMessage: string }>({
       isPresent: false,
