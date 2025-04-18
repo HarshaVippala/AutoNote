@@ -49,7 +49,7 @@ function App() {
   const [isAnswersPaneExpanded, setIsAnswersPaneExpanded] = useState<boolean>(true);
   const [userText, setUserText] = useState<string>("");
   const [isMicrophoneMuted, setIsMicrophoneMuted] = useState<boolean>(false);
-  const [activeMobilePanel, setActiveMobilePanel] = useState<number>(0); // Default to Transcript
+  const [activeMobilePanel, setActiveMobilePanel] = useState<number>(1); // Default to Transcript
   const [isMobileView, setIsMobileView] = useState<boolean>(false);
 
   // Touch event handlers
@@ -444,13 +444,12 @@ function App() {
     setTouchEnd(null);
 
     // Determine maximum panel index based on dashboard state
-    // When dashboard is enabled, we have 3 panels (0=Chat, 1=Answers, 2=Dashboard)
-    // When dashboard is disabled, we have 2 panels (0=Chat, 1=Answers)
     const maxPanelIndex = isEventsPaneExpanded ? 2 : 1;
 
     if (isLeftSwipe && activeMobilePanel < maxPanelIndex) {
-      // Next panel
-      setActiveMobilePanel(prev => Math.min(prev + 1, maxPanelIndex));
+      // Next panel - only allow swipe to dashboard (panel 2) if it's enabled
+      const nextPanel = Math.min(activeMobilePanel + 1, maxPanelIndex);
+      setActiveMobilePanel(nextPanel);
     } else if (isRightSwipe && activeMobilePanel > 0) {
       // Previous panel
       setActiveMobilePanel(prev => Math.max(prev - 1, 0));
@@ -689,7 +688,7 @@ function App() {
           </div>
 
           {/* Mobile Panel Indicators */}
-          <div className="absolute bottom-4 left0 right-0 flex justify-center items-center gap-3 pointer-events-none">
+          <div className="absolute bottom-4 left-0 right-0 flex justify-center items-center gap-3 pointer-events-none">
             {['Chat', 'Dashboard'].map((name, index) => {
               // Only show Dashboard indicator if the dashboard is enabled
               if (name === 'Dashboard' && !isEventsPaneExpanded) {
