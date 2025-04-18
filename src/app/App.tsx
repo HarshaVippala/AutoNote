@@ -395,29 +395,66 @@ function App() {
   
   const handleTouchMove = (e: React.TouchEvent) => {
     setTouchEnd(e.targetTouches[0].clientX);
+    
+    // For smoother visual feedback during swipe
+    if (touchStart && e.targetTouches[0].clientX) {
+      const difference = touchStart - e.targetTouches[0].clientX;
+      const maxDiff = window.innerWidth * 0.15; // Limit drag effect
+      
+      // Only apply visual feedback if difference is within acceptable range
+      if (Math.abs(difference) < maxDiff) {
+        const swipePanels = document.querySelectorAll('.mobile-swipe-panel');
+        const translateOffset = -activeMobilePanel * 100;
+        
+        swipePanels.forEach((panel, index) => {
+          const el = panel as HTMLElement;
+          const panelTranslate = translateOffset + (index * 100) - (difference / window.innerWidth * 20);
+          el.style.transform = `translateX(${panelTranslate}%)`;
+        });
+      }
+    }
   };
   
   const handleTouchEnd = () => {
-    if (!touchStart || !touchEnd) return;
+    if (!touchStart || !touchEnd) {
+      // Reset to original positions if no complete swipe detected
+      const swipePanels = document.querySelectorAll('.mobile-swipe-panel');
+      swipePanels.forEach((panel, index) => {
+        const el = panel as HTMLElement;
+        const translateOffset = activeMobilePanel * -100;
+        el.style.transform = `translateX(${100 * index + translateOffset}%)`;
+      });
+      return;
+    }
     
     const distance = touchStart - touchEnd;
     const isLeftSwipe = distance > minSwipeDistance;
     const isRightSwipe = distance < -minSwipeDistance;
     
-    if (isLeftSwipe) {
-      // Next panel (if not on the last one)
-      setActiveMobilePanel(prev => Math.min(prev + 1, 2));
-    }
+    // Reset touch values
+    setTouchStart(null);
+    setTouchEnd(null);
     
-    if (isRightSwipe) {
-      // Previous panel (if not on the first one)
+    if (isLeftSwipe && activeMobilePanel < 2) {
+      // Next panel
+      setActiveMobilePanel(prev => Math.min(prev + 1, 2));
+    } else if (isRightSwipe && activeMobilePanel > 0) {
+      // Previous panel
       setActiveMobilePanel(prev => Math.max(prev - 1, 0));
+    } else {
+      // Reset to original positions if no change
+      const swipePanels = document.querySelectorAll('.mobile-swipe-panel');
+      swipePanels.forEach((panel, index) => {
+        const el = panel as HTMLElement;
+        const translateOffset = activeMobilePanel * -100;
+        el.style.transform = `translateX(${100 * index + translateOffset}%)`;
+      });
     }
   };
 
   // Top Controls Component
   const TopControls = () => (
-    <div className="p-2 border-b border-gray-200 bg-white flex items-center justify-between">
+    <div className="p-2 border-b border-gray-200 bg-white flex items-center justify-between overflow-hidden">
       <div className="flex items-center">
         <div onClick={() => window.location.reload()} style={{ cursor: 'pointer' }}>
           <Image
@@ -433,11 +470,12 @@ function App() {
         </div>
       </div>
       
-      <div className="flex space-x-4 items-center">
+      <div className="flex space-x-3 items-center">
         {/* Connection Button */}
         <button
           onClick={onToggleConnection}
-          className={`text-white text-sm p-2 w-28 rounded-full ${
+          title={sessionStatus === "CONNECTED" ? "Disconnect" : "Connect"}
+          className={`flex items-center justify-center h-9 w-9 rounded-full ${
             sessionStatus === "CONNECTED"
               ? "bg-red-600 hover:bg-red-700"
               : sessionStatus === "CONNECTING"
@@ -446,18 +484,27 @@ function App() {
           }`}
           disabled={sessionStatus === "CONNECTING"}
         >
-          {sessionStatus === "CONNECTED"
-            ? "Disconnect"
-            : sessionStatus === "CONNECTING"
-            ? "Connecting..."
-            : "Connect"}
+          {sessionStatus === "CONNECTING" ? (
+            <div className="h-4 w-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+          ) : sessionStatus === "CONNECTED" ? (
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="white" viewBox="0 0 16 16">
+              <path d="M13.854 2.146a.5.5 0 0 1 0 .708l-11 11a.5.5 0 0 1-.708-.708l11-11a.5.5 0 0 1 .708 0Z"/>
+              <path d="M2.146 2.146a.5.5 0 0 0 0 .708l11 11a.5.5 0 0 0 .708-.708l-11-11a.5.5 0 0 0-.708 0Z"/>
+            </svg>
+          ) : (
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="white" viewBox="0 0 16 16">
+              <path d="M6.5 10.5a.5.5 0 0 1 .5.5h1.5a.5.5 0 0 1 0 1H6a.5.5 0 0 1-.5-.5v-2A.5.5 0 0 1 6 9h4a.5.5 0 0 1 0 1H6.5v.5z"/>
+              <path d="M14 9.5a4.5 4.5 0 0 1-4.5 4.5h-5A4.5 4.5 0 0 1 0 9.5v-5A4.5 4.5 0 0 1 4.5 0h5A4.5 4.5 0 0 1 14 4.5v5zm-4.5 3.5a3.5 3.5 0 0 0 3.5-3.5v-5A3.5 3.5 0 0 0 9.5 1h-5A3.5 3.5 0 0 0 1 4.5v5A3.5 3.5 0 0 0 4.5 13h5z"/>
+            </svg>
+          )}
         </button>
         
         {/* Microphone Button */}
         <button
           onClick={() => setIsMicrophoneMuted(!isMicrophoneMuted)}
           disabled={sessionStatus !== "CONNECTED"}
-          className={`py-1 px-3 rounded-full flex items-center gap-1 text-sm ${
+          title={isMicrophoneMuted ? "Unmute Microphone" : "Mute Microphone"}
+          className={`flex items-center justify-center h-9 w-9 rounded-full ${
             sessionStatus !== "CONNECTED"
               ? "bg-gray-100 text-gray-400 cursor-not-allowed"
               : isMicrophoneMuted
@@ -466,29 +513,60 @@ function App() {
           }`}
         >
           {isMicrophoneMuted ? (
-            <>
-              <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" fill="currentColor" viewBox="0 0 16 16">
-                <path d="M13 8c0 .564-.094 1.107-.266 1.613l-.814-.814A4.02 4.02 0 0 0 12 8V7a.5.5 0 0 1 1 0v1zm-5 4c.818 0 1.578-.245 2.212-.667l.718.719a4.973 4.973 0 0 1-2.43.923V15h3a.5.5 0 0 1 0 1h-7a.5.5 0 0 1 0-1h3v-2.025A5 5 0 0 1 3 8V7a.5.5 0 0 1 1 0v1a4 4 0 0 0 4 4zm3-9v4.879L5.158 2.037A3.001 3.001 0 0 1 11 3z"/>
-                <path d="M9.486 10.607 5 6.12V8a3 3 0 0 0 4.486 2.607zm-7.84-9.253 12 12 .708-.708-12-12-.708.708z"/>
-              </svg>
-              <span className="ml-1">Unmute</span>
-            </>
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16">
+              <path d="M13 8c0 .564-.094 1.107-.266 1.613l-.814-.814A4.02 4.02 0 0 0 12 8V7a.5.5 0 0 1 1 0v1zm-5 4c.818 0 1.578-.245 2.212-.667l.718.719a4.973 4.973 0 0 1-2.43.923V15h3a.5.5 0 0 1 0 1h-7a.5.5 0 0 1 0-1h3v-2.025A5 5 0 0 1 3 8V7a.5.5 0 0 1 1 0v1a4 4 0 0 0 4 4zm3-9v4.879L5.158 2.037A3.001 3.001 0 0 1 11 3z"/>
+              <path d="M9.486 10.607 5 6.12V8a3 3 0 0 0 4.486 2.607zm-7.84-9.253 12 12 .708-.708-12-12-.708.708z"/>
+            </svg>
           ) : (
-            <>
-              <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" fill="currentColor" viewBox="0 0 16 16">
-                <path d="M5 3a3 3 0 0 1 6 0v5a3 3 0 0 1-6 0V3z"/>
-                <path d="M3.5 6.5A.5.5 0 0 1 4 7v1a4 4 0 0 0 8 0V7a.5.5 0 0 1 1 0v1a5 5 0 0 1-4.5 4.975V15h3a.5.5 0 0 1 0 1h-7a.5.5 0 0 1 0-1h3v-2.025A5 5 0 0 1 3 8V7a.5.5 0 0 1 .5-.5z"/>
-              </svg>
-              <span className="ml-1">Mute</span>
-            </>
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16">
+              <path d="M5 3a3 3 0 0 1 6 0v5a3 3 0 0 1-6 0V3z"/>
+              <path d="M3.5 6.5A.5.5 0 0 1 4 7v1a4 4 0 0 0 8 0V7a.5.5 0 0 1 1 0v1a5 5 0 0 1-4.5 4.975V15h3a.5.5 0 0 1 0 1h-7a.5.5 0 0 1 0-1h3v-2.025A5 5 0 0 1 3 8V7a.5.5 0 0 1 .5-.5z"/>
+            </svg>
           )}
         </button>
         
-        {isMobileView ? (
-          <div className="flex space-x-2">
+        {/* Dashboard Toggle */}
+        {!isMobileView && (
+          <button 
+            onClick={() => handleDashboardToggle(!isEventsPaneExpanded)}
+            title="Toggle Dashboard"
+            className={`flex items-center justify-center h-9 w-9 rounded-full ${
+              isEventsPaneExpanded 
+                ? "bg-blue-100 text-blue-700" 
+                : "bg-gray-100 text-gray-600"
+            }`}
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16">
+              <path d="M8 4a.5.5 0 0 1 .5.5V6a.5.5 0 0 1-1 0V4.5A.5.5 0 0 1 8 4zM3.732 5.732a.5.5 0 0 1 .707 0l.915.914a.5.5 0 1 1-.708.708l-.914-.915a.5.5 0 0 1 0-.707zM2 10a.5.5 0 0 1 .5-.5h1.586a.5.5 0 0 1 0 1H2.5A.5.5 0 0 1 2 10zm9.5 0a.5.5 0 0 1 .5-.5h1.5a.5.5 0 0 1 0 1H12a.5.5 0 0 1-.5-.5zm.754-4.246a.389.389 0 0 0-.527-.02L7.547 9.31a.91.91 0 1 0 1.302 1.258l3.434-4.297a.389.389 0 0 0-.029-.518z"/>
+            </svg>
+          </button>
+        )}
+        
+        {/* Answers Toggle */}
+        {!isMobileView && (
+          <button 
+            onClick={() => setIsAnswersPaneExpanded(!isAnswersPaneExpanded)}
+            title="Toggle Answers"
+            className={`flex items-center justify-center h-9 w-9 rounded-full ${
+              isAnswersPaneExpanded 
+                ? "bg-blue-100 text-blue-700" 
+                : "bg-gray-100 text-gray-600"
+            }`}
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16">
+              <path d="M5 8a1 1 0 1 1-2 0 1 1 0 0 1 2 0zm4 0a1 1 0 1 1-2 0 1 1 0 0 1 2 0zm3 1a1 1 0 1 0 0-2 1 1 0 0 0 0 2z"/>
+              <path d="m2.165 15.803.02-.004c1.83-.363 2.948-.842 3.468-1.105A9.06 9.06 0 0 0 8 15c4.418 0 8-3.134 8-7s-3.582-7-8-7-8 3.134-8 7c0 1.76.743 3.37 1.97 4.6a10.437 10.437 0 0 1-.524 2.318l-.003.011a10.722 10.722 0 0 1-.244.637c-.079.186.074.394.273.362a21.673 21.673 0 0 0 .693-.125zm.8-3.108a1 1 0 0 0-.287-.801C1.618 10.83 1 9.468 1 8c0-3.192 3.004-6 7-6s7 2.808 7 6c0 3.193-3.004 6-7 6a8.06 8.06 0 0 1-2.088-.272 1 1 0 0 0-.711.074c-.387.196-1.24.57-2.634.893a10.97 10.97 0 0 0 .398-2z"/>
+            </svg>
+          </button>
+        )}
+        
+        {/* Mobile View Indicators */}
+        {isMobileView && (
+          <div className="flex space-x-1">
             {['Chat', 'Answers', 'Dashboard'].map((name, index) => (
               <button
                 key={index}
+                title={name}
                 className={`w-2 h-2 rounded-full ${
                   activeMobilePanel === index 
                     ? 'bg-blue-500' 
@@ -498,42 +576,15 @@ function App() {
               />
             ))}
           </div>
-        ) : (
-          <>
-            <div className="flex items-center gap-2">
-              <input
-                id="answers"
-                type="checkbox"
-                checked={isAnswersPaneExpanded}
-                onChange={e => setIsAnswersPaneExpanded(e.target.checked)}
-                className="w-4 h-4"
-              />
-              <label htmlFor="answers" className="cursor-pointer text-sm">
-                Answers
-              </label>
-            </div>
-
-            <div className="flex items-center gap-2">
-              <input
-                id="logs"
-                type="checkbox"
-                checked={isEventsPaneExpanded}
-                onChange={e => handleDashboardToggle(e.target.checked)}
-                className="w-4 h-4"
-              />
-              <label htmlFor="logs" className="cursor-pointer text-sm">
-                Dashboard
-              </label>
-            </div>
-          </>
         )}
         
         {/* Agent Selection (only if multiple agents available) */}
         {selectedAgentConfigSet && selectedAgentConfigSet.length > 1 && (
-          <div className="relative inline-block">
+          <div className="relative inline-block ml-1">
             <select
               value={selectedAgentName}
               onChange={handleSelectedAgentChange}
+              title="Select Agent"
               className="appearance-none border border-gray-300 rounded-lg text-sm px-2 py-1 pr-6 cursor-pointer font-normal focus:outline-none"
             >
               {selectedAgentConfigSet?.map(agent => (
@@ -629,6 +680,20 @@ function App() {
             style={{ transform: `translateX(${200 - (activeMobilePanel * 100)}%)` }}
           >
             <Dashboard isExpanded={true} isDashboardEnabled={true} />
+          </div>
+          
+          {/* Mobile Panel Indicators */}
+          <div className="absolute bottom-4 left-0 right-0 flex justify-center items-center gap-3 pointer-events-none">
+            {['Chat', 'Answers', 'Dashboard'].map((name, index) => (
+              <div 
+                key={index}
+                className={`h-1.5 rounded-full transition-all duration-300 ${
+                  activeMobilePanel === index 
+                    ? 'w-6 bg-blue-500' 
+                    : 'w-1.5 bg-gray-300'
+                }`}
+              />
+            ))}
           </div>
         </div>
       )}
