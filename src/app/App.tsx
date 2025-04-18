@@ -465,7 +465,7 @@ function App() {
   };
 
   // Top Controls Component
-  const TopControls = () => (
+  const TopControls: React.FC = () => (
     <div className="p-2 border-b border-gray-200 bg-white flex items-center justify-between overflow-hidden">
       <div className="flex items-center">
         <div onClick={() => window.location.reload()} style={{ cursor: 'pointer' }}>
@@ -477,9 +477,10 @@ function App() {
             height={20}
             className="mr-2"
           /> */}
+          <span className="block sm:hidden font-bold text-lg">JARVIS</span>
         </div>
-        <div className="hidden sm:block">
-          Realtime API <span className="text-gray-500">Agents</span>
+        <div className="hidden sm:block font-bold text-lg">
+          JARVIS
         </div>
       </div>
 
