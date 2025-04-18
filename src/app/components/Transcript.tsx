@@ -83,19 +83,20 @@ function Transcript({
               
               return (
                 <div key={itemId} className={containerClasses}>
-                  <div className={bubbleBase}>
-                    <div className={`whitespace-pre-wrap ${messageStyle}`}>
-                      <ReactMarkdown>{displayTitle}</ReactMarkdown>
-                    </div>
-                    
-                    {/* Add agent indicator for assistant messages */}
+                  <div className="relative">
+                    {/* Agent initials bubble positioned outside at top left */}
                     {!isUser && agentInitials && (
-                      <div className="flex justify-end mt-1">
-                        <div className="text-xs bg-blue-100 text-blue-800 rounded-full w-5 h-5 flex items-center justify-center">
+                      <div className="absolute -left-3 -top-3 z-10">
+                        <div className="text-xs bg-blue-100 text-blue-800 rounded-full w-5 h-5 flex items-center justify-center shadow-sm">
                           {agentInitials}
                         </div>
                       </div>
                     )}
+                    <div className={bubbleBase}>
+                      <div className={`whitespace-pre-wrap ${messageStyle}`}>
+                        <ReactMarkdown>{displayTitle}</ReactMarkdown>
+                      </div>
+                    </div>
                   </div>
                 </div>
               );
