@@ -81,7 +81,7 @@ function Transcript({
 
               // Get agent initials for assistant messages
               const agentInitials = !isUser ? 'GA' : '';
-              
+
               return (
                 <div key={itemId} className={containerClasses}>
                   <div className="relative">
@@ -166,7 +166,7 @@ function Transcript({
         ) : (
           <button
             onClick={() => setIsInputExpanded(true)}
-            className="bg-gray-400 hover:bg-gray-500 text-white rounded-full p-2 absolute bottom-2 right-2"
+            className="bg-gray-900 hover:bg-gray-800 text-white rounded-full p-2 absolute bottom-2 right-2"
             title="Open keyboard"
           >
             <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" fill="currentColor" viewBox="0 0 16 16">
