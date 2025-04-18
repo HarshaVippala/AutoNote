@@ -157,7 +157,7 @@ function Transcript({
         </div>
       </div>
 
-      <div className="p-4 flex items-center gap-x-2 flex-shrink-0 border-t border-gray-200">
+      <div className="p-2 flex items-center gap-x-2 flex-shrink-0 border-t border-gray-200">
         <input
           ref={inputRef}
           type="text"
@@ -168,15 +168,15 @@ function Transcript({
               onSendMessage();
             }
           }}
-          className="flex-1 px-4 py-2 focus:outline-none"
+          className="flex-1 px-3 py-1.5 focus:outline-none text-sm border border-gray-200 rounded"
           placeholder="Type a message..."
         />
         <button
           onClick={onSendMessage}
           disabled={!canSend || !userText.trim()}
-          className="bg-gray-900 text-white rounded-full px-2 py-2 disabled:opacity-50"
+          className="bg-gray-900 text-white rounded-full p-1.5 disabled:opacity-50"
         >
-          <Image src="arrow.svg" alt="Send" width={24} height={24} />
+          <Image src="arrow.svg" alt="Send" width={20} height={20} />
         </button>
       </div>
     </div>

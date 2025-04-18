@@ -1,3 +1,4 @@
+
 "use client";
 
 import React, { useEffect, useRef, useState } from "react";
@@ -10,7 +11,6 @@ import Image from "next/image";
 import Transcript from "./components/Transcript";
 import Dashboard from "./components/Dashboard";
 import AgentAnswers from "./components/AgentAnswers";
-import BottomToolbar from "./components/BottomToolbar";
 
 // Types
 import { AgentConfig, SessionStatus } from "@/app/types";
@@ -338,13 +338,6 @@ function App() {
     }
   };
 
-  const handleAgentChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
-    const newAgentConfig = e.target.value;
-    const url = new URL(window.location.toString());
-    url.searchParams.set("agentConfig", newAgentConfig);
-    window.location.replace(url.toString());
-  };
-
   const handleSelectedAgentChange = (
     e: React.ChangeEvent<HTMLSelectElement>
   ) => {
@@ -422,43 +415,139 @@ function App() {
     }
   };
 
-  const agentSetKey = searchParams.get("agentConfig") || "default";
-
-  return (
-    <div className="text-base flex flex-col h-screen bg-gray-100 text-gray-800 relative">
-      <div className="p-5 text-lg font-semibold flex justify-between items-center">
-        <div className="flex items-center">
-          <div onClick={() => window.location.reload()} style={{ cursor: 'pointer' }}>
-            <Image
-              src="/openai-logomark.svg"
-              alt="OpenAI Logo"
-              width={20}
-              height={20}
-              className="mr-2"
-            />
-          </div>
-          <div>
-            Realtime API <span className="text-gray-500">Agents</span>
-          </div>
+  // Top Controls Component
+  const TopControls = () => (
+    <div className="p-2 border-b border-gray-200 bg-white flex items-center justify-between">
+      <div className="flex items-center">
+        <div onClick={() => window.location.reload()} style={{ cursor: 'pointer' }}>
+          <Image
+            src="/openai-logomark.svg"
+            alt="OpenAI Logo"
+            width={20}
+            height={20}
+            className="mr-2"
+          />
         </div>
-        <div className="flex items-center">
-          <label className="flex items-center text-base gap-1 mr-2 font-medium">
-            Scenario
-          </label>
+        <div className="hidden sm:block">
+          Realtime API <span className="text-gray-500">Agents</span>
+        </div>
+      </div>
+      
+      <div className="flex space-x-4 items-center">
+        {/* Connection Button */}
+        <button
+          onClick={onToggleConnection}
+          className={`text-white text-sm p-2 w-28 rounded-full ${
+            sessionStatus === "CONNECTED"
+              ? "bg-red-600 hover:bg-red-700"
+              : sessionStatus === "CONNECTING"
+              ? "bg-black hover:bg-gray-900 cursor-not-allowed"
+              : "bg-black hover:bg-gray-900"
+          }`}
+          disabled={sessionStatus === "CONNECTING"}
+        >
+          {sessionStatus === "CONNECTED"
+            ? "Disconnect"
+            : sessionStatus === "CONNECTING"
+            ? "Connecting..."
+            : "Connect"}
+        </button>
+        
+        {/* Microphone Button */}
+        <button
+          onClick={() => setIsMicrophoneMuted(!isMicrophoneMuted)}
+          disabled={sessionStatus !== "CONNECTED"}
+          className={`py-1 px-3 rounded-full flex items-center gap-1 text-sm ${
+            sessionStatus !== "CONNECTED"
+              ? "bg-gray-100 text-gray-400 cursor-not-allowed"
+              : isMicrophoneMuted
+              ? "bg-red-100 text-red-700 hover:bg-red-200 cursor-pointer"
+              : "bg-green-100 text-green-700 hover:bg-green-200 cursor-pointer"
+          }`}
+        >
+          {isMicrophoneMuted ? (
+            <>
+              <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" fill="currentColor" viewBox="0 0 16 16">
+                <path d="M13 8c0 .564-.094 1.107-.266 1.613l-.814-.814A4.02 4.02 0 0 0 12 8V7a.5.5 0 0 1 1 0v1zm-5 4c.818 0 1.578-.245 2.212-.667l.718.719a4.973 4.973 0 0 1-2.43.923V15h3a.5.5 0 0 1 0 1h-7a.5.5 0 0 1 0-1h3v-2.025A5 5 0 0 1 3 8V7a.5.5 0 0 1 1 0v1a4 4 0 0 0 4 4zm3-9v4.879L5.158 2.037A3.001 3.001 0 0 1 11 3z"/>
+                <path d="M9.486 10.607 5 6.12V8a3 3 0 0 0 4.486 2.607zm-7.84-9.253 12 12 .708-.708-12-12-.708.708z"/>
+              </svg>
+              <span className="ml-1">Unmute</span>
+            </>
+          ) : (
+            <>
+              <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" fill="currentColor" viewBox="0 0 16 16">
+                <path d="M5 3a3 3 0 0 1 6 0v5a3 3 0 0 1-6 0V3z"/>
+                <path d="M3.5 6.5A.5.5 0 0 1 4 7v1a4 4 0 0 0 8 0V7a.5.5 0 0 1 1 0v1a5 5 0 0 1-4.5 4.975V15h3a.5.5 0 0 1 0 1h-7a.5.5 0 0 1 0-1h3v-2.025A5 5 0 0 1 3 8V7a.5.5 0 0 1 .5-.5z"/>
+              </svg>
+              <span className="ml-1">Mute</span>
+            </>
+          )}
+        </button>
+        
+        {isMobileView ? (
+          <div className="flex space-x-2">
+            {['Chat', 'Answers', 'Dashboard'].map((name, index) => (
+              <button
+                key={index}
+                className={`w-2 h-2 rounded-full ${
+                  activeMobilePanel === index 
+                    ? 'bg-blue-500' 
+                    : 'bg-gray-300'
+                }`}
+                onClick={() => setActiveMobilePanel(index)}
+              />
+            ))}
+          </div>
+        ) : (
+          <>
+            <div className="flex items-center gap-2">
+              <input
+                id="answers"
+                type="checkbox"
+                checked={isAnswersPaneExpanded}
+                onChange={e => setIsAnswersPaneExpanded(e.target.checked)}
+                className="w-4 h-4"
+              />
+              <label htmlFor="answers" className="cursor-pointer text-sm">
+                Answers
+              </label>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <input
+                id="logs"
+                type="checkbox"
+                checked={isEventsPaneExpanded}
+                onChange={e => handleDashboardToggle(e.target.checked)}
+                className="w-4 h-4"
+              />
+              <label htmlFor="logs" className="cursor-pointer text-sm">
+                Dashboard
+              </label>
+            </div>
+          </>
+        )}
+        
+        {/* Agent Selection (only if multiple agents available) */}
+        {selectedAgentConfigSet && selectedAgentConfigSet.length > 1 && (
           <div className="relative inline-block">
             <select
-              value={agentSetKey}
-              onChange={handleAgentChange}
-              className="appearance-none border border-gray-300 rounded-lg text-base px-2 py-1 pr-8 cursor-pointer font-normal focus:outline-none"
+              value={selectedAgentName}
+              onChange={handleSelectedAgentChange}
+              className="appearance-none border border-gray-300 rounded-lg text-sm px-2 py-1 pr-6 cursor-pointer font-normal focus:outline-none"
             >
-              {Object.keys(allAgentSets).map((agentKey) => (
-                <option key={agentKey} value={agentKey}>
-                  {agentKey}
+              {selectedAgentConfigSet?.map(agent => (
+                <option key={agent.name} value={agent.name}>
+                  {agent.name}
                 </option>
               ))}
             </select>
-            <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center pr-2 text-gray-600">
-              <svg className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+            <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center pr-1 text-gray-600">
+              <svg
+                className="h-3 w-3"
+                viewBox="0 0 20 20"
+                fill="currentColor"
+              >
                 <path
                   fillRule="evenodd"
                   d="M5.23 7.21a.75.75 0 011.06.02L10 10.44l3.71-3.21a.75.75 0 111.04 1.08l-4.25 3.65a.75.75 0 01-1.04 0L5.21 8.27a.75.75 0 01.02-1.06z"
@@ -467,46 +556,18 @@ function App() {
               </svg>
             </div>
           </div>
-
-          {agentSetKey && (
-            <div className="flex items-center ml-6">
-              <label className="flex items-center text-base gap-1 mr-2 font-medium">
-                Agent
-              </label>
-              <div className="relative inline-block">
-                <select
-                  value={selectedAgentName}
-                  onChange={handleSelectedAgentChange}
-                  className="appearance-none border border-gray-300 rounded-lg text-base px-2 py-1 pr-8 cursor-pointer font-normal focus:outline-none"
-                >
-                  {selectedAgentConfigSet?.map(agent => (
-                    <option key={agent.name} value={agent.name}>
-                      {agent.name}
-                    </option>
-                  ))}
-                </select>
-                <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center pr-2 text-gray-600">
-                  <svg
-                    className="h-4 w-4"
-                    viewBox="0 0 20 20"
-                    fill="currentColor"
-                  >
-                    <path
-                      fillRule="evenodd"
-                      d="M5.23 7.21a.75.75 0 011.06.02L10 10.44l3.71-3.21a.75.75 0 111.04 1.08l-4.25 3.65a.75.75 0 01-1.04 0L5.21 8.27a.75.75 0 01.02-1.06z"
-                      clipRule="evenodd"
-                    />
-                  </svg>
-                </div>
-              </div>
-            </div>
-          )}
-        </div>
+        )}
       </div>
+    </div>
+  );
+
+  return (
+    <div className="text-base flex flex-col h-screen bg-gray-100 text-gray-800 relative">
+      <TopControls />
 
       {!isMobileView ? (
         // Desktop layout
-        <div className="flex flex-1 gap-2 px-2 pb-2 overflow-hidden">
+        <div className="flex flex-1 gap-2 px-2 pb-2 pt-2 overflow-hidden">
           <div className={`${(isAnswersPaneExpanded || isEventsPaneExpanded) ? 'w-1/3' : 'w-full'} transition-all duration-200 h-full`}>
             <Transcript
               userText={userText}
@@ -569,32 +630,8 @@ function App() {
           >
             <Dashboard isExpanded={true} isDashboardEnabled={true} />
           </div>
-          
-          {/* Panel indicators */}
-          <div className="mobile-indicators">
-            {[0, 1, 2].map((index) => (
-              <div 
-                key={index}
-                className={`mobile-indicator ${activeMobilePanel === index ? 'active' : ''}`}
-                onClick={() => setActiveMobilePanel(index)}
-              />
-            ))}
-          </div>
         </div>
       )}
-
-      <BottomToolbar
-        sessionStatus={sessionStatus}
-        onToggleConnection={onToggleConnection}
-        isMicrophoneMuted={isMicrophoneMuted}
-        setIsMicrophoneMuted={setIsMicrophoneMuted}
-        isEventsPaneExpanded={isEventsPaneExpanded}
-        setIsEventsPaneExpanded={handleDashboardToggle}
-        isAnswersPaneExpanded={isAnswersPaneExpanded}
-        setIsAnswersPaneExpanded={setIsAnswersPaneExpanded}
-        activeMobilePanel={activeMobilePanel}
-        setActiveMobilePanel={setActiveMobilePanel}
-      />
     </div>
   );
 }
