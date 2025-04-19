@@ -10,6 +10,8 @@ interface BottomToolbarProps {
   setIsEventsPaneExpanded: (val: boolean) => void;
   isAnswersPaneExpanded: boolean;
   setIsAnswersPaneExpanded: (val: boolean) => void;
+  activeMobilePanel?: number; // Optional, as it has a default value
+  setActiveMobilePanel?: (val: number) => void; // Optional, as it has a default value
 }
 
 function BottomToolbar({

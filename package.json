@@ -10,7 +10,8 @@
     "lint": "next lint",
     "build-check": "./scripts/build.sh",
     "electron": "electron .",
-    "electron:prod": "npm run build && npm run start && npm run electron"
+    "electron:prod": "npm run build && npm run start && npm run electron",
+    "package-mac": "electron-packager . MyAppName --platform=darwin --arch=x64 --out=release-builds --overwrite"
   },
   "dependencies": {
     "next": "15.2.4",
@@ -22,11 +23,13 @@
     "uuid": "^11.0.4"
   },
   "devDependencies": {
+    "@electron/packager": "^18.3.6",
     "@eslint/eslintrc": "^3",
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "electron": "^35.2.0",
+    "electron-builder": "^26.0.12",
     "eslint": "^9",
     "eslint-config-next": "15.1.4",
     "postcss": "^8",

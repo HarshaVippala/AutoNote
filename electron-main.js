@@ -11,9 +11,12 @@ function createWindow() {
     webPreferences: {
       nodeIntegration: false,
     },
+    
     // 🛡️ blocks screen‑shares & captures at the OS level
     contentProtection: true,
   });
+  //win.setContentProtection(true);
+
 
   // In dev you might point to http://localhost:3000,
   // but since you’ve built, point to your running Next.js server:
