@@ -1,12 +1,11 @@
 "use client";
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, memo } from 'react';
 import Image from 'next/image';
-import { SessionStatus, LoggedEvent } from "@/app/types"; // Assuming SessionStatus is exported from types
-import { useEvent } from "@/app/contexts/EventContext"; // Needed for API key status logic
+import { ConnectionState } from "@/app/types"; // Import ConnectionState, remove SessionStatus, LoggedEvent
 
 interface TopControlsProps {
-  sessionStatus: SessionStatus;
+  connectionState: ConnectionState; // Replace sessionStatus
   isMicrophoneMuted: boolean;
   setIsMicrophoneMuted: (muted: boolean) => void;
   onToggleConnection: () => void;
@@ -18,8 +17,8 @@ interface TopControlsProps {
   activeMobilePanel: number; // Used by mobile toggle logic
 }
 
-const TopControls: React.FC<TopControlsProps> = ({
-  sessionStatus,
+const TopControls: React.FC<TopControlsProps> = memo(({
+  connectionState, // Replace sessionStatus
   isMicrophoneMuted,
   setIsMicrophoneMuted,
   onToggleConnection,
@@ -30,42 +29,43 @@ const TopControls: React.FC<TopControlsProps> = ({
   setActiveMobilePanel,
   activeMobilePanel,
 }) => {
-  // API Key Status Logic (Temporary - Plan to refactor in Step 3.4)
-  const { loggedEvents } = useEvent();
-  const [apiKeyStatus, setApiKeyStatus] = useState<{ isPresent: boolean; statusMessage: string }>({
-    isPresent: false,
-    statusMessage: "API Key Not Configured"
-  });
-
-  useEffect(() => {
-    // Consider active connection as valid API key
-    if (sessionStatus === "CONNECTED") {
-      setApiKeyStatus({
-        isPresent: true,
-        statusMessage: "API Key Valid"
-      });
-      return;
+  // Helper function to determine button text and title based on state
+  const getConnectionButtonProps = () => {
+    switch (connectionState) {
+      case "CONNECTED":
+        return { text: "Disconnect", title: "Disconnect Assistant", disabled: false, connecting: false };
+      case "CONNECTING":
+      case "FETCHING_KEY":
+        return { text: "Connecting...", title: "Connecting Assistant", disabled: true, connecting: true };
+      case "INITIAL":
+      case "DISCONNECTED":
+      case "KEY_INVALID":
+      case "ERROR":
+      default:
+        return { text: "Connect", title: "Connect Assistant", disabled: false, connecting: false };
     }
+  };
 
-    // Check token events if not connected
-    const tokenEvents = loggedEvents.filter(e => e.eventName === "fetch_session_token_response");
-    if (tokenEvents.length > 0) {
-      const latest = tokenEvents[tokenEvents.length - 1];
-      const hasError = latest.eventData?.error || !latest.eventData?.client_secret?.value;
-
-      setApiKeyStatus({
-        isPresent: !hasError,
-        statusMessage: hasError ? (latest.eventData?.error || "Invalid API Key") : "API Key Valid"
-      });
-    } else {
-       // If no token events yet, keep initial status
-        setApiKeyStatus({
-            isPresent: false,
-            statusMessage: "API Key Not Configured"
-        });
+  // Helper function to determine API Key status message and presence
+  const getApiKeyStatus = () => {
+    switch (connectionState) {
+      case "CONNECTED":
+      case "CONNECTING": // Assume key is valid if connecting
+        return { isPresent: true, statusMessage: "API Key Valid" };
+      case "KEY_INVALID":
+        return { isPresent: false, statusMessage: "Invalid API Key" };
+      case "FETCHING_KEY":
+        return { isPresent: false, statusMessage: "Checking API Key..." };
+      case "INITIAL":
+      case "DISCONNECTED":
+      case "ERROR":
+      default:
+        return { isPresent: false, statusMessage: "API Key Not Configured" };
     }
-  }, [loggedEvents, sessionStatus]);
+  };
 
+  const { text: connectButtonText, title: connectButtonTitle, disabled: connectButtonDisabled, connecting: isConnecting } = getConnectionButtonProps();
+  const { isPresent: isApiKeyPresent, statusMessage: apiKeyStatusMessage } = getApiKeyStatus();
 
   return (
     <div className="border-b border-gray-200 bg-white flex items-center justify-between overflow-hidden" style={{ height: 56 }}>
@@ -94,23 +94,23 @@ const TopControls: React.FC<TopControlsProps> = ({
       </div>
 
       <div className="flex space-x-3 items-center mr-4">
-        {/* Connection Button (Moved to the left) */}
+        {/* Connection Button - Updated logic */}
         <button
           onClick={onToggleConnection}
-          title={sessionStatus === "CONNECTED" ? "Disconnect Assistant" : "Connect Assistant"}
+          title={connectButtonTitle}
           className={`flex items-center justify-center h-9 rounded-full px-3 text-sm font-medium text-white transition-colors ${ // Adjusted styles: added px-3, text-sm, font-medium, text-white, transition
-            sessionStatus === "CONNECTED"
-              ? "bg-red-600 hover:bg-red-700" // Red when connected (Disconnect)
-              : sessionStatus === "CONNECTING"
-              ? "bg-gray-400 cursor-not-allowed" // Greyed out when connecting
-              : "bg-green-600 hover:bg-green-700" // Green when disconnected (Connect) - Changed from black
+            connectionState === "CONNECTED"
+              ? "bg-red-600 hover:bg-red-700"
+              : (connectionState === "CONNECTING" || connectionState === "FETCHING_KEY")
+              ? "bg-gray-400 cursor-not-allowed"
+              : "bg-green-600 hover:bg-green-700"
           }`}
-          disabled={sessionStatus === "CONNECTING"}
+          disabled={connectButtonDisabled}
         >
-          {sessionStatus === "CONNECTING" ? (
+          {isConnecting ? (
             <>
               <div className="h-4 w-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2"></div> {/* Spinner */}
-              <span>Connecting...</span>
+              <span>{connectButtonText}</span>
             </>
           ) : (
              <>
@@ -119,22 +119,18 @@ const TopControls: React.FC<TopControlsProps> = ({
                  <path d="M7.5 1v7h1V1h-1z"/>
                  <path d="M3 8.812a4.999 4.999 0 0 1 10 0V11a.5.5 0 0 1-1 0V8.812a3.999 3.999 0 0 0-8 0V11a.5.5 0 0 1-1 0V8.812z"/>
                </svg>
-               {sessionStatus === "CONNECTED" ? (
-                  <span>Disconnect</span> // Text when connected
-               ) : (
-                  <span>Connect</span> // Text when disconnected
-               )}
+               <span>{connectButtonText}</span>
             </>
           )}
         </button>
 
-        {/* Microphone Button (Now second) */}
+        {/* Microphone Button - Updated disabled logic */}
         <button
           onClick={() => setIsMicrophoneMuted(!isMicrophoneMuted)}
-          disabled={sessionStatus !== "CONNECTED"}
+          disabled={connectionState !== "CONNECTED"}
           title={isMicrophoneMuted ? "Unmute Microphone" : "Mute Microphone"}
           className={`flex items-center justify-center h-9 w-9 rounded-full ${
-            sessionStatus !== "CONNECTED"
+            connectionState !== "CONNECTED"
               ? "bg-gray-100 text-gray-400 cursor-not-allowed"
               : isMicrophoneMuted
               ? "bg-red-100 text-red-700 hover:bg-red-200 cursor-pointer"
@@ -154,13 +150,13 @@ const TopControls: React.FC<TopControlsProps> = ({
           )}
         </button>
 
-        {/* API Key Status Icon (Now third) */}
+        {/* API Key Status Icon - Updated logic */}
         <div
           className="relative group"
-          title={apiKeyStatus.statusMessage}
+          title={apiKeyStatusMessage}
         >
           <div className={`flex items-center justify-center h-9 w-9 rounded-full ${
-            apiKeyStatus.isPresent
+            isApiKeyPresent
               ? 'bg-green-100 text-green-700'
               : 'bg-red-100 text-red-700'
           }`}>
@@ -171,7 +167,7 @@ const TopControls: React.FC<TopControlsProps> = ({
           </div>
           {/* Tooltip */}
           <div className="hidden group-hover:block absolute top-full right-0 mt-2 p-2 bg-gray-800 text-white shadow-lg rounded-md text-xs w-48 z-10">
-            {apiKeyStatus.statusMessage}
+            {apiKeyStatusMessage}
           </div>
         </div>
 
@@ -229,6 +225,6 @@ const TopControls: React.FC<TopControlsProps> = ({
       </div>
     </div>
   );
-};
+});
 
 export default TopControls; 

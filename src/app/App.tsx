@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useRef, useState, useCallback } from "react";
 import { useSearchParams } from "next/navigation";
 import { v4 as uuidv4 } from "uuid";
 
@@ -14,7 +14,7 @@ import TopControls from "./components/TopControls";
 import MobileSwipeContainer from "./components/MobileSwipeContainer"; // Import the new component
 
 // Types
-import { AgentConfig, SessionStatus } from "@/app/types";
+import { AgentConfig, ConnectionState } from "@/app/types";
 
 // Context providers & hooks
 import { useTranscript } from "@/app/contexts/TranscriptContext";
@@ -43,8 +43,8 @@ function App() {
   const dcRef = useRef<RTCDataChannel | null>(null);
   const audioElementRef = useRef<HTMLAudioElement | null>(null);
   const audioTrackRef = useRef<MediaStreamTrack | null>(null);
-  const [sessionStatus, setSessionStatus] =
-    useState<SessionStatus>("DISCONNECTED");
+  const [connectionState, setConnectionState] =
+    useState<ConnectionState>("INITIAL");
 
   const [isEventsPaneExpanded, setIsEventsPaneExpanded] =
     useState<boolean>(true);
@@ -54,7 +54,7 @@ function App() {
   const [activeMobilePanel, setActiveMobilePanel] = useState<number>(0); // Default to Transcript
   const [isMobileView, setIsMobileView] = useState<boolean | null>(null); // Initialize as null
 
-  const sendClientEvent = (eventObj: any, eventNameSuffix = "") => {
+  const sendClientEvent = useCallback((eventObj: any, eventNameSuffix = "") => {
     if (dcRef.current && dcRef.current.readyState === "open") {
       logClientEvent(eventObj, eventNameSuffix);
       dcRef.current.send(JSON.stringify(eventObj));
@@ -68,10 +68,10 @@ function App() {
         eventObj
       );
     }
-  };
+  }, [logClientEvent, dcRef]);
 
   const handleServerEventRef = useHandleServerEvent({
-    setSessionStatus,
+    setConnectionState,
     selectedAgentName,
     selectedAgentConfigSet,
     sendClientEvent,
@@ -96,14 +96,14 @@ function App() {
   }, [searchParams]);
 
   useEffect(() => {
-    if (selectedAgentName && sessionStatus === "DISCONNECTED") {
+    if (selectedAgentName && (connectionState === "INITIAL" || connectionState === "DISCONNECTED")) {
       connectToRealtime();
     }
-  }, [selectedAgentName]);
+  }, [selectedAgentName, connectionState]);
 
   useEffect(() => {
     if (
-      sessionStatus === "CONNECTED" &&
+      connectionState === "CONNECTED" &&
       selectedAgentConfigSet &&
       selectedAgentName
     ) {
@@ -116,7 +116,7 @@ function App() {
       );
       updateSession(true);
     }
-  }, [selectedAgentConfigSet, selectedAgentName, sessionStatus]);
+  }, [selectedAgentConfigSet, selectedAgentName, connectionState]);
 
   // Update microphone state when mute status changes
   useEffect(() => {
@@ -125,8 +125,9 @@ function App() {
     }
   }, [isMicrophoneMuted]);
 
-  const fetchEphemeralKey = async (): Promise<string | null> => {
+  const fetchEphemeralKey = useCallback(async (): Promise<string | null> => {
     logClientEvent({ url: "/session" }, "fetch_session_token_request");
+    setConnectionState("FETCHING_KEY");
     const tokenResponse = await fetch("/api/session");
     const data = await tokenResponse.json();
     logServerEvent(data, "fetch_session_token_response");
@@ -134,22 +135,25 @@ function App() {
     if (!data.client_secret?.value) {
       logClientEvent(data, "error.no_ephemeral_key");
       console.error("No ephemeral key provided by the server");
-      setSessionStatus("DISCONNECTED");
+      setConnectionState("KEY_INVALID");
       return null;
     }
 
     return data.client_secret.value;
-  };
+  }, [logClientEvent, logServerEvent, setConnectionState]);
 
-  const connectToRealtime = async () => {
-    if (sessionStatus !== "DISCONNECTED") return;
-    setSessionStatus("CONNECTING");
+  const connectToRealtime = useCallback(async () => {
+    if (!["INITIAL", "DISCONNECTED", "KEY_INVALID"].includes(connectionState)) return;
+
+    setConnectionState("FETCHING_KEY");
 
     try {
       const EPHEMERAL_KEY = await fetchEphemeralKey();
       if (!EPHEMERAL_KEY) {
         return;
       }
+
+      setConnectionState("CONNECTING");
 
       if (!audioElementRef.current) {
         audioElementRef.current = document.createElement("audio");
@@ -180,17 +184,26 @@ function App() {
         logClientEvent({ error: err }, "data_channel.error");
       });
       dc.addEventListener("message", (e: MessageEvent) => {
-        handleServerEventRef.current(JSON.parse(e.data));
+        const eventData = JSON.parse(e.data);
+        handleServerEventRef.current(eventData);
       });
 
       setDataChannel(dc);
     } catch (err) {
       console.error("Error connecting to realtime:", err);
-      setSessionStatus("DISCONNECTED");
+      setConnectionState("ERROR");
     }
-  };
+  }, [
+    connectionState,
+    fetchEphemeralKey,
+    isMicrophoneMuted,
+    logClientEvent,
+    handleServerEventRef,
+    setDataChannel,
+    setConnectionState,
+  ]);
 
-  const disconnectFromRealtime = () => {
+  const disconnectFromRealtime = useCallback(() => {
     if (pcRef.current) {
       pcRef.current.getSenders().forEach((sender) => {
         if (sender.track) {
@@ -201,12 +214,18 @@ function App() {
       pcRef.current.close();
       pcRef.current = null;
     }
-    audioTrackRef.current = null;
+    if (audioTrackRef.current) {
+      audioTrackRef.current.stop();
+      audioTrackRef.current = null;
+    }
+    if (dcRef.current) {
+      dcRef.current = null;
+    }
     setDataChannel(null);
-    setSessionStatus("DISCONNECTED");
+    setConnectionState("DISCONNECTED");
 
     logClientEvent({}, "disconnected");
-  };
+  }, [logClientEvent, setDataChannel, setConnectionState]);
 
   const sendSimulatedUserMessage = (text: string) => {
     const id = uuidv4().slice(0, 32);
@@ -303,7 +322,7 @@ function App() {
     if (!userText.trim()) return;
     cancelAssistantSpeech();
 
-    const messageId = uuidv4();
+    const messageId = uuidv4().slice(0, 32);
     addTranscriptMessage(messageId, "user", userText.trim(), false, "user");
 
     sendClientEvent(
@@ -323,14 +342,13 @@ function App() {
     sendClientEvent({ type: "response.create" }, "trigger response");
   };
 
-  const onToggleConnection = () => {
-    if (sessionStatus === "CONNECTED" || sessionStatus === "CONNECTING") {
+  const onToggleConnection = useCallback(() => {
+    if (connectionState === "CONNECTED" || connectionState === "CONNECTING") {
       disconnectFromRealtime();
-      setSessionStatus("DISCONNECTED");
     } else {
       connectToRealtime();
     }
-  };
+  }, [connectionState, connectToRealtime, disconnectFromRealtime]);
 
   const handleSelectedAgentChange = (
     e: React.ChangeEvent<HTMLSelectElement>
@@ -339,10 +357,10 @@ function App() {
     setSelectedAgentName(newAgentName);
   };
 
-  const handleDashboardToggle = (checked: boolean) => {
+  const handleDashboardToggle = useCallback((checked: boolean) => {
     setIsEventsPaneExpanded(checked);
     localStorage.setItem("logsExpanded", checked.toString());
-  };
+  }, [setIsEventsPaneExpanded]);
 
   useEffect(() => {
     const storedMicMuted = localStorage.getItem("microphoneMuted");
@@ -384,7 +402,7 @@ function App() {
   return (
     <div className="text-base flex flex-col h-screen bg-gray-100 text-gray-800 relative rounded-xl">
       <TopControls
-        sessionStatus={sessionStatus}
+        connectionState={connectionState}
         isMicrophoneMuted={isMicrophoneMuted}
         setIsMicrophoneMuted={setIsMicrophoneMuted}
         onToggleConnection={onToggleConnection}
@@ -410,7 +428,7 @@ function App() {
                     setUserText={setUserText}
                     onSendMessage={handleSendTextMessage}
                     canSend={
-                      sessionStatus === "CONNECTED" &&
+                      connectionState === "CONNECTED" &&
                       dcRef.current?.readyState === "open"
                     }
                   />
@@ -448,7 +466,7 @@ function App() {
                 setUserText={setUserText}
                 onSendMessage={handleSendTextMessage}
                 canSend={
-                  sessionStatus === "CONNECTED" &&
+                  connectionState === "CONNECTED" &&
                   dcRef.current?.readyState === "open"
                 }
               />

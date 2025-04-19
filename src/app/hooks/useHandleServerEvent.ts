@@ -1,12 +1,12 @@
 "use client";
 
-import { ServerEvent, SessionStatus, AgentConfig } from "@/app/types";
+import { ServerEvent, ConnectionState, AgentConfig } from "@/app/types";
 import { useTranscript } from "@/app/contexts/TranscriptContext";
 import { useEvent } from "@/app/contexts/EventContext";
 import { useRef } from "react";
 
 export interface UseHandleServerEventParams {
-  setSessionStatus: (status: SessionStatus) => void;
+  setConnectionState: (state: ConnectionState) => void;
   selectedAgentName: string;
   selectedAgentConfigSet: AgentConfig[] | null;
   sendClientEvent: (eventObj: any, eventNameSuffix?: string) => void;
@@ -15,7 +15,7 @@ export interface UseHandleServerEventParams {
 }
 
 export function useHandleServerEvent({
-  setSessionStatus,
+  setConnectionState,
   selectedAgentName,
   selectedAgentConfigSet,
   sendClientEvent,
@@ -108,7 +108,7 @@ export function useHandleServerEvent({
     switch (serverEvent.type) {
       case "session.created": {
         if (serverEvent.session?.id) {
-          setSessionStatus("CONNECTED");
+          setConnectionState("CONNECTED");
           addTranscriptBreadcrumb(
             `session.id: ${
               serverEvent.session.id

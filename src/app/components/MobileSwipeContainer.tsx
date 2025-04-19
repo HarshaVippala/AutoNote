@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, memo } from 'react';
 
 interface MobileSwipeContainerProps {
   activeMobilePanel: number;
@@ -178,4 +178,4 @@ const MobileSwipeContainer: React.FC<MobileSwipeContainerProps> = ({
   );
 };
 
-export default MobileSwipeContainer; 
+export default memo(MobileSwipeContainer); 

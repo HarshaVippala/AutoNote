@@ -1,5 +1,15 @@
 export type SessionStatus = "DISCONNECTED" | "CONNECTING" | "CONNECTED";
 
+export type ConnectionState =
+  | "INITIAL"
+  | "FETCHING_KEY"
+  | "KEY_INVALID"
+  | "KEY_VALID" // Maybe remove this if CONNECTING implies valid key?
+  | "CONNECTING"
+  | "CONNECTED"
+  | "DISCONNECTED"
+  | "ERROR"; // General error state
+
 export interface ToolParameterProperty {
   type: string;
   description?: string;
