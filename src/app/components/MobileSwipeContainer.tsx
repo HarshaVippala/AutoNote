@@ -155,25 +155,7 @@ const MobileSwipeContainer: React.FC<MobileSwipeContainerProps> = ({
       {/* TEMP: Placeholder removed */}
 
        {/* Mobile Panel Indicators */}
-       <div className="absolute bottom-4 left-0 right-0 flex justify-center items-center gap-3 pointer-events-none">
-         {['Chat', 'Answers', 'Dashboard'].map((name, index) => {
-           // Only show Dashboard indicator if the dashboard is enabled
-           if (name === 'Dashboard' && !isEventsPaneExpanded) {
-             return null;
-           }
-
-           return (
-             <div
-               key={index}
-               className={`h-1.5 rounded-full transition-all duration-300 ${
-                 activeMobilePanel === index
-                   ? 'w-6 bg-blue-500'
-                   : 'w-1.5 bg-gray-300'
-               }`}
-             />
-           );
-         })}
-       </div>
+       // (Indicator dots code fully removed)
     </div>
   );
 };

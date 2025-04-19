@@ -12,6 +12,7 @@ export interface UseHandleServerEventParams {
   sendClientEvent: (eventObj: any, eventNameSuffix?: string) => void;
   setSelectedAgentName: (name: string) => void;
   shouldForceResponse?: boolean;
+  updateSession?: (shouldTriggerResponse: boolean) => void;
 }
 
 export function useHandleServerEvent({
@@ -20,6 +21,7 @@ export function useHandleServerEvent({
   selectedAgentConfigSet,
   sendClientEvent,
   setSelectedAgentName,
+  updateSession,
 }: UseHandleServerEventParams) {
   const {
     transcriptItems,
@@ -114,6 +116,11 @@ export function useHandleServerEvent({
               serverEvent.session.id
             }\nStarted at: ${new Date().toLocaleString()}`
           );
+          
+          // Initialize session and trigger welcome message
+          if (updateSession) {
+            updateSession(true);
+          }
         }
         break;
       }

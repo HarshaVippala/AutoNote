@@ -32,7 +32,11 @@ function App() {
 
   const { transcriptItems, addTranscriptMessage, addTranscriptBreadcrumb } =
     useTranscript();
-  const { logClientEvent, logServerEvent } = useEvent();
+  const {
+    loggedEvents,
+    logClientEvent,
+    logServerEvent,
+  } = useEvent();
 
   const [selectedAgentName, setSelectedAgentName] = useState<string>("");
   const [selectedAgentConfigSet, setSelectedAgentConfigSet] =
@@ -46,13 +50,12 @@ function App() {
   const [connectionState, setConnectionState] =
     useState<ConnectionState>("INITIAL");
 
-  const [isEventsPaneExpanded, setIsEventsPaneExpanded] =
-    useState<boolean>(true);
+  const [isMicrophoneMuted, setIsMicrophoneMuted] = useState<boolean>(false);
+  const [isEventsPaneExpanded, setIsEventsPaneExpanded] = useState<boolean>(false);
   const [isAnswersPaneExpanded, setIsAnswersPaneExpanded] = useState<boolean>(true);
   const [userText, setUserText] = useState<string>("");
-  const [isMicrophoneMuted, setIsMicrophoneMuted] = useState<boolean>(false);
-  const [activeMobilePanel, setActiveMobilePanel] = useState<number>(0); // Default to Transcript
-  const [isMobileView, setIsMobileView] = useState<boolean | null>(null); // Initialize as null
+  const [activeMobilePanel, setActiveMobilePanel] = useState<number>(0);
+  const [isMobileView, setIsMobileView] = useState<boolean | null>(null);
 
   const sendClientEvent = useCallback((eventObj: any, eventNameSuffix = "") => {
     if (dcRef.current && dcRef.current.readyState === "open") {
@@ -70,12 +73,78 @@ function App() {
     }
   }, [logClientEvent, dcRef]);
 
+  const sendSimulatedUserMessage = useCallback((text: string) => {
+    const id = uuidv4().slice(0, 32);
+    addTranscriptMessage(id, "user", text, true, "user");
+
+    sendClientEvent(
+      {
+        type: "conversation.item.create",
+        item: {
+          id,
+          type: "message",
+          role: "user",
+          content: [{ type: "input_text", text }],
+        },
+      },
+      "(simulated user text message)"
+    );
+    sendClientEvent(
+      { type: "response.create" },
+      "(trigger response after simulated user text message)"
+    );
+  }, [addTranscriptMessage, sendClientEvent]);
+
+  const updateSession = useCallback((shouldTriggerResponse: boolean = false) => {
+    sendClientEvent(
+      { type: "input_audio_buffer.clear" },
+      "clear audio buffer on session update"
+    );
+
+    const currentAgent = selectedAgentConfigSet?.find(
+      (a) => a.name === selectedAgentName
+    );
+
+    // Always use server voice activity detection regardless of microphone mute state
+    const turnDetection = {
+      type: "server_vad",
+      threshold: 0.5,
+      prefix_padding_ms: 300,
+      silence_duration_ms: 200,
+      create_response: true,
+    };
+
+    const instructions = currentAgent?.instructions || "";
+    const tools = currentAgent?.tools || [];
+
+    const sessionUpdateEvent = {
+      type: "session.update",
+      session: {
+        modalities: ["text", "audio"],
+        instructions,
+        voice: "coral",
+        input_audio_format: "pcm16",
+        output_audio_format: "pcm16",
+        input_audio_transcription: { model: "whisper-1" },
+        turn_detection: turnDetection,
+        tools,
+      },
+    };
+
+    sendClientEvent(sessionUpdateEvent);
+
+    if (shouldTriggerResponse) {
+      sendSimulatedUserMessage("hi");
+    }
+  }, [selectedAgentConfigSet, selectedAgentName, sendClientEvent, sendSimulatedUserMessage]);
+
   const handleServerEventRef = useHandleServerEvent({
     setConnectionState,
     selectedAgentName,
     selectedAgentConfigSet,
     sendClientEvent,
     setSelectedAgentName,
+    updateSession,
   });
 
   useEffect(() => {
@@ -96,7 +165,7 @@ function App() {
   }, [searchParams]);
 
   useEffect(() => {
-    if (selectedAgentName && (connectionState === "INITIAL" || connectionState === "DISCONNECTED")) {
+    if (selectedAgentName && connectionState === "INITIAL") {
       connectToRealtime();
     }
   }, [selectedAgentName, connectionState]);
@@ -114,7 +183,6 @@ function App() {
         `Agent: ${selectedAgentName}`,
         currentAgent
       );
-      updateSession(true);
     }
   }, [selectedAgentConfigSet, selectedAgentName, connectionState]);
 
@@ -184,8 +252,17 @@ function App() {
         logClientEvent({ error: err }, "data_channel.error");
       });
       dc.addEventListener("message", (e: MessageEvent) => {
-        const eventData = JSON.parse(e.data);
-        handleServerEventRef.current(eventData);
+        // Reverted: Removed debug log here
+        try {
+          const eventData = JSON.parse(e.data);
+          if (handleServerEventRef.current) {
+            handleServerEventRef.current(eventData);
+          } else {
+             console.error("[App.tsx] handleServerEventRef.current is null!");
+          }
+        } catch (parseError) {
+           console.error("[App.tsx] Error parsing WebSocket message:", parseError, e.data);
+        }
       });
 
       setDataChannel(dc);
@@ -226,71 +303,6 @@ function App() {
 
     logClientEvent({}, "disconnected");
   }, [logClientEvent, setDataChannel, setConnectionState]);
-
-  const sendSimulatedUserMessage = (text: string) => {
-    const id = uuidv4().slice(0, 32);
-    addTranscriptMessage(id, "user", text, true, "user");
-
-    sendClientEvent(
-      {
-        type: "conversation.item.create",
-        item: {
-          id,
-          type: "message",
-          role: "user",
-          content: [{ type: "input_text", text }],
-        },
-      },
-      "(simulated user text message)"
-    );
-    sendClientEvent(
-      { type: "response.create" },
-      "(trigger response after simulated user text message)"
-    );
-  };
-
-  const updateSession = (shouldTriggerResponse: boolean = false) => {
-    sendClientEvent(
-      { type: "input_audio_buffer.clear" },
-      "clear audio buffer on session update"
-    );
-
-    const currentAgent = selectedAgentConfigSet?.find(
-      (a) => a.name === selectedAgentName
-    );
-
-    // Always use server voice activity detection regardless of microphone mute state
-    const turnDetection = {
-      type: "server_vad",
-      threshold: 0.5,
-      prefix_padding_ms: 300,
-      silence_duration_ms: 200,
-      create_response: true,
-    };
-
-    const instructions = currentAgent?.instructions || "";
-    const tools = currentAgent?.tools || [];
-
-    const sessionUpdateEvent = {
-      type: "session.update",
-      session: {
-        modalities: ["text", "audio"],
-        instructions,
-        voice: "coral",
-        input_audio_format: "pcm16",
-        output_audio_format: "pcm16",
-        input_audio_transcription: { model: "whisper-1" },
-        turn_detection: turnDetection,
-        tools,
-      },
-    };
-
-    sendClientEvent(sessionUpdateEvent);
-
-    if (shouldTriggerResponse) {
-      sendSimulatedUserMessage("hi");
-    }
-  };
 
   const cancelAssistantSpeech = async () => {
     const mostRecentAssistantMessage = [...transcriptItems]
@@ -414,6 +426,19 @@ function App() {
         activeMobilePanel={activeMobilePanel}
       />
 
+      {/* Mobile View Indicator Line (only when mobile) */}
+      {isMobileView && (
+        <div className="relative w-full h-1 bg-gray-200 rounded-full">
+          <div
+            className="absolute top-0 left-0 h-full bg-blue-500 rounded-full transition-all duration-300 ease-in-out"
+            style={{
+              width: `${100 / (isEventsPaneExpanded ? 3 : 2)}%`,
+              transform: `translateX(${activeMobilePanel * 100}%)`
+            }}
+          />
+        </div>
+      )}
+
       {/* Render nothing until view type is determined */}
       {isMobileView === null ? null : (
          // Once determined, render the correct layout
@@ -471,7 +496,11 @@ function App() {
                 }
               />
               <AgentAnswers isExpanded={activeMobilePanel === 1} />
-              <Dashboard isExpanded={true} isDashboardEnabled={isEventsPaneExpanded} transcriptItems={transcriptItems} />
+              <Dashboard 
+                isExpanded={true} 
+                isDashboardEnabled={isEventsPaneExpanded} 
+                transcriptItems={transcriptItems}
+              />
             </MobileSwipeContainer>
           )
         )

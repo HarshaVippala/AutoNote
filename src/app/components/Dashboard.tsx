@@ -1,21 +1,16 @@
 "use client";
 
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useEffect, useMemo, useRef } from "react";
 import { useEvent } from "../contexts/EventContext";
 import { ServerEvent, LoggedEvent } from "../types";
 
 export interface DashboardProps {
   isExpanded: boolean;
   isDashboardEnabled: boolean;
-  transcriptItems: any[]; // Added transcriptItems prop
+  transcriptItems: any[];
 }
 
 interface TokenUsage {
-  input: number;
-  output: number;
-  total: number;
-  tpm: number;
-  tpmLimit: number;
   resetTimeSeconds: number;
 }
 
@@ -39,46 +34,12 @@ const TOKEN_RATES = {
   output: 0.03,
 };
 
-// Default TPM limit - using gpt-3.5-turbo as default (2M TPM)
-const DEFAULT_TPM_LIMIT = 200000;
-
-// OpenAI Rate Limits by model
-const MODEL_RATE_LIMITS: Record<string, { tpm: number; rpm: number }> = {
-  "gpt-3.5-turbo": { tpm: 2000000, rpm: 5000 },
-  "gpt-3.5-turbo-0125": { tpm: 2000000, rpm: 5000 },
-  "gpt-3.5-turbo-1106": { tpm: 2000000, rpm: 5000 },
-  "gpt-3.5-turbo-16k": { tpm: 2000000, rpm: 5000 },
-  "gpt-3.5-turbo-instruct": { tpm: 90000, rpm: 3500 },
-  "gpt-3.5-turbo-instruct-0914": { tpm: 90000, rpm: 3500 },
-  "gpt-4": { tpm: 40000, rpm: 5000 },
-  "gpt-4-0613": { tpm: 40000, rpm: 5000 },
-  "gpt-4-turbo": { tpm: 450000, rpm: 500 },
-  "gpt-4.1": { tpm: 450000, rpm: 5000 },
-  "gpt-4o": { tpm: 450000, rpm: 5000 },
-  "gpt-4o-mini": { tpm: 2000000, rpm: 5000 },
-  "gpt-4o-mini-realtime-preview": { tpm: 200000, rpm: 400 },
-  "gpt-4o-mini-realtime-preview-2024-12-17": { tpm: 200000, rpm: 400 },
-  "gpt-4o-realtime-preview": { tpm: 200000, rpm: 400 },
-  "gpt-4o-realtime-preview-2024-12-17": { tpm: 200000, rpm: 400 },
-  "gpt-4o-realtime-preview-2024-10-01": { tpm: 200000, rpm: 400 },
-  "claude-3-opus": { tpm: 450000, rpm: 5000 },  // example for Claude models
-  "claude-3-sonnet": { tpm: 450000, rpm: 5000 },
-  "claude-3-haiku": { tpm: 2000000, rpm: 5000 },
-  "gemini-1.0-pro": { tpm: 450000, rpm: 5000 }, // example for Gemini models
-  "default": { tpm: 200000, rpm: 400 }
-};
-
 // OpenAI Project ID
 const OPENAI_PROJECT_ID = "proj_iwQ4RJz8jIk9GD62jdsDIfZE";
 
 function Dashboard({ isExpanded, isDashboardEnabled, transcriptItems }: DashboardProps) {
   const { loggedEvents, toggleExpand } = useEvent();
   const [tokenUsage, setTokenUsage] = useState<TokenUsage>({
-    input: 0,
-    output: 0,
-    total: 0,
-    tpm: 0,
-    tpmLimit: DEFAULT_TPM_LIMIT,
     resetTimeSeconds: 60,
   });
 
@@ -100,7 +61,7 @@ function Dashboard({ isExpanded, isDashboardEnabled, transcriptItems }: Dashboar
   const [selectedEventType, setSelectedEventType] = useState<string | null>(null);
   const [developerMode, setDeveloperMode] = useState<boolean>(false);
   const [projectId, setProjectId] = useState<string>(OPENAI_PROJECT_ID);
-  const [activeModel, setActiveModel] = useState<string>("default");
+  const lastProcessedEventCountRef = useRef(0); // Ref to track processed events
 
   // Agent processes state removed
 
@@ -161,20 +122,18 @@ function Dashboard({ isExpanded, isDashboardEnabled, transcriptItems }: Dashboar
 
   // Agent processes update effect removed
 
-  // Update time every second for session duration
+  // Timer Effect
   useEffect(() => {
     if (!isDashboardEnabled) return;
 
     const timer = setInterval(() => {
-      setCurrentTime(new Date());
-
+      setCurrentTime(new Date()); // Keep for duration display
       setTokenUsage(prev => {
-        // Decrement reset timer
         const newReset = Math.max(0, prev.resetTimeSeconds - 1);
-        // When timer hits 0, reset TPM
         if (newReset === 0) {
-          return { ...prev, tpm: 0, resetTimeSeconds: 60 };
+          return { ...prev, resetTimeSeconds: 60 };
         }
+        // Just countdown the timer
         return { ...prev, resetTimeSeconds: newReset };
       });
     }, 1000);
@@ -182,82 +141,40 @@ function Dashboard({ isExpanded, isDashboardEnabled, transcriptItems }: Dashboar
     return () => clearInterval(timer);
   }, [isDashboardEnabled]);
 
-  // Extract token usage from events
+  // Calculation Effect (Updates In/Out/Total based on NEW events)
   useEffect(() => {
     if (!isDashboardEnabled) return;
 
-    // Find the latest response.done event for input/output
-    let lastInputTokens = 0;
-    let lastOutputTokens = 0;
-    let lastTotalTokens = 0;
-    let currentModel = "default";
-    let tpm = 0;
-    let tpmLimit = DEFAULT_TPM_LIMIT;
-    let sessionTotalTokens = 0;
+    const currentEventCount = loggedEvents.length;
+    // Only process events added since the last run
+    const newEvents = loggedEvents.slice(lastProcessedEventCountRef.current);
+    console.log(`[Calc Effect] Run. Prev count: ${lastProcessedEventCountRef.current}, Current count: ${currentEventCount}, New events: ${newEvents.length}`); // Debug log
 
-    // Sum all tokens for session total
+    // Update ref *before* processing, in case of errors
+    lastProcessedEventCountRef.current = currentEventCount;
+
+    // Recalculate cost (always depends on sessionTotal)
+    let sessionTotal = 0;
+    // Iterate through all events to calculate Session Total
     loggedEvents.forEach(event => {
-      if (event.eventName === "response.done" && event.direction === "server") {
-        const usage = event.eventData?.response?.usage;
-        if (usage) {
-          sessionTotalTokens += usage.total_tokens || 0;
-        }
+      if (event.eventName === "response.done" && event.direction === "server" && event.timestampMs) {
+          const usage = event.eventData?.response?.usage;
+          if (usage) {
+              const totalTokens = usage.total_tokens || (usage.input_tokens || 0) + (usage.output_tokens || 0);
+              sessionTotal += totalTokens;
+          }
       }
     });
-
-    // Find the latest response.done event for input/output/tpm
-    for (let i = loggedEvents.length - 1; i >= 0; i--) {
-      const event = loggedEvents[i];
-      if (event.eventName === "response.done" && event.direction === "server") {
-        const usage = event.eventData?.response?.usage;
-        if (usage) {
-          // Get input tokens
-          const inputDetails = usage.input_token_details;
-          if (inputDetails) {
-            lastInputTokens = (inputDetails.text_tokens || 0) + (inputDetails.audio_tokens || 0) + (inputDetails.cached_tokens || 0);
-          } else {
-            lastInputTokens = usage.input_tokens || 0;
-          }
-          // Get output tokens
-          const outputDetails = usage.output_token_details;
-          if (outputDetails) {
-            lastOutputTokens = (outputDetails.text_tokens || 0) + (outputDetails.audio_tokens || 0);
-          } else {
-            lastOutputTokens = usage.output_tokens || 0;
-          }
-          lastTotalTokens = usage.total_tokens || (lastInputTokens + lastOutputTokens);
-          // For TPM, use the last call's total tokens (could be improved to sum calls in the last minute, but this matches your ask)
-          tpm = lastInputTokens + lastOutputTokens;
-          break;
-        }
-      }
-    }
-
-    // Get the rate limit for the current model or use default
-    const modelLimits = MODEL_RATE_LIMITS[currentModel] || MODEL_RATE_LIMITS.default;
-    tpmLimit = modelLimits.tpm;
-
-    setTokenUsage(prev => ({
-      input: lastInputTokens,
-      output: lastOutputTokens,
-      total: sessionTotalTokens,
-      tpm: prev.tpm, // TPM is only reset by the timer effect
-      tpmLimit: tpmLimit,
-      resetTimeSeconds: prev.resetTimeSeconds
+    
+    const sessionInputCost = (sessionTotal / 1000) * TOKEN_RATES.input;
+    const sessionOutputCost = (sessionTotal / 1000) * TOKEN_RATES.output;
+    setCost(prevCost => ({
+        ...prevCost,
+        input: sessionInputCost,
+        output: sessionOutputCost,
+        total: sessionInputCost + sessionOutputCost
     }));
-
-    // Calculate cost
-    const inputCost = (lastInputTokens / 1000) * TOKEN_RATES.input;
-    const outputCost = (lastOutputTokens / 1000) * TOKEN_RATES.output;
-    const totalCost = (sessionTotalTokens / 1000) * (TOKEN_RATES.input + TOKEN_RATES.output); // rough estimate
-
-    setCost({
-      input: inputCost,
-      output: outputCost,
-      total: totalCost,
-      dailyLimit: 5
-    });
-  }, [loggedEvents, projectId, isDashboardEnabled]);
+  }, [loggedEvents, isDashboardEnabled]);
 
   // Update API key status based on token events
   useEffect(() => {
@@ -297,26 +214,30 @@ function Dashboard({ isExpanded, isDashboardEnabled, transcriptItems }: Dashboar
     }
   };
 
+  // Filtered events based on selected filters
   const filteredEvents = useMemo(() => {
-    return loggedEvents
-      .filter(event => {
-        if (selectedEventType && event.eventName !== selectedEventType) {
-          return false;
-        }
-        return true;
-      })
-      .reverse();
+    return loggedEvents.filter(event => {
+      if (selectedEventType && event.eventName !== selectedEventType) {
+        return false;
+      }
+      return true;
+    });
   }, [loggedEvents, selectedEventType]);
 
-  const [logsExpanded, setLogsExpanded] = useState<boolean>(false);
+  // Tracking state for UI components
+  const [logsExpanded, setLogsExpanded] = useState(false);
+  const [breadcrumbsExpanded, setBreadcrumbsExpanded] = useState(true);
 
   const toggleLogsExpanded = () => {
     setLogsExpanded(!logsExpanded);
   };
 
-  const isNearingTpmLimit = tokenUsage.tpm / tokenUsage.tpmLimit > 0.8;
+  const toggleBreadcrumbsExpanded = () => {
+    setBreadcrumbsExpanded(!breadcrumbsExpanded);
+  };
+
   const isNearingCostLimit = cost.total / cost.dailyLimit > 0.8;
-  const showAlert = isNearingTpmLimit || isNearingCostLimit;
+  const showAlert = isNearingCostLimit;
 
   // Early return if dashboard is not enabled and not expanded
   if (!isDashboardEnabled && !isExpanded) {
@@ -349,118 +270,54 @@ function Dashboard({ isExpanded, isDashboardEnabled, transcriptItems }: Dashboar
       </div>
 
       <div className="flex-1 overflow-hidden flex flex-col">
-        {/* TPM Usage Section with Enhanced UI */}
-        <div className="px-4 py-3 border-b bg-white">
-          <div className="flex flex-col gap-2">
-            {/* Header with reset timer */}
-            <div className="flex justify-between items-center">
-              <div className="flex items-center gap-2">
-                <div className="font-bold text-gray-800 text-base">TPM Usage</div>
-                <div className={`text-xs px-2 py-0.5 rounded-full ${
-                  tokenUsage.tpm / tokenUsage.tpmLimit > 0.8
-                    ? 'bg-red-100 text-red-700'
-                    : tokenUsage.tpm / tokenUsage.tpmLimit > 0.5
-                      ? 'bg-yellow-100 text-yellow-700'
-                      : 'bg-green-100 text-green-700'
-                }`}>
-                  {Math.round((tokenUsage.tpm / tokenUsage.tpmLimit) * 100)}%
-                </div>
-              </div>
-              <div className="flex items-center gap-1 text-sm text-gray-500">
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
-                  <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-12a1 1 0 10-2 0v4a1 1 0 00.293.707l2.828 2.829a1 1 0 101.415-1.415L11 9.586V6z" clipRule="evenodd" />
-                </svg>
-                <span>Resets in: <span className="font-mono font-semibold">{tokenUsage.resetTimeSeconds}s</span></span>
-              </div>
-            </div>
-            
-            {/* Main usage display */}
-            <div className="flex items-center gap-2">
-              <div className="font-mono text-xl font-bold text-gray-800">
-                {tokenUsage.tpm.toLocaleString()}
-              </div>
-              <div className="text-gray-500 font-mono">
-                / {tokenUsage.tpmLimit.toLocaleString()}
-              </div>
-            </div>
-            
-            {/* Progress bar with improved styling */}
-            <div className="h-2.5 bg-gray-200 rounded-full relative overflow-hidden">
-              <div 
-                className="h-full rounded-full absolute top-0 left-0 transition-all duration-500"
-                style={{ 
-                  width: `${Math.min(100, (tokenUsage.tpm / tokenUsage.tpmLimit) * 100)}%`,
-                  backgroundImage: tokenUsage.tpm / tokenUsage.tpmLimit > 0.8 
-                    ? 'linear-gradient(to right, #ef4444, #f59e0b)' 
-                    : tokenUsage.tpm / tokenUsage.tpmLimit > 0.5
-                      ? 'linear-gradient(to right, #eab308, #3b82f6)'
-                      : 'linear-gradient(to right, #3b82f6, #10b981)' 
-                }}
-              ></div>
-            </div>
-            
-            {/* Detailed metrics */}
-            <div className="grid grid-cols-2 sm:flex sm:flex-wrap sm:gap-6 text-sm mt-1">
-              <div className="flex items-center gap-1.5 p-1">
-                <div className="w-2 h-2 rounded-full bg-blue-500"></div>
-                <span className="text-gray-600">In:</span>
-                <span className="font-mono font-semibold">{tokenUsage.input.toLocaleString()}</span>
-              </div>
-              <div className="flex items-center gap-1.5 p-1">
-                <div className="w-2 h-2 rounded-full bg-green-500"></div>
-                <span className="text-gray-600">Out:</span>
-                <span className="font-mono font-semibold">{tokenUsage.output.toLocaleString()}</span>
-              </div>
-              <div className="flex items-center gap-1.5 p-1">
-                <div className="w-2 h-2 rounded-full bg-purple-500"></div>
-                <span className="text-gray-600">Total:</span>
-                <span className="font-mono font-semibold">{tokenUsage.total.toLocaleString()}</span>
-              </div>
-              <div className="flex items-center gap-1.5 p-1 max-w-full">
-                <div className="w-2 h-2 rounded-full bg-gray-500"></div>
-                <span className="text-gray-600">Model:</span>
-                <span className="font-mono font-semibold truncate" title={activeModel}>
-                  {activeModel.length > 15 ? activeModel.substring(0, 15) + '...' : activeModel}
-                </span>
-              </div>
-            </div>
-          </div>
+        {/* Empty space or other content could go here */}
+        <div className="flex-1">
+            {/* This div will grow to fill available space if needed */}
         </div>
 
-        {/* API Key Status section removed - moved to top bar */}
+        {/* Breadcrumbs Section (moved and made collapsible) */}
+        <div className="flex flex-col overflow-hidden border-t">
+             <div
+                className="flex justify-between items-center px-4 py-2 bg-gray-50 border-b cursor-pointer"
+                onClick={toggleBreadcrumbsExpanded}
+             >
+                <span className="font-semibold text-sm">Agent Breadcrumbs</span>
+                <button>
+                    {breadcrumbsExpanded ? '▼' : '▶'}
+                </button>
+             </div>
 
-        {/* Agent Status section removed */}
-
-        {/* Breadcrumbs Section (moved from Transcript) */}
-        <div className="px-4 py-3 border-b">
-          <h2 className="font-semibold text-sm mb-2">Agent Breadcrumbs</h2>
-          <div className="max-h-64 overflow-auto">
-            {transcriptItems
-              .filter(item => item.type === "BREADCRUMB" && !item.isHidden)
-              .map(item => (
-                <div key={item.itemId} className="mb-3 border-b pb-2">
-                  <div className="flex items-center justify-between">
-                    <div className="text-xs font-medium">{item.title}</div>
-                    <div className="text-xs text-gray-500">{item.timestamp}</div>
-                  </div>
-                  {item.data && (
-                    <div className="mt-1">
-                      <details className="text-xs">
-                        <summary className="cursor-pointer text-blue-600">View Details</summary>
-                        <pre className="mt-1 text-[10px] bg-gray-50 p-2 rounded overflow-auto max-h-32">
-                          {JSON.stringify(item.data, null, 2)}
-                        </pre>
-                      </details>
+             {breadcrumbsExpanded && (
+                <div className="px-4 py-3">
+                    <div className="max-h-64 overflow-auto">
+                        {transcriptItems
+                        .filter(item => item.type === "BREADCRUMB" && !item.isHidden)
+                        .map(item => (
+                            <div key={item.itemId} className="mb-3 border-b pb-2">
+                            <div className="flex items-center justify-between">
+                                <div className="text-xs font-medium">{item.title}</div>
+                                <div className="text-xs text-gray-500">{item.timestamp}</div>
+                            </div>
+                            {item.data && (
+                                <div className="mt-1">
+                                <details className="text-xs">
+                                    <summary className="cursor-pointer text-blue-600">View Details</summary>
+                                    <pre className="mt-1 text-[10px] bg-gray-50 p-2 rounded overflow-auto max-h-32">
+                                        {JSON.stringify(item.data, null, 2)}
+                                    </pre>
+                                </details>
+                                </div>
+                            )}
+                            </div>
+                        ))}
+                        {transcriptItems.filter(item => item.type === "BREADCRUMB" && !item.isHidden).length === 0 && (
+                            <div className="text-gray-500 text-xs italic text-center py-4">
+                                No breadcrumbs available
+                            </div>
+                        )}
                     </div>
-                  )}
                 </div>
-              ))}
-            {transcriptItems.filter(item => item.type === "BREADCRUMB" && !item.isHidden).length === 0 && (
-              <div className="text-gray-500 text-xs italic text-center py-4">
-                No breadcrumbs available
-              </div>
-            )}
-          </div>
+             )}
         </div>
 
         {/* Logs Explorer - Moved to the bottom */}
@@ -519,6 +376,7 @@ function Dashboard({ isExpanded, isDashboardEnabled, transcriptItems }: Dashboar
                             )}
                           </div>
                           <div className="text-xs text-gray-500">
+                            {/* Use the original formatted timestamp string for display */}
                             {log.timestamp}
                           </div>
                         </div>
@@ -542,11 +400,10 @@ function Dashboard({ isExpanded, isDashboardEnabled, transcriptItems }: Dashboar
 
       {/* Alert Banner */}
       {showAlert && (
-        <div className={`px-4 py-2 text-white ${isNearingTpmLimit ? 'bg-red-500' : 'bg-orange-500'}`}>
+        <div className="px-4 py-2 text-white bg-orange-500">
           <div className="flex items-center">
             <span className="mr-2">⚠️</span>
-            {isNearingTpmLimit && <span>Warning: Approaching TPM limit ({Math.round(tokenUsage.tpm / tokenUsage.tpmLimit * 100)}%)</span>}
-            {!isNearingTpmLimit && isNearingCostLimit && <span>Warning: Approaching daily cost limit (${cost.total.toFixed(2)} / ${cost.dailyLimit.toFixed(2)})</span>}
+            <span>Warning: Approaching daily cost limit (${cost.total.toFixed(2)} / ${cost.dailyLimit.toFixed(2)})</span>
           </div>
         </div>
       )}

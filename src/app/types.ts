@@ -73,6 +73,14 @@ export interface Log {
   type: string;
 }
 
+// New type definition based on ServerEvent item content structure
+export interface ContentItem {
+  type?: string;
+  transcript?: string | null;
+  text?: string;
+  // Add other potential properties if needed based on actual usage
+}
+
 export interface ServerEvent {
   type: string;
   event_id?: string;

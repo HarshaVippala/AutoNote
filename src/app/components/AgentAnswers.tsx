@@ -56,7 +56,7 @@ function AgentAnswers({ isExpanded }: AgentAnswersProps) {
             {/* Invisible border for scroll buffer */}
             <div style={{ height: 36, width: '100%', pointerEvents: 'none', borderBottom: '2px solid transparent' }}></div>
           </div>
-          <div className="overflow-auto p-4 flex-1 flex flex-col gap-y-4">
+          <div className="overflow-auto p-4 pt-2 flex-1 flex flex-col gap-y-4">
             {assistantMessages.map((item) => {
               return (
                 <div key={item.itemId} className="border-b border-gray-200 py-3 px-4">

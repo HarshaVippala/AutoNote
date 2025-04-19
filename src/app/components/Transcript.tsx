@@ -2,24 +2,25 @@
 
 import React, { useEffect, useRef, useState } from "react";
 import ReactMarkdown from "react-markdown";
-import { TranscriptItem } from "@/app/types";
+import { TranscriptItem, ContentItem } from "@/app/types";
 import Image from "next/image";
 import { useTranscript } from "@/app/contexts/TranscriptContext";
 import { capitalizeFirstLetter } from "@/app/lib/textUtils";
+import { SendHorizonal } from "lucide-react";
 
 export interface TranscriptProps {
   userText: string;
-  setUserText: (val: string) => void;
+  setUserText: (text: string) => void;
   onSendMessage: () => void;
   canSend: boolean;
 }
 
-function Transcript({
+const Transcript: React.FC<TranscriptProps> = ({
   userText,
   setUserText,
   onSendMessage,
   canSend,
-}: TranscriptProps) {
+}) => {
   const { transcriptItems, toggleTranscriptItemExpand } = useTranscript();
   const transcriptRef = useRef<HTMLDivElement | null>(null);
   const [prevLogs, setPrevLogs] = useState<TranscriptItem[]>([]);
@@ -29,6 +30,7 @@ function Transcript({
   const [expandedUserMessages, setExpandedUserMessages] = useState<{ [id: string]: boolean }>({});
   // state for which user group popup is open (index of the group start)
   const [openGroupIdx, setOpenGroupIdx] = useState<number | null>(null);
+  const transcriptEndRef = useRef<HTMLDivElement>(null);
 
   function scrollToBottom() {
     if (transcriptRef.current) {
@@ -39,6 +41,7 @@ function Transcript({
         behavior: isNearBottom ? 'smooth' : 'auto',
       });
     }
+    transcriptEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }
 
   useEffect(() => {
@@ -71,8 +74,17 @@ function Transcript({
 
   const baseContainer = "flex justify-end flex-col";
 
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault();
+      if (canSend) {
+        onSendMessage();
+      }
+    }
+  };
+
   return (
-    <div className="flex flex-col h-full bg-gray-100 rounded-xl">
+    <div className="flex flex-col h-full bg-white rounded-xl shadow-md overflow-hidden pb-4">
       {/* Top bar with invisible border and JARVIS label */}
       <div className="relative w-full" style={{ minHeight: 36 }}>
         {/* JARVIS label, top left, fits inside the border area */}
@@ -106,7 +118,7 @@ function Transcript({
       <div className="relative flex-1 overflow-hidden">
         <div
           ref={transcriptRef}
-          className="overflow-auto p-4 flex flex-col gap-y-2 h-full"
+          className="overflow-auto p-4 pt-2 flex flex-col gap-y-2 h-full"
           style={{ scrollPaddingTop: 56 }}
         >
           {transcriptItems.map((item, idx) => {
@@ -250,13 +262,7 @@ function Transcript({
               type="text"
               value={userText}
               onChange={(e) => setUserText(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter" && canSend) {
-                  // Capitalize text before sending
-                  setUserText(capitalizeFirstLetter(userText.trim()));
-                  onSendMessage();
-                }
-              }}
+              onKeyDown={handleKeyDown}
               className="flex-1 px-3 py-1.5 focus:outline-none text-sm border border-gray-200 rounded-l-full"
               placeholder="Type a message..."
               autoFocus
@@ -299,6 +305,6 @@ function Transcript({
       </div>
     </div>
   );
-}
+};
 
 export default Transcript;

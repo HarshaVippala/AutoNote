@@ -70,7 +70,16 @@ const TopControls: React.FC<TopControlsProps> = memo(({
   return (
     <div className="border-b border-gray-200 bg-white flex items-center justify-between overflow-hidden" style={{ height: 56 }}>
       <div className="flex items-center h-full">
-        <div onClick={() => window.location.reload()} style={{ cursor: 'pointer', height: '100%' }}>
+        <div 
+          onClick={() => {
+            if (isMobileView) {
+              setActiveMobilePanel(1); // Switch to AgentAnswers panel (index 1)
+            } else {
+              window.location.reload(); // Keep reload for desktop
+            }
+          }}
+          style={{ cursor: 'pointer', height: '100%' }}
+        >
           {/* Use relative path for images in public */}
           <Image
             src="/logo.png"
