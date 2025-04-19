@@ -383,7 +383,18 @@ function App() {
 
   return (
     <div className="text-base flex flex-col h-screen bg-gray-100 text-gray-800 relative rounded-xl">
-      <TopControls />
+      <TopControls
+        sessionStatus={sessionStatus}
+        isMicrophoneMuted={isMicrophoneMuted}
+        setIsMicrophoneMuted={setIsMicrophoneMuted}
+        onToggleConnection={onToggleConnection}
+        isMobileView={isMobileView}
+        isEventsPaneExpanded={isEventsPaneExpanded}
+        setIsEventsPaneExpanded={setIsEventsPaneExpanded}
+        handleDashboardToggle={handleDashboardToggle}
+        setActiveMobilePanel={setActiveMobilePanel}
+        activeMobilePanel={activeMobilePanel}
+      />
 
       {!isMobileView ? (
         // Desktop layout

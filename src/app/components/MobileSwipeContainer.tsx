@@ -22,15 +22,9 @@ const MobileSwipeContainer: React.FC<MobileSwipeContainerProps> = ({
   const minSwipeDistance = 50; // Minimum required distance for swipe detection
 
   const handleTouchStart = (e: React.TouchEvent) => {
-    // Only track touch starting within the container itself
-    if (e.target === containerRef.current) {
-        setTouchEnd(null); // Reset touch end on new start
-        setTouchStart(e.targetTouches[0].clientX);
-    } else {
-        // If touch starts on an inner element, ignore for swipe tracking
-        setTouchStart(null);
-        setTouchEnd(null);
-    }
+    // Allow touch tracking even if it starts on inner elements
+    setTouchEnd(null); // Reset touch end on new start
+    setTouchStart(e.targetTouches[0].clientX);
   };
 
   const handleTouchMove = (e: React.TouchEvent) => {
@@ -128,7 +122,7 @@ const MobileSwipeContainer: React.FC<MobileSwipeContainerProps> = ({
   return (
     <div
       ref={containerRef}
-      className="mobile-swipe-container flex-1 overflow-hidden relative" // Added relative positioning
+      className="mobile-swipe-container flex-1 relative" // Removed overflow-hidden
       onTouchStart={handleTouchStart}
       onTouchMove={handleTouchMove}
       onTouchEnd={handleTouchEnd}
@@ -144,6 +138,8 @@ const MobileSwipeContainer: React.FC<MobileSwipeContainerProps> = ({
           {panel}
         </div>
       ))}
+
+      {/* TEMP: Placeholder removed */}
 
        {/* Mobile Panel Indicators */}
        <div className="absolute bottom-4 left-0 right-0 flex justify-center items-center gap-3 pointer-events-none">

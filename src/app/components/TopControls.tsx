@@ -94,56 +94,41 @@ const TopControls: React.FC<TopControlsProps> = ({
       </div>
 
       <div className="flex space-x-3 items-center mr-4">
-        {/* API Key Status Icon */}
-        <div
-          className="relative group"
-          title={apiKeyStatus.statusMessage}
-        >
-          <div className={`flex items-center justify-center h-9 w-9 rounded-full ${
-            apiKeyStatus.isPresent
-              ? 'bg-green-100 text-green-700'
-              : 'bg-red-100 text-red-700'
-          }`}>
-            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16">
-              <path d="M0 8a4 4 0 0 1 7.465-2H14a.5.5 0 0 1 .354.146l1.5 1.5a.5.5 0 0 1 0 .708l-1.5 1.5a.5.5 0 0 1-.708 0L13 9.207l-.646.647a.5.5 0 0 1-.708 0L11 9.207l-.646.647a.5.5 0 0 1-.708 0L9 9.207l-.646.647A.5.5 0 0 1 8 10h-.535A4 4 0 0 1 0 8zm4-3a3 3 0 1 0 2.712 4.285A.5.5 0 0 1 7.163 9h.63l.853-.854a.5.5 0 0 1 .708 0l.646.647.646-.647a.5.5 0 0 1 .708 0l.646.647.646-.647a.5.5 0 0 1 .708 0l.646.647.793-.793-1-1h-6.63a.5.5 0 0 1-.451-.285A3 3 0 0 0 4 5z"/>
-              <path d="M4 8a1 1 0 1 1-2 0 1 1 0 0 1 2 0z"/>
-            </svg>
-          </div>
-          {/* Tooltip */}
-          <div className="hidden group-hover:block absolute top-full right-0 mt-2 p-2 bg-gray-800 text-white shadow-lg rounded-md text-xs w-48 z-10">
-            {apiKeyStatus.statusMessage}
-          </div>
-        </div>
-
-        {/* Connection Button */}
+        {/* Connection Button (Moved to the left) */}
         <button
           onClick={onToggleConnection}
-          title={sessionStatus === "CONNECTED" ? "Disconnect" : "Connect"}
-          className={`flex items-center justify-center h-9 w-9 rounded-full ${
+          title={sessionStatus === "CONNECTED" ? "Disconnect Assistant" : "Connect Assistant"}
+          className={`flex items-center justify-center h-9 rounded-full px-3 text-sm font-medium text-white transition-colors ${ // Adjusted styles: added px-3, text-sm, font-medium, text-white, transition
             sessionStatus === "CONNECTED"
-              ? "bg-red-600 hover:bg-red-700"
+              ? "bg-red-600 hover:bg-red-700" // Red when connected (Disconnect)
               : sessionStatus === "CONNECTING"
-              ? "bg-black hover:bg-gray-900 cursor-not-allowed"
-              : "bg-black hover:bg-gray-900"
+              ? "bg-gray-400 cursor-not-allowed" // Greyed out when connecting
+              : "bg-green-600 hover:bg-green-700" // Green when disconnected (Connect) - Changed from black
           }`}
           disabled={sessionStatus === "CONNECTING"}
         >
           {sessionStatus === "CONNECTING" ? (
-            <div className="h-4 w-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-          ) : sessionStatus === "CONNECTED" ? (
-            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="white" viewBox="0 0 16 16">
-              <path d="M13.854 2.146a.5.5 0 0 1 0 .708l-11 11a.5.5 0 0 1-.708-.708l11-11a.5.5 0 0 1 .708 0Z"/>
-              <path d="M2.146 2.146a.5.5 0 0 0 0 .708l11 11a.5.5 0 0 0 .708-.708l-11-11a.5.5 0 0 0-.708 0Z"/>
-            </svg>
+            <>
+              <div className="h-4 w-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2"></div> {/* Spinner */}
+              <span>Connecting...</span>
+            </>
           ) : (
-            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="white" viewBox="0 0 16 16">
-              <path d="M6.5 10.5a.5.5 0 0 1 .5.5h1.5a.5.5 0 0 1 0 1H6a.5.5 0 0 1-.5-.5v-2A.5.5 0 0 1 6 9h4a.5.5 0 0 1 0 1H6.5v.5z"/>
-              <path d="M14 9.5a4.5 4.5 0 0 1-4.5 4.5h-5A4.5 4.5 0 0 1 0 9.5v-5A4.5 4.5 0 0 1 4.5 0h5A4.5 4.5 0 0 1 14 4.5v5zm-4.5 3.5a3.5 3.5 0 0 0 3.5-3.5v-5A3.5 3.5 0 0 0 9.5 1h-5A3.5 3.5 0 0 0 1 4.5v5A3.5 3.5 0 0 0 4.5 13h5z"/>
-            </svg>
+             <>
+               {/* Power Icon SVG */}
+               <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" className="mr-2" viewBox="0 0 16 16">
+                 <path d="M7.5 1v7h1V1h-1z"/>
+                 <path d="M3 8.812a4.999 4.999 0 0 1 10 0V11a.5.5 0 0 1-1 0V8.812a3.999 3.999 0 0 0-8 0V11a.5.5 0 0 1-1 0V8.812z"/>
+               </svg>
+               {sessionStatus === "CONNECTED" ? (
+                  <span>Disconnect</span> // Text when connected
+               ) : (
+                  <span>Connect</span> // Text when disconnected
+               )}
+            </>
           )}
         </button>
 
-        {/* Microphone Button */}
+        {/* Microphone Button (Now second) */}
         <button
           onClick={() => setIsMicrophoneMuted(!isMicrophoneMuted)}
           disabled={sessionStatus !== "CONNECTED"}
@@ -169,7 +154,28 @@ const TopControls: React.FC<TopControlsProps> = ({
           )}
         </button>
 
-        {/* Dashboard Toggle */}
+        {/* API Key Status Icon (Now third) */}
+        <div
+          className="relative group"
+          title={apiKeyStatus.statusMessage}
+        >
+          <div className={`flex items-center justify-center h-9 w-9 rounded-full ${
+            apiKeyStatus.isPresent
+              ? 'bg-green-100 text-green-700'
+              : 'bg-red-100 text-red-700'
+          }`}>
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16">
+              <path d="M0 8a4 4 0 0 1 7.465-2H14a.5.5 0 0 1 .354.146l1.5 1.5a.5.5 0 0 1 0 .708l-1.5 1.5a.5.5 0 0 1-.708 0L13 9.207l-.646.647a.5.5 0 0 1-.708 0L11 9.207l-.646.647a.5.5 0 0 1-.708 0L9 9.207l-.646.647A.5.5 0 0 1 8 10h-.535A4 4 0 0 1 0 8zm4-3a3 3 0 1 0 2.712 4.285A.5.5 0 0 1 7.163 9h.63l.853-.854a.5.5 0 0 1 .708 0l.646.647.646-.647a.5.5 0 0 1 .708 0l.646.647.646-.647a.5.5 0 0 1 .708 0l.646.647.793-.793-1-1h-6.63a.5.5 0 0 1-.451-.285A3 3 0 0 0 4 5z"/>
+              <path d="M4 8a1 1 0 1 1-2 0 1 1 0 0 1 2 0z"/>
+            </svg>
+          </div>
+          {/* Tooltip */}
+          <div className="hidden group-hover:block absolute top-full right-0 mt-2 p-2 bg-gray-800 text-white shadow-lg rounded-md text-xs w-48 z-10">
+            {apiKeyStatus.statusMessage}
+          </div>
+        </div>
+
+        {/* Dashboard Toggle (Desktop only) */}
         {!isMobileView && (
           <button
             onClick={() => handleDashboardToggle(!isEventsPaneExpanded)}
