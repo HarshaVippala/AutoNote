@@ -32,17 +32,17 @@
 
 ### Phase 4: Deeper Dive & Verification
 
-- [ ] **Step 4.1:** Analyze Other Areas (`useHandleServerEvent`, Contexts, Components, Lib, API).
-  - [ ] Review `useHandleServerEvent` for clarity and potential optimizations.
-  - [ ] Review Context providers (`TranscriptProvider`, `EventProvider`) for efficiency.
-  - [ ] Review other components (`Transcript`, `Dashboard`, `AgentAnswers`) for complexity or prop issues.
-  - [ ] Review `lib/realtimeConnection.ts`.
-  - [ ] Review `api/session.ts`.
-- [ ] **Step 4.2:** Testing.
-  - [ ] Perform thorough functional testing (desktop/mobile) after each major step/phase.
-  - [ ] Check browser console for errors/warnings.
-- [ ] **Step 4.3:** (Optional) Hunt for Unused Code/Files.
-  - [ ] Use tooling (e.g., `ts-prune`, IDE features) or manual analysis to find and remove dead code.
-- [ ] **Step 4.4:** Final Review & Cleanup.
-  - [ ] Read through all changed files.
-  - [ ] Ensure consistency and readability. 
+- [ ] ~~**Step 4.1:** Analyze Other Areas (`useHandleServerEvent`, Contexts, Components, Lib, API).~~
+  - [ ] ~~Review `useHandleServerEvent` for clarity and potential optimizations.~~
+  - [ ] ~~Review Context providers (`TranscriptProvider`, `EventProvider`) for efficiency.~~
+  - [ ] ~~Review other components (`Transcript`, `Dashboard`, `AgentAnswers`) for complexity or prop issues.~~
+  - [ ] ~~Review `lib/realtimeConnection.ts`.~~
+  - [ ] ~~Review `api/session.ts`.~~
+- [ ] ~~**Step 4.2:** Testing.~~
+  - [ ] ~~Perform thorough functional testing (desktop/mobile) after each major step/phase.~~
+  - [ ] ~~Check browser console for errors/warnings.~~
+- [ ] ~~**Step 4.3:** (Optional) Hunt for Unused Code/Files.~~
+  - [ ] ~~Use tooling (e.g., `ts-prune`, IDE features) or manual analysis to find and remove dead code.~~
+- [ ] ~~**Step 4.4:** Final Review & Cleanup.~~
+  - [ ] ~~Read through all changed files.~~
+  - [ ] ~~Ensure consistency and readability.~~ 
