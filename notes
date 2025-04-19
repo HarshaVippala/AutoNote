@@ -1,0 +1,112 @@
+mann@Mahas-MacBook-Pro openai-realtime-agents % npm install --save-dev electron
+
+npm warn deprecated boolean@3.2.0: Package no longer supported. Contact Support at https://www.npmjs.com/support for more info.
+
+added 56 packages, and audited 539 packages in 4s
+
+225 packages are looking for funding
+run `npm fund` for details
+
+found 0 vulnerabilities
+mann@Mahas-MacBook-Pro openai-realtime-agents % npm run dev
+
+> realtime-examples@0.1.0 dev
+> next dev
+
+▲ Next.js 15.2.4
+
+- Local: http://localhost:3000
+- Network: http://192.168.2.79:3000
+- Environments: .env
+
+✓ Starting...
+✓ Ready in 989ms
+○ Compiling / ...
+✓ Compiled / in 1116ms (1108 modules)
+GET / 200 in 1333ms
+✓ Compiled in 89ms (532 modules)
+GET /?agentConfig=simpleExample 200 in 36ms
+✓ Compiled /api/session in 139ms (1113 modules)
+GET /api/session 200 in 573ms
+✓ Compiled in 140ms (533 modules)
+^C
+mann@Mahas-MacBook-Pro openai-realtime-agents %
+mann@Mahas-MacBook-Pro openai-realtime-agents %
+mann@Mahas-MacBook-Pro openai-realtime-agents % npm run electron
+
+> realtime-examples@0.1.0 electron
+> electron .
+
+(node:58288) UnhandledPromiseRejectionWarning: ReferenceError: win is not defined
+at createWindow (/Users/mann/Documents/Random/openai-realtime-agents/electron-main.js:18:3)
+(Use `Electron --trace-warnings ...` to show where the warning was created)
+(node:58288) UnhandledPromiseRejectionWarning: Unhandled promise rejection. This error originated either by throwing inside of an async function without a catch block, or by rejecting a promise which was not handled with .catch(). To terminate the node process on unhandled promise rejection, use the CLI flag `--unhandled-rejections=strict` (see https://nodejs.org/api/cli.html#cli_unhandled_rejections_mode). (rejection id: 1)
+2025-04-18 23:35:37.095 Electron[58288:2620113] +[IMKClient subclass]: chose IMKClient_Modern
+2025-04-18 23:35:37.095 Electron[58288:2620113] +[IMKInputSession subclass]: chose IMKInputSession_Modern
+^C/Users/mann/Documents/Random/openai-realtime-agents/node_modules/electron/dist/Electron.app/Contents/MacOS/Electron exited with signal SIGINT
+mann@Mahas-MacBook-Pro openai-realtime-agents % npm run electron
+
+> realtime-examples@0.1.0 electron
+> electron .
+
+2025-04-18 23:36:47.983 Electron[58336:2621858] +[IMKClient subclass]: chose IMKClient_Modern
+2025-04-18 23:36:47.983 Electron[58336:2621858] +[IMKInputSession subclass]: chose IMKInputSession_Modern
+2025-04-18 23:36:49.136 Electron Helper (Plugin)[58344:2622159] WARNING: AVCaptureDeviceTypeExternal is deprecated for Continuity Cameras. Please use AVCaptureDeviceTypeContinuityCamera and add NSCameraUseContinuityCameraDeviceType to your Info.plist.
+^C/Users/mann/Documents/Random/openai-realtime-agents/node_modules/electron/dist/Electron.app/Contents/MacOS/Electron exited with signal SIGINT
+mann@Mahas-MacBook-Pro openai-realtime-agents % npm run package-mac
+
+> realtime-examples@0.1.0 package-mac
+> electron-packager . MyAppName --platform=darwin --arch=x64 --out=release-builds --overwrite
+
+sh: electron-packager: command not found
+mann@Mahas-MacBook-Pro openai-realtime-agents % npm install --save-dev @electron/packager
+
+npm warn deprecated lodash.get@4.4.2: This package is deprecated. Use the optional chaining (?.) operator instead.
+
+added 52 packages, and audited 843 packages in 2s
+
+254 packages are looking for funding
+run `npm fund` for details
+
+found 0 vulnerabilities
+mann@Mahas-MacBook-Pro openai-realtime-agents % npm run package-mac
+
+> realtime-examples@0.1.0 package-mac
+> electron-packager . MyAppName --platform=darwin --arch=x64 --out=release-builds --overwrite
+
+Packaging app for platform darwin x64 using electron v35.2.0
+Wrote new app to: release-builds/MyAppName-darwin-x64
+mann@Mahas-MacBook-Pro openai-realtime-agents % open release-builds/MyAppName-darwin-x64/MyAppName.app
+
+mann@Mahas-MacBook-Pro openai-realtime-agents % open release-builds/MyAppName-darwin-x64/MyAppName.app
+
+mann@Mahas-MacBook-Pro openai-realtime-agents %
+mann@Mahas-MacBook-Pro openai-realtime-agents % git rm -r -f "release-builds/MyAppName-darwin-x64/MyAppName.app"
+
+fatal: pathspec 'release-builds/MyAppName-darwin-x64/MyAppName.app' did not match any files
+mann@Mahas-MacBook-Pro openai-realtime-agents % ls
+ARCHITECTURE.md README.md next-env.d.ts package.json scripts
+LICENSE electron-main.js next.config.ts postcss.config.mjs src
+PRD eslint.config.mjs node_modules public tailwind.config.ts
+PRD.md logo.png package-lock.json release-builds tsconfig.json
+mann@Mahas-MacBook-Pro openai-realtime-agents % git rm -r --cached release-builds
+git commit -m "Stop tracking release-builds and ignore future builds"
+
+fatal: pathspec 'release-builds' did not match any files
+[electronnn b2954cb] Stop tracking release-builds and ignore future builds
+1 file changed, 1 insertion(+), 1 deletion(-)
+mann@Mahas-MacBook-Pro openai-realtime-agents % npm run package-mac
+
+> realtime-examples@0.1.0 package-mac
+> electron-packager . MyAppName --platform=darwin --arch=x64 --out=release-builds --overwrite
+
+Packaging app for platform darwin x64 using electron v35.2.0
+Wrote new app to: release-builds/MyAppName-darwin-x64
+mann@Mahas-MacBook-Pro openai-realtime-agents % codesign --force --deep --sign - \
+ release-builds/MyAppName-darwin-x64/MyAppName.app
+
+mann@Mahas-MacBook-Pro openai-realtime-agents % open release-builds/MyAppName-darwin-x64/MyAppName.app
+
+mann@Mahas-MacBook-Pro openai-realtime-agents % open release-builds/MyAppName-darwin-x64/MyAppName.app
+
+mann@Mahas-MacBook-Pro openai-realtime-agents %
