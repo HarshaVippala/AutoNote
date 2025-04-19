@@ -52,7 +52,7 @@ function App() {
   const [userText, setUserText] = useState<string>("");
   const [isMicrophoneMuted, setIsMicrophoneMuted] = useState<boolean>(false);
   const [activeMobilePanel, setActiveMobilePanel] = useState<number>(0); // Default to Transcript
-  const [isMobileView, setIsMobileView] = useState<boolean>(false);
+  const [isMobileView, setIsMobileView] = useState<boolean | null>(null); // Initialize as null
 
   const sendClientEvent = (eventObj: any, eventNameSuffix = "") => {
     if (dcRef.current && dcRef.current.readyState === "open") {
@@ -388,7 +388,7 @@ function App() {
         isMicrophoneMuted={isMicrophoneMuted}
         setIsMicrophoneMuted={setIsMicrophoneMuted}
         onToggleConnection={onToggleConnection}
-        isMobileView={isMobileView}
+        isMobileView={isMobileView === null ? false : isMobileView}
         isEventsPaneExpanded={isEventsPaneExpanded}
         setIsEventsPaneExpanded={setIsEventsPaneExpanded}
         handleDashboardToggle={handleDashboardToggle}
@@ -396,12 +396,53 @@ function App() {
         activeMobilePanel={activeMobilePanel}
       />
 
-      {!isMobileView ? (
-        // Desktop layout
-        <div className="flex flex-1 gap-1 px-2 pb-2 pt-2 overflow-hidden rounded-xl">
-          {/* Transcript Panel */}
-          {isAnswersPaneExpanded && (
-            <div className={`${isEventsPaneExpanded ? 'w-1/4' : 'w-2/5'} transition-all duration-200 h-full rounded-xl border border-gray-600`}>
+      {/* Render nothing until view type is determined */}
+      {isMobileView === null ? null : (
+         // Once determined, render the correct layout
+          !isMobileView ? (
+            // Desktop layout
+            <div className="flex flex-1 gap-1 px-2 pb-2 pt-2 overflow-hidden rounded-xl">
+              {/* Transcript Panel */}
+              {isAnswersPaneExpanded && (
+                <div className={`${isEventsPaneExpanded ? 'w-1/4' : 'w-2/5'} transition-all duration-200 h-full rounded-xl border border-gray-600`}>
+                  <Transcript
+                    userText={userText}
+                    setUserText={setUserText}
+                    onSendMessage={handleSendTextMessage}
+                    canSend={
+                      sessionStatus === "CONNECTED" &&
+                      dcRef.current?.readyState === "open"
+                    }
+                  />
+                </div>
+              )}
+
+              {/* Agent Answers Panel */}
+              {isAnswersPaneExpanded && (
+                <div className={`${isEventsPaneExpanded ? 'w-1/2' : 'w-3/5'} transition-all duration-200 h-full rounded-xl border border-gray-600`}>
+                  <AgentAnswers isExpanded={isAnswersPaneExpanded} />
+                </div>
+              )}
+
+              {/* Dashboard Panel */}
+              {isEventsPaneExpanded && (
+                <div className="w-1/4 transition-all duration-200 h-full rounded-xl border border-gray-600">
+                  <Dashboard 
+                    isExpanded={true} 
+                    isDashboardEnabled={isEventsPaneExpanded} 
+                    transcriptItems={transcriptItems}
+                  />
+                </div>
+              )}
+            </div>
+          ) : (
+            // Use MobileSwipeContainer for mobile layout
+            <MobileSwipeContainer
+              activeMobilePanel={activeMobilePanel}
+              setActiveMobilePanel={setActiveMobilePanel}
+              isEventsPaneExpanded={isEventsPaneExpanded}
+            >
+              {/* Pass the panels as children */}
               <Transcript
                 userText={userText}
                 setUserText={setUserText}
@@ -411,48 +452,12 @@ function App() {
                   dcRef.current?.readyState === "open"
                 }
               />
-            </div>
-          )}
-
-          {/* Agent Answers Panel */}
-          {isAnswersPaneExpanded && (
-            <div className={`${isEventsPaneExpanded ? 'w-1/2' : 'w-3/5'} transition-all duration-200 h-full rounded-xl border border-gray-600`}>
-              <AgentAnswers isExpanded={isAnswersPaneExpanded} />
-            </div>
-          )}
-
-          {/* Dashboard Panel */}
-          {isEventsPaneExpanded && (
-            <div className="w-1/4 transition-all duration-200 h-full rounded-xl border border-gray-600">
-              <Dashboard 
-                isExpanded={true} 
-                isDashboardEnabled={isEventsPaneExpanded} 
-                transcriptItems={transcriptItems}
-              />
-            </div>
-          )}
-        </div>
-      ) : (
-        // Use MobileSwipeContainer for mobile layout
-        <MobileSwipeContainer
-          activeMobilePanel={activeMobilePanel}
-          setActiveMobilePanel={setActiveMobilePanel}
-          isEventsPaneExpanded={isEventsPaneExpanded}
-        >
-          {/* Pass the panels as children */}
-          <Transcript
-            userText={userText}
-            setUserText={setUserText}
-            onSendMessage={handleSendTextMessage}
-            canSend={
-              sessionStatus === "CONNECTED" &&
-              dcRef.current?.readyState === "open"
-            }
-          />
-          <AgentAnswers isExpanded={activeMobilePanel === 1} />
-          <Dashboard isExpanded={true} isDashboardEnabled={isEventsPaneExpanded} transcriptItems={transcriptItems} />
-        </MobileSwipeContainer>
-      )}
+              <AgentAnswers isExpanded={activeMobilePanel === 1} />
+              <Dashboard isExpanded={true} isDashboardEnabled={isEventsPaneExpanded} transcriptItems={transcriptItems} />
+            </MobileSwipeContainer>
+          )
+        )
+       }
     </div>
   );
 }

@@ -56,10 +56,18 @@ const MobileSwipeContainer: React.FC<MobileSwipeContainerProps> = ({
         // Adjust panel positions based on swipe difference
         swipePanels.forEach((panel, index) => {
           const el = panel as HTMLElement;
-          // Calculate translation: base offset + index offset - swipe difference scaled to percentage
-          const panelTranslate = translateOffset + (index * 100) - (difference / window.innerWidth * 100);
           el.style.transition = 'none'; // Disable transition during drag for direct feedback
-          el.style.transform = `translateX(${panelTranslate}%)`;
+
+          // Only apply drag effect to panels within the allowed range
+          if (index <= maxPanelIndex) {
+            const panelTranslate = translateOffset + (index * 100) - (difference / window.innerWidth * 100);
+            el.style.transform = `translateX(${panelTranslate}%)`;
+          } else {
+            // For panels beyond the max index (e.g., dashboard when disabled),
+            // keep them locked in their default off-screen position relative to the active panel.
+            const lockedTranslate = translateOffset + (index * 100);
+            el.style.transform = `translateX(${lockedTranslate}%)`;
+          }
         });
       }
     }
@@ -90,6 +98,11 @@ const MobileSwipeContainer: React.FC<MobileSwipeContainerProps> = ({
     } else if (isRightSwipe && activeMobilePanel > 0) {
       // Swipe right to previous panel
       nextPanel = activeMobilePanel - 1;
+    }
+
+    // Ensure the calculated nextPanel doesn't exceed the maximum allowed index
+    if (nextPanel > maxPanelIndex) {
+      nextPanel = maxPanelIndex; // Clamp it to the max allowed
     }
 
     if (nextPanel !== activeMobilePanel) {
