@@ -19,4 +19,83 @@ body {
   background: var(--background);
   font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
     "Helvetica Neue", Arial, "Noto Sans", sans-serif;
+  overflow-x: hidden;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* Mobile optimizations */
+@media (max-width: 640px) {
+  input, button {
+    font-size: 16px; /* Prevents iOS zoom on focus */
+  }
+
+/* JARVIS title animation */
+.text-transparent.bg-gradient-to-r {
+  transition: background-position 0.3s ease;
+  background-size: 200% 100%;
+  background-position: 0% 0%;
+}
+
+.text-transparent.bg-gradient-to-r:hover {
+  background-position: 100% 0%;
+}
+
+
+  pre {
+    white-space: pre-wrap;
+    word-break: break-word;
+  }
+
+  .mobile-swipe-container {
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+    position: relative;
+    touch-action: pan-x; /* Enable horizontal swiping, disable vertical */
+  }
+
+  .mobile-swipe-panel {
+    position: absolute;
+    width: 100%;
+    height: 100%;
+    transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+    will-change: transform;
+    overflow-y: auto; /* Allow vertical scrolling within panels */
+    overflow-x: hidden; /* Prevent horizontal scrolling within panels */
+    -webkit-overflow-scrolling: touch; /* Smooth scrolling on iOS */
+  }
+
+  .mobile-indicators {
+    display: flex;
+    justify-content: center;
+    position: fixed;
+    bottom: 60px;
+    left: 0;
+    right: 0;
+    z-index: 20;
+  }
+
+  .mobile-indicator {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background-color: rgba(156, 163, 175, 0.5);
+    margin: 0 4px;
+    transition: background-color 0.3s;
+  }
+
+  .mobile-indicator.active {
+    background-color: rgba(37, 99, 235, 1);
+  }
+  
+  /* Prevent text selection during swipe */
+  .mobile-swipe-container * {
+    user-select: none;
+  }
+  
+  /* Re-enable text selection for content areas */
+  .mobile-swipe-panel .text-content {
+    user-select: text;
+  }
 }

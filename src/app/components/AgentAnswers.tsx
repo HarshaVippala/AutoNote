@@ -49,8 +49,14 @@ function AgentAnswers({ isExpanded }: AgentAnswersProps) {
     >
       {isExpanded && (
         <div className="h-full flex flex-col">
-          <div className="font-semibold px-6 py-4 sticky top-0 z-10 text-base border-b bg-white">
-            Response Agent Answers
+          {/* Sticky top bar with invisible border and RESPONSE label styled like big JARVIS */}
+          <div className="relative w-full" style={{ minHeight: 36 }}>
+            {/* RESPONSE label, top left, fits inside the border area */}
+            <div className="absolute left-4 top-0 flex items-center h-8 z-20">
+              <span className="font-bold text-lg tracking-wide text-gray-700" style={{ letterSpacing: 2, fontSize: '1.05rem', marginTop: 0 }}>RESPONSE</span>
+            </div>
+            {/* Invisible border for scroll buffer */}
+            <div style={{ height: 36, width: '100%', pointerEvents: 'none', borderBottom: '2px solid transparent' }}></div>
           </div>
           <div className="overflow-auto p-4 flex-1 flex flex-col gap-y-4">
             {assistantMessages.map((item) => {
