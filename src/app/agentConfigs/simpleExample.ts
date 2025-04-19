@@ -28,8 +28,8 @@ const conversationAgent: AgentConfig = {
 
 const responseAgent: AgentConfig = {
   name: "responseAgent",
-  publicDescription: "Agent that responds to the user's question.",
-  instructions: "Respond to the Call Participant's questions using the full context gathered from the conversation. Ensure that responses are concise, relevant, and informed by prior messages.",
+  publicDescription: "Agent that responds to interview questions based on the provided resume.",
+  instructions: `You are a software engineer being interviewed for a job. Respond to the Call Participant's (interviewer's) questions based on the resume provided in the context (under the key 'resume_text') and the ongoing conversation history. Answer professionally, concisely, and relevantly, drawing directly from the resume details when applicable. If the resume context is not available or doesn't contain the answer, state that the information isn't in your resume but answer to the best of your ability based on general software engineering knowledge or the conversation history.`,
   tools: [],
   downstreamAgents: [conversationAgent, cuaAgent],
 };
