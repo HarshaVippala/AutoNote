@@ -1,8 +1,9 @@
 // electron-main.js
 const path = require('path');
-const { app, BrowserWindow } = require('electron');
+const { app, BrowserWindow, Tray, Menu } = require('electron');
 
 let mainWindow;
+let tray;
 
 function createWindow() {
   mainWindow = new BrowserWindow({
@@ -27,7 +28,18 @@ function createWindow() {
   });
 }
 
-app.whenReady().then(createWindow);
+//app.whenReady().then(createWindow);
+app.whenReady().then(() => {
+    createWindow();
+  
+    // --- add a Tray so users can quit or show the window ---
+    tray = new Tray(path.join(__dirname, 'assets', 'trayIcon.png')); 
+    const trayMenu = Menu.buildFromTemplate([
+      { label: 'Show App', click: () => mainWindow ? mainWindow.show() : createWindow() },
+      { label: 'Quit',   click: () => app.quit() }
+    ]);
+    tray.setContextMenu(trayMenu);
+  });
 
 // Quit when all windows are closed (except on macOS)
 app.on('window-all-closed', () => {
