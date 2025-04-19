@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useRef } from "react"; // Added useRef
 import { SessionStatus } from "@/app/types";
 
 interface BottomToolbarProps {
@@ -12,6 +12,7 @@ interface BottomToolbarProps {
   setIsAnswersPaneExpanded: (val: boolean) => void;
   activeMobilePanel?: number; // Optional, as it has a default value
   setActiveMobilePanel?: (val: number) => void; // Optional, as it has a default value
+  onFileUpload?: (file: File) => void; // Add prop for file upload handling
 }
 
 function BottomToolbar({
@@ -25,19 +26,21 @@ function BottomToolbar({
   setIsAnswersPaneExpanded,
   activeMobilePanel = 0,
   setActiveMobilePanel = () => {},
+  onFileUpload = () => {}, // Default empty handler
 }: BottomToolbarProps) {
   const isConnected = sessionStatus === "CONNECTED";
   const isConnecting = sessionStatus === "CONNECTING";
   const [isMobileView, setIsMobileView] = useState<boolean>(false);
+  const fileInputRef = useRef<HTMLInputElement>(null); // Ref for file input
 
   useEffect(() => {
     const checkMobileView = () => {
       setIsMobileView(window.innerWidth <= 640);
     };
-    
+
     checkMobileView();
     window.addEventListener('resize', checkMobileView);
-    
+
     return () => {
       window.removeEventListener('resize', checkMobileView);
     };
@@ -63,17 +66,32 @@ function BottomToolbar({
 
   function getMicButtonClasses() {
     const baseClasses = "py-1 sm:py-2 px-3 sm:px-4 rounded-full flex items-center gap-1 sm:gap-2 text-sm sm:text-base";
-    
+
     if (!isConnected) {
       return `${baseClasses} bg-gray-100 text-gray-400 cursor-not-allowed`;
     }
-    
+
     if (isMicrophoneMuted) {
       return `${baseClasses} bg-red-100 text-red-700 hover:bg-red-200 cursor-pointer`;
     }
-    
+
     return `${baseClasses} bg-green-100 text-green-700 hover:bg-green-200 cursor-pointer`;
   }
+
+  const handleFileButtonClick = () => {
+    fileInputRef.current?.click();
+  };
+
+  const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (file && onFileUpload) {
+      onFileUpload(file);
+    }
+    // Reset file input value to allow uploading the same file again
+    if (event.target) {
+      event.target.value = '';
+    }
+  };
 
   return (
     <div className="p-2 sm:p-4 flex flex-row flex-wrap items-center justify-center gap-2 sm:gap-x-8">
@@ -110,6 +128,28 @@ function BottomToolbar({
           </>
         )}
       </button>
+
+      {/* Hidden File Input */}
+      <input
+        type="file"
+        ref={fileInputRef}
+        onChange={handleFileChange}
+        className="hidden"
+        accept=".pdf,.doc,.docx,.txt" // Specify acceptable file types
+      />
+
+      {/* Upload Resume Button */}
+      <button
+        onClick={handleFileButtonClick}
+        className="py-1 sm:py-2 px-3 sm:px-4 rounded-full flex items-center gap-1 sm:gap-2 text-sm sm:text-base bg-blue-100 text-blue-700 hover:bg-blue-200 cursor-pointer"
+      >
+        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16">
+          <path d="M.5 9.9a.5.5 0 0 1 .5.5v2.5a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-2.5a.5.5 0 0 1 1 0v2.5a2 2 0 0 1-2 2H2a2 2 0 0 1-2-2v-2.5a.5.5 0 0 1 .5-.5z"/>
+          <path d="M7.646 1.146a.5.5 0 0 1 .708 0l3 3a.5.5 0 0 1-.708.708L8.5 2.707V11.5a.5.5 0 0 1-1 0V2.707L5.354 4.854a.5.5 0 1 1-.708-.708l3-3z"/>
+        </svg>
+        <span className="ml-1">Upload Resume</span>
+      </button>
+
 
       {isMobileView ? (
         // Mobile view: No panel indicators needed

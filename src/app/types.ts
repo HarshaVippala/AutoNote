@@ -23,6 +23,7 @@ export interface Tool {
   name: string;
   description: string;
   parameters: ToolParameters;
+  run?: (args: any, context: any) => Promise<any> | any; // Add optional run method
 }
 
 export interface AgentConfig {

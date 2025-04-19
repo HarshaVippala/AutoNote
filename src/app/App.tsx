@@ -39,7 +39,7 @@ function App() {
   const [, setDataChannel] = useState<RTCDataChannel | null>(null);
   const pcRef = useRef<RTCPeerConnection | null>(null);
   const dcRef = useRef<RTCDataChannel | null>(null);
-  const audioElementRef = useRef<HTMLAudioElement | null>(null);
+  const audioElementRef = useRef<HTMLAudioElement | null>(null); // Ref for the audio element
   const audioTrackRef = useRef<MediaStreamTrack | null>(null);
   const [sessionStatus, setSessionStatus] =
     useState<SessionStatus>("DISCONNECTED");
@@ -51,6 +51,7 @@ function App() {
   const [isMicrophoneMuted, setIsMicrophoneMuted] = useState<boolean>(false);
   const [activeMobilePanel, setActiveMobilePanel] = useState<number>(0); // Default to Transcript
   const [isMobileView, setIsMobileView] = useState<boolean>(false);
+  const [resumeText, setResumeText] = useState<string | null>(null); // State to hold resume text
 
   // Touch event handlers
   const [touchStart, setTouchStart] = useState<number | null>(null);
@@ -156,15 +157,18 @@ function App() {
         return;
       }
 
+      // Ensure the audio element ref is ready (it should be rendered in JSX now)
       if (!audioElementRef.current) {
-        audioElementRef.current = document.createElement("audio");
+         console.error("Audio element ref not available for connection.");
+         setSessionStatus("DISCONNECTED");
+         logClientEvent({}, "error.audio_element_missing");
+         return;
       }
-      audioElementRef.current.autoplay = true;
-      audioElementRef.current.volume = 0;
+      // Configuration (autoplay, volume) is now done on the element directly in JSX
 
       const { pc, dc, audioTrack } = await createRealtimeConnection(
         EPHEMERAL_KEY,
-        audioElementRef
+        audioElementRef // Pass the ref directly
       );
       pcRef.current = pc;
       dcRef.current = dc;
@@ -206,8 +210,14 @@ function App() {
       pcRef.current.close();
       pcRef.current = null;
     }
-    audioTrackRef.current = null;
+
+    // Explicitly stop the track and null the ref
+    if (audioTrackRef.current) {
+      audioTrackRef.current.stop();
+      audioTrackRef.current = null;
+    }
     setDataChannel(null);
+    dcRef.current = null; // Null the data channel ref as well
     setSessionStatus("DISCONNECTED");
 
     logClientEvent({}, "disconnected");
@@ -257,24 +267,37 @@ function App() {
     const instructions = currentAgent?.instructions || "";
     const tools = currentAgent?.tools || [];
 
+    const sessionData: any = {
+      modalities: ["text", "audio"],
+      instructions,
+      voice: "coral",
+      input_audio_format: "pcm16",
+      output_audio_format: "pcm16",
+      input_audio_transcription: { model: "whisper-1" },
+      turn_detection: turnDetection,
+      tools,
+    };
+
+    // Include resume context if available
+    if (resumeText) {
+      sessionData.context = {
+        resume_text: resumeText,
+      };
+      logClientEvent({ contextKeys: Object.keys(sessionData.context) }, "session_update_including_context");
+    }
+
     const sessionUpdateEvent = {
       type: "session.update",
-      session: {
-        modalities: ["text", "audio"],
-        instructions,
-        voice: "coral",
-        input_audio_format: "pcm16",
-        output_audio_format: "pcm16",
-        input_audio_transcription: { model: "whisper-1" },
-        turn_detection: turnDetection,
-        tools,
-      },
+      session: sessionData,
     };
+
 
     sendClientEvent(sessionUpdateEvent);
 
     if (shouldTriggerResponse) {
-      sendSimulatedUserMessage("hi");
+      // Directly trigger the initial agent response without sending a simulated user message.
+      // The greeterAgent's instructions should handle the initial prompt.
+      sendClientEvent({ type: "response.create" }, "trigger initial agent response");
     }
   };
 
@@ -464,6 +487,95 @@ function App() {
     }
   };
 
+  const handleFileUpload = (file: File) => {
+    // 1) Telemetry & breadcrumb for start
+    logClientEvent(
+      { fileName: file.name, fileSize: file.size, fileType: file.type },
+      "file_upload_start"
+    );
+    addTranscriptBreadcrumb(`Uploading and processing file: ${file.name}`);
+  
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const base64DataUrl = event.target?.result;
+      if (typeof base64DataUrl !== "string") {
+        console.error("Failed to read file as Data URL");
+        logClientEvent({ fileName: file.name }, "error.file_read_local_base64");
+        addTranscriptBreadcrumb(`Error reading file: ${file.name}`);
+        return;
+      }
+  
+      console.log("File read as Data URL successfully.");
+      logClientEvent({ fileName: file.name }, "file_read_success_local_base64");
+  
+      // 2) Build a function_call message just like handleSendTextMessage
+      const messageId = uuidv4();
+      addTranscriptMessage(
+        messageId,
+        "user",
+        "", // no visible text
+        false,
+        "user",
+        {
+          function_call: {
+            name: "uploadResume",
+            arguments: JSON.stringify({
+              file: {
+                name: file.name,
+                type: file.type,
+                data: base64DataUrl,
+              },
+            }),
+          },
+        }
+      );
+  
+      // 3) Emit the same conversation.item.create event for your backend
+      sendClientEvent(
+        {
+          type: "conversation.item.create",
+          item: {
+            id: messageId,
+            type: "message",
+            role: "user",
+            content: [
+              {
+                type: "function_call",
+                name: "uploadResume",
+                arguments: {
+                  file: {
+                    name: file.name,
+                    type: file.type,
+                    data: base64DataUrl,
+                  },
+                },
+              },
+            ],
+          },
+        },
+        "(tool_call.uploadResume)"
+      );
+      addTranscriptBreadcrumb(`File "${file.name}" sent to agent for processing.`);
+  
+      // 4) Finally trigger your assistant to run immediately
+      sendClientEvent({ type: "response.create" }, "trigger response");
+    };
+  
+    reader.onerror = (event) => {
+      console.error("Error reading file:", event.target?.error);
+      logClientEvent(
+        { fileName: file.name, error: event.target?.error?.message },
+        "error.file_read_local_onerror"
+      );
+      addTranscriptBreadcrumb(`Error reading file: ${file.name}`);
+    };
+  
+    // Read the file as Base64 string
+    reader.readAsDataURL(file);
+  };
+  
+
+
   // Top Controls Component
   const TopControls = () => {
     const { loggedEvents } = useEvent();
@@ -471,7 +583,7 @@ function App() {
       isPresent: false,
       statusMessage: "API Key Not Configured"
     });
-    
+
     useEffect(() => {
       // Consider active connection as valid API key
       if (sessionStatus === "CONNECTED") {
@@ -481,20 +593,20 @@ function App() {
         });
         return;
       }
-      
+
       // Check token events if not connected
       const tokenEvents = loggedEvents.filter(e => e.eventName === "fetch_session_token_response");
       if (tokenEvents.length > 0) {
         const latest = tokenEvents[tokenEvents.length - 1];
         const hasError = latest.eventData?.error || !latest.eventData?.client_secret?.value;
-        
+
         setApiKeyStatus({
           isPresent: !hasError,
           statusMessage: hasError ? (latest.eventData?.error || "Invalid API Key") : "API Key Valid"
         });
       }
     }, [loggedEvents, sessionStatus]);
-    
+
     return (
       <div className="border-b border-gray-200 bg-white flex items-center justify-between overflow-hidden" style={{ height: 56 }}>
         <div className="flex items-center h-full">
@@ -520,13 +632,13 @@ function App() {
 
         <div className="flex space-x-3 items-center mr-4">
           {/* API Key Status Icon */}
-          <div 
+          <div
             className="relative group"
             title={apiKeyStatus.statusMessage}
           >
             <div className={`flex items-center justify-center h-9 w-9 rounded-full ${
-              apiKeyStatus.isPresent 
-                ? 'bg-green-100 text-green-700' 
+              apiKeyStatus.isPresent
+                ? 'bg-green-100 text-green-700'
                 : 'bg-red-100 text-red-700'
             }`}>
               <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16">
@@ -595,12 +707,12 @@ function App() {
 
           {/* Dashboard Toggle */}
           {!isMobileView && (
-            <button 
+            <button
               onClick={() => handleDashboardToggle(!isEventsPaneExpanded)}
               title="Toggle Dashboard"
               className={`flex items-center justify-center h-9 w-9 rounded-full ${
-                isEventsPaneExpanded 
-                  ? "bg-blue-100 text-blue-700" 
+                isEventsPaneExpanded
+                  ? "bg-blue-100 text-blue-700"
                   : "bg-gray-100 text-gray-600"
               }`}
             >
@@ -613,7 +725,7 @@ function App() {
           {/* Mobile View Buttons */}
           {isMobileView && (
             <div className="flex">
-              <button 
+              <button
                 onClick={() => {
                   // Toggle dashboard functionality, similar to desktop behavior
                   const newState = !isEventsPaneExpanded;
@@ -630,8 +742,8 @@ function App() {
                 }}
                 title="Toggle Dashboard"
                 className={`flex items-center justify-center h-8 w-8 rounded-full ${
-                  isEventsPaneExpanded 
-                    ? "bg-blue-100 text-blue-700" 
+                  isEventsPaneExpanded
+                    ? "bg-blue-100 text-blue-700"
                     : "bg-gray-100 text-gray-600"
                 }`}
               >
@@ -643,10 +755,49 @@ function App() {
           )}
 
           {/* Agent Selection removed */}
+
+          {/* Hidden File Input */}
+          <input
+            type="file"
+            ref={fileInputRef} // Need to add this ref
+            onChange={(e) => {
+              const file = e.target.files?.[0];
+              if (file) {
+                handleFileUpload(file);
+              }
+              // Reset input value
+              if (e.target) {
+                e.target.value = '';
+              }
+            }}
+            className="hidden"
+            accept=".pdf,.doc,.docx,.txt" // Specify acceptable file types
+          />
+
+          {/* Upload Resume Button */}
+          <button
+            onClick={() => fileInputRef.current?.click()}
+            title={sessionStatus === "CONNECTED" && dcRef.current?.readyState === "open" ? "Upload Resume" : "Connect first to upload resume"}
+            disabled={!(sessionStatus === "CONNECTED" && dcRef.current?.readyState === "open")}
+            className={`flex items-center justify-center h-9 w-9 rounded-full ${
+              sessionStatus === "CONNECTED" && dcRef.current?.readyState === "open"
+                ? "bg-blue-100 text-blue-700 hover:bg-blue-200 cursor-pointer"
+                : "bg-gray-100 text-gray-400 cursor-not-allowed"
+            }`}
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16">
+              <path d="M.5 9.9a.5.5 0 0 1 .5.5v2.5a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-2.5a.5.5 0 0 1 1 0v2.5a2 2 0 0 1-2 2H2a2 2 0 0 1-2-2v-2.5a.5.5 0 0 1 .5-.5z"/>
+              <path d="M7.646 1.146a.5.5 0 0 1 .708 0l3 3a.5.5 0 0 1-.708.708L8.5 2.707V11.5a.5.5 0 0 1-1 0V2.707L5.354 4.854a.5.5 0 1 1-.708-.708l3-3z"/>
+            </svg>
+          </button>
+
         </div>
       </div>
     );
   };
+
+  // Add ref for file input
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   return (
     <div className="text-base flex flex-col h-screen bg-gray-100 text-gray-800 relative rounded-xl">
@@ -680,9 +831,9 @@ function App() {
           {/* Dashboard Panel */}
           {isEventsPaneExpanded && (
             <div className="w-1/4 transition-all duration-200 h-full rounded-xl border border-gray-600">
-              <Dashboard 
-                isExpanded={true} 
-                isDashboardEnabled={isEventsPaneExpanded} 
+              <Dashboard
+                isExpanded={true}
+                isDashboardEnabled={isEventsPaneExpanded}
                 transcriptItems={transcriptItems}
               />
             </div>
@@ -690,14 +841,14 @@ function App() {
         </div>
       ) : (
         // Mobile layout with swipe
-        <div 
+        <div
           className="mobile-swipe-container flex-1 overflow-hidden"
           onTouchStart={handleTouchStart}
           onTouchMove={handleTouchMove}
           onTouchEnd={handleTouchEnd}
         >
           {/* Conversation Panel */}
-          <div 
+          <div
             className="mobile-swipe-panel absolute top-0 left-0 w-full h-full transition-transform duration-300 ease-in-out"
             style={{ transform: `translateX(${(activeMobilePanel * -100)}%)` }}
           >
@@ -713,7 +864,7 @@ function App() {
           </div>
 
           {/* Agent Answers Panel (middle panel) */}
-          <div 
+          <div
             className="mobile-swipe-panel absolute top-0 left-0 w-full h-full transition-transform duration-300 easein-out"
             style={{ transform: `translateX(${100 - (activeMobilePanel * 100)}%)` }}
           >
@@ -721,7 +872,7 @@ function App() {
           </div>
 
           {/* Dashboard Panel */}
-          <div 
+          <div
             className="mobile-swipe-panel absolute top-0 left-0 w-full h-full transition-transform duration-300 ease-in-out"
             style={{ transform: `translateX(${200 - (activeMobilePanel * 100)}%)` }}
           >
@@ -737,11 +888,11 @@ function App() {
               }
 
               return (
-                <div 
+                <div
                   key={index}
                   className={`h-1.5 rounded-full transition-all duration-300 ${
-                    activeMobilePanel === index 
-                      ? 'w-6 bg-blue-500' 
+                    activeMobilePanel === index
+                      ? 'w-6 bg-blue-500'
                       : 'w-1.5 bg-gray-300'
                   }`}
                 />
@@ -750,6 +901,8 @@ function App() {
           </div>
         </div>
       )}
+      {/* Hidden Audio Element for WebRTC Output */}
+      <audio ref={audioElementRef} autoPlay playsInline style={{ display: 'none' }} />
     </div>
   );
 }

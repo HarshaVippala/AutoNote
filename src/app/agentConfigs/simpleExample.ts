@@ -1,49 +1,45 @@
 import { AgentConfig } from "@/app/types";
 import { injectTransferTools } from "./utils";
+import { uploadResumeTool } from "../utils/uploadResumeTool";
 
-/**
- * Naming Convention:
- * - "User": the individual directly interacting with the system.
- * - "Call Participant": the other person present on the call.
- *
- * Use these terms consistently to ensure clarity in all agent instructions and prompt communications.
- */
-
-// Define agents
 const cuaAgent: AgentConfig = {
   name: "cuaAgent",
-  publicDescription: "Agent that performs a CUA action", // Context for the agent_transfer tool
+  publicDescription: "Agent that performs a Custom User Action when triggered.",
   instructions:
-    "Perform a CUA (Custom User Action) when triggered by a recognized intent from the ongoing conversation. Use available context to determine the exact action needed.",
+    "Perform a CUA (Custom User Action) when triggered by a recognized intent from the conversation, using context as needed.",
   tools: [],
 };
 
 const conversationAgent: AgentConfig = {
   name: "conversationAgent",
-  publicDescription: "Agent that listens to the conversation between the user and other person in the call.", // Context for the agent_transfer tool
+  publicDescription: "Agent that listens to the conversation and stores context.",
   instructions:
-    "Continuously listen to the live conversation between the user and the Call Participant. Store all relevant context. When the Call Participant asks a question, delegate the query to the responseAgent. While the responseAgent is active, continue listening and storing new context. Trigger again only when a new question is detected. This agent should run in parallel with the responseAgent.",
+    "Continuously listen to the conversation and store relevant context. Delegate questions to responseAgent and run in parallel.",
   tools: [],
 };
 
 const responseAgent: AgentConfig = {
   name: "responseAgent",
   publicDescription: "Agent that responds to interview questions based on the provided resume.",
-  instructions: `You are a software engineer being interviewed for a job. Respond to the Call Participant's (interviewer's) questions based on the resume provided in the context (under the key 'resume_text') and the ongoing conversation history. Answer professionally, concisely, and relevantly, drawing directly from the resume details when applicable. If the resume context is not available or doesn't contain the answer, state that the information isn't in your resume but answer to the best of your ability based on general software engineering knowledge or the conversation history.`,
-  tools: [],
-  downstreamAgents: [conversationAgent, cuaAgent],
+  instructions: `DEBUG: console.log("Memory keys:", await context.getAllKeys());
+CRITICAL INSTRUCTION: Your *only* source of information for answering questions is the resume text provided in the session context under the key 'resume_text'. You MUST use this resume to answer.
+If the 'resume_text' context is missing or empty, state clearly: "I cannot answer that question as the resume context ('resume_text') is missing. Please ensure the resume has been uploaded and provided in the context."`,
+  // Optional: allow responseAgent to re-trigger resume upload
+  tools: [uploadResumeTool],
 };
 
 const greeterAgent: AgentConfig = {
   name: "greeterAgent",
-  publicDescription: "Agent that initiates the conversation with the user.",
+  publicDescription: "Agent that greets the user and requests their resume, job description, and context.",
   instructions:
-    "Initiate the conversation with the user. Greet them and request their resume, job description, and any other context that might help in the conversation. Ensure the collected information is available to other agents.",
-  tools: [],
+    "Greet the user, ask for their resume, job description, and any other context. Use uploadResumeTool to parse and store the resume.",
+  tools: [uploadResumeTool],
   downstreamAgents: [responseAgent, conversationAgent, cuaAgent],
 };
 
-// add the transfer tool to point to downstreamAgents
-const agents = injectTransferTools([greeterAgent, responseAgent, conversationAgent, cuaAgent]);
-
-export default agents;
+export default injectTransferTools([
+  greeterAgent,
+  responseAgent,
+  conversationAgent,
+  cuaAgent,
+]);
