@@ -15,21 +15,19 @@ function AgentAnswers({ isExpanded }: AgentAnswersProps) {
 
   const { transcriptItems } = useTranscript();
   
-  // Filter transcript items to get only assistant messages from responseAgent
+  // Filter transcript items to get only assistant messages
   const assistantMessages = transcriptItems.filter(
-    (item) => 
-      item.type === "MESSAGE" && 
-      item.role === "assistant" && 
-      !item.isHidden && 
-      item.agentName === "responseAgent"
+    (item) =>
+      item.type === "MESSAGE" &&
+      item.role === "assistant" &&
+      !item.isHidden
   );
 
   useEffect(() => {
     const hasNewMessage = assistantMessages.length > 
-      prevTranscriptItems.filter(item => 
-        item.type === "MESSAGE" && 
-        item.role === "assistant" && 
-        item.agentName === "responseAgent"
+      prevTranscriptItems.filter(item =>
+        item.type === "MESSAGE" &&
+        item.role === "assistant"
       ).length;
 
     if (isExpanded && hasNewMessage && answersContainerRef.current) {
