@@ -1,0 +1,9 @@
+npm run electron:prod
+
+new terminal tab
+
+npm install --save-dev @electron/packager
+npm run package-mac
+"codesign --force --deep --sign - \
+release-builds/MyAppName-darwin-x64/MyAppName.app"
+open release-builds/MyAppName-darwin-x64/MyAppName.app
