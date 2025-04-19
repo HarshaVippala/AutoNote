@@ -9,7 +9,7 @@ import Image from "next/image";
 // UI components
 import Transcript from "./components/Transcript";
 import Dashboard from "./components/Dashboard";
-// import AgentAnswers from "./components/AgentAnswers"; // Removed AgentAnswers component
+import AgentAnswers from "./components/AgentAnswers";
 
 // Types
 import { AgentConfig, SessionStatus } from "@/app/types";
@@ -496,25 +496,29 @@ function App() {
     }, [loggedEvents, sessionStatus]);
     
     return (
-      <div className="p-2 border-b border-gray-200 bg-white flex items-center justify-between overflow-hidden">
-        <div className="flex items-center">
-          <div onClick={() => window.location.reload()} style={{ cursor: 'pointer' }}>
-            {/* OpenAI Logo Removed */}
-            {/* <Image
-              src="/openai-logomark.svg"
-              alt="OpenAI Logo"
-              width={20}
-              height={20}
-              className="mr-2"
-            /> */}
-            <span className="block sm:hidden text-xl font-extrabold tracking-tight bg-gradient-to-r from-blue-600 to-cyan-500 bg-clip-text text-transparent">JARVIS</span>
-          </div>
-          <div className="hidden sm:block text-2xl font-extrabold tracking-tight bg-gradient-to-r from-blue-600 to-cyan-500 bg-clip-text text-transparent ml-2">
-            JARVIS
+      <div className="border-b border-gray-200 bg-white flex items-center justify-between overflow-hidden" style={{ height: 56 }}>
+        <div className="flex items-center h-full">
+          <div onClick={() => window.location.reload()} style={{ cursor: 'pointer', height: '100%' }}>
+            <Image
+              src="/logo.png"
+              alt="Logo"
+              width={56}
+              height={56}
+              className="block sm:hidden"
+              style={{ height: '100%', width: 'auto' }}
+            />
+            <Image
+              src="/logo.png"
+              alt="Logo"
+              width={56}
+              height={56}
+              className="hidden sm:block"
+              style={{ height: '100%', width: 'auto' }}
+            />
           </div>
         </div>
 
-        <div className="flex space-x-3 items-center">
+        <div className="flex space-x-3 items-center mr-4">
           {/* API Key Status Icon */}
           <div 
             className="relative group"
@@ -645,41 +649,44 @@ function App() {
   };
 
   return (
-    <div className="text-base flex flex-col h-screen bg-gray-100 text-gray-800 relative">
+    <div className="text-base flex flex-col h-screen bg-gray-100 text-gray-800 relative rounded-xl">
       <TopControls />
 
       {!isMobileView ? (
         // Desktop layout
-        <div className="flex flex-1 gap-2 px-2 pb-2 pt-2 overflow-hidden">
-          <div className={`${(isAnswersPaneExpanded || isEventsPaneExpanded) ? 'w-1/3' : 'w-full'} transition-all duration-200 h-full`}>
-            <Transcript
-              userText={userText}
-              setUserText={setUserText}
-              onSendMessage={handleSendTextMessage}
-              canSend={
-                sessionStatus === "CONNECTED" &&
-                dcRef.current?.readyState === "open"
-              }
-            />
-          </div>
+        <div className="flex flex-1 gap-1 px-2 pb-2 pt-2 overflow-hidden rounded-xl">
+          {/* Transcript Panel */}
+          {isAnswersPaneExpanded && (
+            <div className={`${isEventsPaneExpanded ? 'w-1/4' : 'w-2/5'} transition-all duration-200 h-full rounded-xl border border-gray-600`}>
+              <Transcript
+                userText={userText}
+                setUserText={setUserText}
+                onSendMessage={handleSendTextMessage}
+                canSend={
+                  sessionStatus === "CONNECTED" &&
+                  dcRef.current?.readyState === "open"
+                }
+              />
+            </div>
+          )}
 
-          <div className="flex flex-1 gap-2 h-full">
-            {isAnswersPaneExpanded && (
-              <div className={`${isEventsPaneExpanded ? 'w-1/2' : 'w-full'} transition-all duration-200 h-full`}>
-                {/* AgentAnswers is removed for mobile */}
-              </div>
-            )}
+          {/* Agent Answers Panel */}
+          {isAnswersPaneExpanded && (
+            <div className={`${isEventsPaneExpanded ? 'w-1/2' : 'w-3/5'} transition-all duration-200 h-full rounded-xl border border-gray-600`}>
+              <AgentAnswers isExpanded={isAnswersPaneExpanded} />
+            </div>
+          )}
 
-            {isEventsPaneExpanded && (
-              <div className={`${isAnswersPaneExpanded ? 'w-1/2' : 'w-full'} transition-all duration-200 h-full`}>
-                <Dashboard 
-                  isExpanded={true} 
-                  isDashboardEnabled={isEventsPaneExpanded} 
-                  transcriptItems={transcriptItems}
-                />
-              </div>
-            )}
-          </div>
+          {/* Dashboard Panel */}
+          {isEventsPaneExpanded && (
+            <div className="w-1/4 transition-all duration-200 h-full rounded-xl border border-gray-600">
+              <Dashboard 
+                isExpanded={true} 
+                isDashboardEnabled={isEventsPaneExpanded} 
+                transcriptItems={transcriptItems}
+              />
+            </div>
+          )}
         </div>
       ) : (
         // Mobile layout with swipe
@@ -710,33 +717,7 @@ function App() {
             className="mobile-swipe-panel absolute top-0 left-0 w-full h-full transition-transform duration-300 easein-out"
             style={{ transform: `translateX(${100 - (activeMobilePanel * 100)}%)` }}
           >
-            {/* This panel is for agent answers only */}
-            <div className="w-full h-full overflow-auto flex flex-col bg-white rounded-xl">
-              <div className="font-semibold text-base px-4 py-2 border-b bg-gray-50">
-                Agent Answers
-              </div>
-              <div className="flex-1 overflow-auto p-4 flex flex-col gap-y-4">
-                {transcriptItems
-                  .filter(item => item.type === "MESSAGE" && item.role === "assistant" && !item.isHidden)
-                  .map((item) => (
-                    <div key={item.itemId} className="border-b border-gray-200 py-3 px-4">
-                      <div className="flex flex-col">
-                        <div className="text-xs text-gray-500 font-mono mb-2">
-                          {item.timestamp}
-                        </div>
-                        <div className="whitespace-pre-wrap text-gray-800">
-                          {item.title}
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                {transcriptItems.filter(item => item.type === "MESSAGE" && item.role === "assistant" && !item.isHidden).length === 0 && (
-                  <div className="text-gray-500 text-center italic p-4 flex-1 flex items-center justify-center">
-                    No agent answers yet
-                  </div>
-                )}
-              </div>
-            </div>
+            <AgentAnswers isExpanded={activeMobilePanel === 1} />
           </div>
 
           {/* Dashboard Panel */}

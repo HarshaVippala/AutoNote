@@ -168,96 +168,88 @@ function Dashboard({ isExpanded, isDashboardEnabled, transcriptItems }: Dashboar
     const timer = setInterval(() => {
       setCurrentTime(new Date());
 
-      // Decrement reset timer
-      setTokenUsage(prev => ({
-        ...prev,
-        resetTimeSeconds: Math.max(0, prev.resetTimeSeconds - 1)
-      }));
-
-      // Reset TPM counter when timer reaches 0
-      if (tokenUsage.resetTimeSeconds === 0) {
-        setTokenUsage(prev => ({
-          ...prev,
-          tpm: 0,
-          resetTimeSeconds: 60
-        }));
-      }
+      setTokenUsage(prev => {
+        // Decrement reset timer
+        const newReset = Math.max(0, prev.resetTimeSeconds - 1);
+        // When timer hits 0, reset TPM
+        if (newReset === 0) {
+          return { ...prev, tpm: 0, resetTimeSeconds: 60 };
+        }
+        return { ...prev, resetTimeSeconds: newReset };
+      });
     }, 1000);
 
     return () => clearInterval(timer);
-  }, [tokenUsage.resetTimeSeconds, isDashboardEnabled]);
+  }, [isDashboardEnabled]);
 
   // Extract token usage from events
   useEffect(() => {
     if (!isDashboardEnabled) return;
 
-    let inputTokens = 0;
-    let outputTokens = 0;
+    // Find the latest response.done event for input/output
+    let lastInputTokens = 0;
+    let lastOutputTokens = 0;
+    let lastTotalTokens = 0;
     let currentModel = "default";
+    let tpm = 0;
+    let tpmLimit = DEFAULT_TPM_LIMIT;
+    let sessionTotalTokens = 0;
 
+    // Sum all tokens for session total
     loggedEvents.forEach(event => {
-      // Check for model information
-      if (event.direction === "server" && event.eventData?.model) {
-        currentModel = event.eventData.model;
-        setActiveModel(currentModel);
-      }
-
-      // Track token metrics from response.done events
       if (event.eventName === "response.done" && event.direction === "server") {
         const usage = event.eventData?.response?.usage;
         if (usage) {
-          // Get total tokens
-          const totalTokens = usage.total_tokens || 0;
-
-          // Get input tokens
-          const inputDetails = usage.input_token_details;
-          if (inputDetails) {
-            inputTokens = Math.max(inputTokens, 
-              (inputDetails.text_tokens || 0) + 
-              (inputDetails.audio_tokens || 0) + 
-              (inputDetails.cached_tokens || 0)
-            );
-          }
-
-          // Get output tokens
-          const outputDetails = usage.output_token_details;
-          if (outputDetails) {
-            outputTokens = Math.max(outputTokens,
-              (outputDetails.text_tokens || 0) + 
-              (outputDetails.audio_tokens || 0)
-            );
-          }
-
-          // If no details available, use the direct counts
-          if (!inputDetails && !outputDetails) {
-            inputTokens = Math.max(inputTokens, usage.input_tokens || 0);
-            outputTokens = Math.max(outputTokens, usage.output_tokens || 0);
-          }
+          sessionTotalTokens += usage.total_tokens || 0;
         }
       }
     });
 
+    // Find the latest response.done event for input/output/tpm
+    for (let i = loggedEvents.length - 1; i >= 0; i--) {
+      const event = loggedEvents[i];
+      if (event.eventName === "response.done" && event.direction === "server") {
+        const usage = event.eventData?.response?.usage;
+        if (usage) {
+          // Get input tokens
+          const inputDetails = usage.input_token_details;
+          if (inputDetails) {
+            lastInputTokens = (inputDetails.text_tokens || 0) + (inputDetails.audio_tokens || 0) + (inputDetails.cached_tokens || 0);
+          } else {
+            lastInputTokens = usage.input_tokens || 0;
+          }
+          // Get output tokens
+          const outputDetails = usage.output_token_details;
+          if (outputDetails) {
+            lastOutputTokens = (outputDetails.text_tokens || 0) + (outputDetails.audio_tokens || 0);
+          } else {
+            lastOutputTokens = usage.output_tokens || 0;
+          }
+          lastTotalTokens = usage.total_tokens || (lastInputTokens + lastOutputTokens);
+          // For TPM, use the last call's total tokens (could be improved to sum calls in the last minute, but this matches your ask)
+          tpm = lastInputTokens + lastOutputTokens;
+          break;
+        }
+      }
+    }
+
     // Get the rate limit for the current model or use default
     const modelLimits = MODEL_RATE_LIMITS[currentModel] || MODEL_RATE_LIMITS.default;
-    const tpmLimit = modelLimits.tpm;
+    tpmLimit = modelLimits.tpm;
 
-    // Update token usage
-    const total = inputTokens + outputTokens;
-    const tpm = Math.min(total, tpmLimit);
-
-    setTokenUsage({
-      input: inputTokens,
-      output: outputTokens,
-      total,
-      tpm,
+    setTokenUsage(prev => ({
+      input: lastInputTokens,
+      output: lastOutputTokens,
+      total: sessionTotalTokens,
+      tpm: prev.tpm, // TPM is only reset by the timer effect
       tpmLimit: tpmLimit,
-      resetTimeSeconds: tokenUsage.resetTimeSeconds
-    });
+      resetTimeSeconds: prev.resetTimeSeconds
+    }));
 
     // Calculate cost
-    const inputCost = (inputTokens / 1000) * TOKEN_RATES.input;
-    const outputCost = (outputTokens / 1000) * TOKEN_RATES.output;
-    const totalCost = inputCost + outputCost;
+    const inputCost = (lastInputTokens / 1000) * TOKEN_RATES.input;
+    const outputCost = (lastOutputTokens / 1000) * TOKEN_RATES.output;
+    const totalCost = (sessionTotalTokens / 1000) * (TOKEN_RATES.input + TOKEN_RATES.output); // rough estimate
 
     setCost({
       input: inputCost,
@@ -265,7 +257,7 @@ function Dashboard({ isExpanded, isDashboardEnabled, transcriptItems }: Dashboar
       total: totalCost,
       dailyLimit: 5
     });
-  }, [loggedEvents, projectId, tokenUsage.resetTimeSeconds, isDashboardEnabled]);
+  }, [loggedEvents, projectId, isDashboardEnabled]);
 
   // Update API key status based on token events
   useEffect(() => {
@@ -347,8 +339,13 @@ function Dashboard({ isExpanded, isDashboardEnabled, transcriptItems }: Dashboar
 
   return (
     <div className="w-full h-full flex flex-col bg-white rounded-xl overflow-hidden">
-      <div className="font-semibold text-base px-4 py-2 border-b bg-gray-50">
-        Dashboard
+      <div className="relative w-full" style={{ minHeight: 36 }}>
+        {/* DASHBOARD label, top left, fits inside the border area */}
+        <div className="absolute left-4 top-0 flex items-center h-8 z-20">
+          <span className="font-bold text-lg tracking-wide text-gray-700" style={{ letterSpacing: 2, fontSize: '1.05rem', marginTop: 0 }}>DASHBOARD</span>
+        </div>
+        {/* Invisible border for scroll buffer */}
+        <div style={{ height: 36, width: '100%', pointerEvents: 'none', borderBottom: '2px solid transparent' }}></div>
       </div>
 
       <div className="flex-1 overflow-hidden flex flex-col">
