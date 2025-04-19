@@ -15,7 +15,7 @@ function createWindow() {
     // 🛡️ blocks screen‑shares & captures at the OS level
     contentProtection: true,
   });
-  //win.setContentProtection(true);
+  mainWindow.setContentProtection(true);
 
 
   // In dev you might point to http://localhost:3000,
