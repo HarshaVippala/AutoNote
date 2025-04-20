@@ -4,6 +4,7 @@ import { Suspense } from "react";
 import { TranscriptProvider } from "@/app/contexts/TranscriptContext";
 import { EventProvider } from "@/app/contexts/EventContext";
 import App from "./App";
+import ErrorBoundary from "./components/ErrorBoundary";
 
 function LoadingFallback() {
   return (
@@ -19,12 +20,14 @@ function LoadingFallback() {
 
 export default function Page() {
   return (
-    <TranscriptProvider>
-      <EventProvider>
-        <Suspense fallback={<LoadingFallback />}>
-          <App />
-        </Suspense>
-      </EventProvider>
-    </TranscriptProvider>
+    <ErrorBoundary>
+      <TranscriptProvider>
+        <EventProvider>
+          <Suspense fallback={<LoadingFallback />}>
+            <App />
+          </Suspense>
+        </EventProvider>
+      </TranscriptProvider>
+    </ErrorBoundary>
   );
 }

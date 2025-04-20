@@ -38,7 +38,7 @@ export const EventProvider: FC<PropsWithChildren> = ({ children }) => {
         ...prev,
         newEvent
       ];
-      return newEvents.slice(-50);
+      return newEvents.slice(-20);
     });
   }
 

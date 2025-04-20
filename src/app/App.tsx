@@ -19,13 +19,15 @@ import { AgentConfig, ConnectionState } from "@/app/types";
 // Context providers & hooks
 import { useTranscript } from "@/app/contexts/TranscriptContext";
 import { useEvent } from "@/app/contexts/EventContext";
-import { useHandleServerEvent } from "./hooks/useHandleServerEvent";
-
-// Utilities
-import { createRealtimeConnection } from "./lib/realtimeConnection";
 
 // Agent configs
 import { allAgentSets, defaultAgentSetKey } from "@/app/agentConfigs";
+
+// Assuming WebRTCConnectionStatus is defined and exported from TopControls.tsx
+// This might require exporting it from TopControls.tsx first.
+// Let's assume it's NOT exported yet and define it here temporarily to fix linter,
+// then we can move it properly later.
+type WebRTCConnectionStatus = 'disconnected' | 'connecting' | 'connected' | 'failed' | 'error';
 
 function App() {
   const searchParams = useSearchParams();
@@ -42,11 +44,6 @@ function App() {
   const [selectedAgentConfigSet, setSelectedAgentConfigSet] =
     useState<AgentConfig[] | null>(null);
 
-  const [, setDataChannel] = useState<RTCDataChannel | null>(null);
-  const pcRef = useRef<RTCPeerConnection | null>(null);
-  const dcRef = useRef<RTCDataChannel | null>(null);
-  const audioElementRef = useRef<HTMLAudioElement | null>(null);
-  const audioTrackRef = useRef<MediaStreamTrack | null>(null);
   const [connectionState, setConnectionState] =
     useState<ConnectionState>("INITIAL");
 
@@ -57,95 +54,8 @@ function App() {
   const [activeMobilePanel, setActiveMobilePanel] = useState<number>(0);
   const [isMobileView, setIsMobileView] = useState<boolean | null>(null);
 
-  const sendClientEvent = useCallback((eventObj: any, eventNameSuffix = "") => {
-    if (dcRef.current && dcRef.current.readyState === "open") {
-      logClientEvent(eventObj, eventNameSuffix);
-      dcRef.current.send(JSON.stringify(eventObj));
-    } else {
-      logClientEvent(
-        { attemptedEvent: eventObj.type },
-        "error.data_channel_not_open"
-      );
-      console.error(
-        "Failed to send message - no data channel available",
-        eventObj
-      );
-    }
-  }, [logClientEvent, dcRef]);
-
-  const sendSimulatedUserMessage = useCallback((text: string) => {
-    const id = uuidv4().slice(0, 32);
-    addTranscriptMessage(id, "user", text, true, "user");
-
-    sendClientEvent(
-      {
-        type: "conversation.item.create",
-        item: {
-          id,
-          type: "message",
-          role: "user",
-          content: [{ type: "input_text", text }],
-        },
-      },
-      "(simulated user text message)"
-    );
-    sendClientEvent(
-      { type: "response.create" },
-      "(trigger response after simulated user text message)"
-    );
-  }, [addTranscriptMessage, sendClientEvent]);
-
-  const updateSession = useCallback((shouldTriggerResponse: boolean = false) => {
-    sendClientEvent(
-      { type: "input_audio_buffer.clear" },
-      "clear audio buffer on session update"
-    );
-
-    const currentAgent = selectedAgentConfigSet?.find(
-      (a) => a.name === selectedAgentName
-    );
-
-    // Always use server voice activity detection regardless of microphone mute state
-    const turnDetection = {
-      type: "server_vad",
-      threshold: 0.5,
-      prefix_padding_ms: 300,
-      silence_duration_ms: 200,
-      create_response: true,
-    };
-
-    const instructions = currentAgent?.instructions || "";
-    const tools = currentAgent?.tools || [];
-
-    const sessionUpdateEvent = {
-      type: "session.update",
-      session: {
-        modalities: ["text", "audio"],
-        instructions,
-        voice: "coral",
-        input_audio_format: "pcm16",
-        output_audio_format: "pcm16",
-        input_audio_transcription: { model: "whisper-1" },
-        turn_detection: turnDetection,
-        tools,
-      },
-    };
-
-    sendClientEvent(sessionUpdateEvent);
-
-    if (shouldTriggerResponse) {
-      sendSimulatedUserMessage("hi");
-    }
-  }, [selectedAgentConfigSet, selectedAgentName, sendClientEvent, sendSimulatedUserMessage]);
-
-  const handleServerEventRef = useHandleServerEvent({
-    setConnectionState,
-    selectedAgentName,
-    selectedAgentConfigSet,
-    sendClientEvent,
-    setSelectedAgentName,
-    updateSession,
-  });
+  const [connectTrigger, setConnectTrigger] = useState(0);
+  const [disconnectTrigger, setDisconnectTrigger] = useState(0);
 
   useEffect(() => {
     let finalAgentConfig = searchParams.get("agentConfig");
@@ -165,12 +75,6 @@ function App() {
   }, [searchParams]);
 
   useEffect(() => {
-    if (selectedAgentName && connectionState === "INITIAL") {
-      connectToRealtime();
-    }
-  }, [selectedAgentName, connectionState]);
-
-  useEffect(() => {
     if (
       connectionState === "CONNECTED" &&
       selectedAgentConfigSet &&
@@ -184,183 +88,38 @@ function App() {
         currentAgent
       );
     }
-  }, [selectedAgentConfigSet, selectedAgentName, connectionState]);
+  }, [selectedAgentConfigSet, selectedAgentName, connectionState, addTranscriptBreadcrumb]);
 
-  // Update microphone state when mute status changes
-  useEffect(() => {
-    if (audioTrackRef.current) {
-      audioTrackRef.current.enabled = !isMicrophoneMuted;
+  const handleMicStatusUpdate = useCallback((status: WebRTCConnectionStatus) => {
+    console.log(`App received mic status update: ${status}`);
+    switch (status) {
+      case 'connecting':
+        setConnectionState('CONNECTING');
+        break;
+      case 'connected':
+        setConnectionState('CONNECTED');
+        break;
+      case 'disconnected':
+        setConnectionState('DISCONNECTED');
+        break;
+      case 'failed':
+      case 'error':
+        setConnectionState('ERROR');
+        break;
+      default:
+        setConnectionState('INITIAL');
     }
-  }, [isMicrophoneMuted]);
-
-  const fetchEphemeralKey = useCallback(async (): Promise<string | null> => {
-    logClientEvent({ url: "/session" }, "fetch_session_token_request");
-    setConnectionState("FETCHING_KEY");
-    const tokenResponse = await fetch("/api/session");
-    const data = await tokenResponse.json();
-    logServerEvent(data, "fetch_session_token_response");
-
-    if (!data.client_secret?.value) {
-      logClientEvent(data, "error.no_ephemeral_key");
-      console.error("No ephemeral key provided by the server");
-      setConnectionState("KEY_INVALID");
-      return null;
-    }
-
-    return data.client_secret.value;
-  }, [logClientEvent, logServerEvent, setConnectionState]);
-
-  const connectToRealtime = useCallback(async () => {
-    if (!["INITIAL", "DISCONNECTED", "KEY_INVALID"].includes(connectionState)) return;
-
-    setConnectionState("FETCHING_KEY");
-
-    try {
-      const EPHEMERAL_KEY = await fetchEphemeralKey();
-      if (!EPHEMERAL_KEY) {
-        return;
-      }
-
-      setConnectionState("CONNECTING");
-
-      if (!audioElementRef.current) {
-        audioElementRef.current = document.createElement("audio");
-      }
-      audioElementRef.current.autoplay = true;
-      audioElementRef.current.volume = 0;
-
-      const { pc, dc, audioTrack } = await createRealtimeConnection(
-        EPHEMERAL_KEY,
-        audioElementRef
-      );
-      pcRef.current = pc;
-      dcRef.current = dc;
-      audioTrackRef.current = audioTrack;
-
-      // Apply initial mute state
-      if (audioTrackRef.current) {
-        audioTrackRef.current.enabled = !isMicrophoneMuted;
-      }
-
-      dc.addEventListener("open", () => {
-        logClientEvent({}, "data_channel.open");
-      });
-      dc.addEventListener("close", () => {
-        logClientEvent({}, "data_channel.close");
-      });
-      dc.addEventListener("error", (err: any) => {
-        logClientEvent({ error: err }, "data_channel.error");
-      });
-      dc.addEventListener("message", (e: MessageEvent) => {
-        // Reverted: Removed debug log here
-        try {
-          const eventData = JSON.parse(e.data);
-          if (handleServerEventRef.current) {
-            handleServerEventRef.current(eventData);
-          } else {
-             console.error("[App.tsx] handleServerEventRef.current is null!");
-          }
-        } catch (parseError) {
-           console.error("[App.tsx] Error parsing WebSocket message:", parseError, e.data);
-        }
-      });
-
-      setDataChannel(dc);
-    } catch (err) {
-      console.error("Error connecting to realtime:", err);
-      setConnectionState("ERROR");
-    }
-  }, [
-    connectionState,
-    fetchEphemeralKey,
-    isMicrophoneMuted,
-    logClientEvent,
-    handleServerEventRef,
-    setDataChannel,
-    setConnectionState,
-  ]);
-
-  const disconnectFromRealtime = useCallback(() => {
-    if (pcRef.current) {
-      pcRef.current.getSenders().forEach((sender) => {
-        if (sender.track) {
-          sender.track.stop();
-        }
-      });
-
-      pcRef.current.close();
-      pcRef.current = null;
-    }
-    if (audioTrackRef.current) {
-      audioTrackRef.current.stop();
-      audioTrackRef.current = null;
-    }
-    if (dcRef.current) {
-      dcRef.current = null;
-    }
-    setDataChannel(null);
-    setConnectionState("DISCONNECTED");
-
-    logClientEvent({}, "disconnected");
-  }, [logClientEvent, setDataChannel, setConnectionState]);
-
-  const cancelAssistantSpeech = async () => {
-    const mostRecentAssistantMessage = [...transcriptItems]
-      .reverse()
-      .find((item) => item.role === "assistant");
-
-    if (!mostRecentAssistantMessage) {
-      console.warn("can't cancel, no recent assistant message found");
-      return;
-    }
-    if (mostRecentAssistantMessage.status === "DONE") {
-      console.log("No truncation needed, message is DONE");
-      return;
-    }
-
-    sendClientEvent({
-      type: "conversation.item.truncate",
-      item_id: mostRecentAssistantMessage?.itemId,
-      content_index: 0,
-      audio_end_ms: Date.now() - mostRecentAssistantMessage.createdAtMs,
-    });
-    sendClientEvent(
-      { type: "response.cancel" },
-      "(cancel due to user interruption)"
-    );
-  };
-
-  const handleSendTextMessage = () => {
-    if (!userText.trim()) return;
-    cancelAssistantSpeech();
-
-    const messageId = uuidv4().slice(0, 32);
-    addTranscriptMessage(messageId, "user", userText.trim(), false, "user");
-
-    sendClientEvent(
-      {
-        type: "conversation.item.create",
-        item: {
-          id: messageId,
-          type: "message",
-          role: "user",
-          content: [{ type: "input_text", text: userText.trim() }],
-        },
-      },
-      "(send user text message)"
-    );
-    setUserText("");
-
-    sendClientEvent({ type: "response.create" }, "trigger response");
-  };
+  }, []);
 
   const onToggleConnection = useCallback(() => {
     if (connectionState === "CONNECTED" || connectionState === "CONNECTING") {
-      disconnectFromRealtime();
+      console.log("App: Requesting disconnect via trigger...");
+      setDisconnectTrigger(c => c + 1);
     } else {
-      connectToRealtime();
+      console.log("App: Requesting connect via trigger...");
+      setConnectTrigger(c => c + 1);
     }
-  }, [connectionState, connectToRealtime, disconnectFromRealtime]);
+  }, [connectionState]);
 
   const handleSelectedAgentChange = (
     e: React.ChangeEvent<HTMLSelectElement>
@@ -397,7 +156,6 @@ function App() {
     localStorage.setItem("answersExpanded", isAnswersPaneExpanded.toString());
   }, [isAnswersPaneExpanded]);
 
-  // Check if we're in mobile view
   useEffect(() => {
     const checkMobileView = () => {
       setIsMobileView(window.innerWidth <= 640);
@@ -414,19 +172,22 @@ function App() {
   return (
     <div className="text-base flex flex-col h-screen bg-gray-100 text-gray-800 relative rounded-xl">
       <TopControls
-        connectionState={connectionState}
+        appConnectionState={connectionState}
         isMicrophoneMuted={isMicrophoneMuted}
         setIsMicrophoneMuted={setIsMicrophoneMuted}
         onToggleConnection={onToggleConnection}
-        isMobileView={isMobileView === null ? false : isMobileView}
+        isMobileView={isMobileView}
         isEventsPaneExpanded={isEventsPaneExpanded}
         setIsEventsPaneExpanded={setIsEventsPaneExpanded}
         handleDashboardToggle={handleDashboardToggle}
         setActiveMobilePanel={setActiveMobilePanel}
         activeMobilePanel={activeMobilePanel}
+        triggerConnect={connectTrigger}
+        triggerDisconnect={disconnectTrigger}
+        onMicStatusChange={handleMicStatusUpdate}
+        addTranscriptMessage={addTranscriptMessage}
       />
 
-      {/* Mobile View Indicator Line (only when mobile) */}
       {isMobileView && (
         <div className="relative w-full h-1 bg-gray-200 rounded-full">
           <div
@@ -439,35 +200,27 @@ function App() {
         </div>
       )}
 
-      {/* Render nothing until view type is determined */}
-      {isMobileView === null ? null : (
-         // Once determined, render the correct layout
+      {/* Conditionally render the main content area only after isMobileView is determined */}
+      {isMobileView !== null && (
           !isMobileView ? (
-            // Desktop layout
             <div className="flex flex-1 gap-1 px-2 pb-2 pt-2 overflow-hidden rounded-xl">
-              {/* Transcript Panel */}
               {isAnswersPaneExpanded && (
                 <div className={`${isEventsPaneExpanded ? 'w-1/4' : 'w-2/5'} transition-all duration-200 h-full rounded-xl border border-gray-600`}>
                   <Transcript
                     userText={userText}
                     setUserText={setUserText}
-                    onSendMessage={handleSendTextMessage}
-                    canSend={
-                      connectionState === "CONNECTED" &&
-                      dcRef.current?.readyState === "open"
-                    }
+                    onSendMessage={() => { console.warn("Send message not implemented yet."); }}
+                    canSend={false}
                   />
                 </div>
               )}
 
-              {/* Agent Answers Panel */}
               {isAnswersPaneExpanded && (
                 <div className={`${isEventsPaneExpanded ? 'w-1/2' : 'w-3/5'} transition-all duration-200 h-full rounded-xl border border-gray-600`}>
                   <AgentAnswers isExpanded={isAnswersPaneExpanded} />
                 </div>
               )}
 
-              {/* Dashboard Panel */}
               {isEventsPaneExpanded && (
                 <div className="w-1/4 transition-all duration-200 h-full rounded-xl border border-gray-600">
                   <Dashboard 
@@ -479,21 +232,16 @@ function App() {
               )}
             </div>
           ) : (
-            // Use MobileSwipeContainer for mobile layout
             <MobileSwipeContainer
               activeMobilePanel={activeMobilePanel}
               setActiveMobilePanel={setActiveMobilePanel}
               isEventsPaneExpanded={isEventsPaneExpanded}
             >
-              {/* Pass the panels as children */}
               <Transcript
                 userText={userText}
                 setUserText={setUserText}
-                onSendMessage={handleSendTextMessage}
-                canSend={
-                  connectionState === "CONNECTED" &&
-                  dcRef.current?.readyState === "open"
-                }
+                onSendMessage={() => { console.warn("Send message not implemented yet."); }}
+                canSend={false}
               />
               <AgentAnswers isExpanded={activeMobilePanel === 1} />
               <Dashboard 

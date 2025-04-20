@@ -10,8 +10,8 @@ export interface AgentAnswersProps {
 }
 
 function AgentAnswers({ isExpanded }: AgentAnswersProps) {
-  const [prevTranscriptItems, setPrevTranscriptItems] = useState<TranscriptItem[]>([]);
   const answersContainerRef = useRef<HTMLDivElement | null>(null);
+  const prevAssistantMessagesLengthRef = useRef<number>(0);
 
   const { transcriptItems } = useTranscript();
   
@@ -24,18 +24,18 @@ function AgentAnswers({ isExpanded }: AgentAnswersProps) {
   );
 
   useEffect(() => {
-    const hasNewMessage = assistantMessages.length > 
-      prevTranscriptItems.filter(item =>
-        item.type === "MESSAGE" &&
-        item.role === "assistant"
-      ).length;
+    // Compare current length with previous length from ref
+    const hasNewMessage = assistantMessages.length > prevAssistantMessagesLengthRef.current;
 
     if (isExpanded && hasNewMessage && answersContainerRef.current) {
       answersContainerRef.current.scrollTop = answersContainerRef.current.scrollHeight;
     }
 
-    setPrevTranscriptItems(transcriptItems);
-  }, [transcriptItems, assistantMessages.length, isExpanded]);
+    // Update the ref with the current length *after* the check
+    prevAssistantMessagesLengthRef.current = assistantMessages.length;
+
+    // Dependencies are now just the length and visibility
+  }, [assistantMessages.length, isExpanded]);
 
   return (
     <div

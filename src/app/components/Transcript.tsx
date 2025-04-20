@@ -23,10 +23,10 @@ const Transcript: React.FC<TranscriptProps> = ({
 }) => {
   const { transcriptItems, toggleTranscriptItemExpand } = useTranscript();
   const transcriptRef = useRef<HTMLDivElement | null>(null);
-  const [prevLogs, setPrevLogs] = useState<TranscriptItem[]>([]);
+  const prevTranscriptLengthRef = useRef<number>(0);
   const inputRef = useRef<HTMLInputElement | null>(null);
   const [isInputExpanded, setIsInputExpanded] = useState<boolean>(false);
-  const [fontSize, setFontSize] = useState(12); // default to 12px
+  const [fontSize, setFontSize] = useState(14); // default to 14px
   const [expandedUserMessages, setExpandedUserMessages] = useState<{ [id: string]: boolean }>({});
   // state for which user group popup is open (index of the group start)
   const [openGroupIdx, setOpenGroupIdx] = useState<number | null>(null);
@@ -45,24 +45,17 @@ const Transcript: React.FC<TranscriptProps> = ({
   }
 
   useEffect(() => {
-    // only auto-scroll when a new MESSAGE is added
-    const prevMessageCount = prevLogs.filter(item => item.type === "MESSAGE").length;
-    const newMessageCount = transcriptItems.filter(item => item.type === "MESSAGE").length;
-    const hasNewMessage = newMessageCount > prevMessageCount;
-    const hasUpdatedMessage = transcriptItems.some((newItem, index) => {
-      const oldItem = prevLogs[index];
-      return (
-        oldItem &&
-        newItem.type === "MESSAGE" &&
-        (newItem.title !== oldItem.title || newItem.data !== oldItem.data)
-      );
-    });
+    const currentLength = transcriptItems.filter(item => item.type === "MESSAGE").length;
+    const prevLength = prevTranscriptLengthRef.current;
 
-    if (hasNewMessage || hasUpdatedMessage) {
+    // Scroll if the number of messages increased
+    if (currentLength > prevLength) {
       scrollToBottom();
     }
 
-    setPrevLogs(transcriptItems);
+    // Update the ref *after* the check
+    prevTranscriptLengthRef.current = currentLength;
+
   }, [transcriptItems]);
 
   // Autofocus on text box input on load
@@ -219,14 +212,23 @@ const Transcript: React.FC<TranscriptProps> = ({
                       {/* Agent initials bubble positioned outside at top left */}
                       {!isUser && agentInitials && (
                         <div className="absolute -left-3 -top-3 z-10">
-                          <div className="text-[9px] font-bold bg-teal-700 text-white rounded-full w-5 h-5 flex items-center justify-center shadow border border-white">
-                            {agentInitials}
+                          <div className={`text-[9px] font-bold ${item.agentName === 'Aux' ? 'bg-blue-500' : 'bg-teal-700'} text-white rounded-full w-5 h-5 flex items-center justify-center shadow border border-white`}>
+                            {item.agentName === 'Aux' ? 'AX' : 'GA'}
                           </div>
                         </div>
                       )}
-                      <div className="max-w-xl p-3 rounded-xl font-bold" style={{ background: '#18181b', color: '#fff' }}>
+                      <div 
+                        className={`max-w-xl p-3 rounded-xl font-bold ${item.agentName === 'Aux' ? 'bg-blue-500/90' : 'bg-[#18181b]'}`} 
+                        style={{ color: '#fff' }}
+                      >
+                        {/* Show agent name as a small label if provided */}
+                        {item.agentName && (
+                          <div className="text-[10px] uppercase tracking-wider opacity-75 mb-1">
+                            {item.agentName === 'Aux' ? '👉 Quick Response' : 'Main Assistant'}
+                          </div>
+                        )}
                         <div className={`whitespace-pre-wrap ${messageStyle}`}
-                             style={{ fontSize: fontSize, lineHeight: 1.5 }}>
+                            style={{ fontSize: fontSize, lineHeight: 1.5 }}>
                           <ReactMarkdown>{displayTitle}</ReactMarkdown>
                         </div>
                       </div>

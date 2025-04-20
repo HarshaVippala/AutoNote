@@ -148,7 +148,6 @@ function Dashboard({ isExpanded, isDashboardEnabled, transcriptItems }: Dashboar
     const currentEventCount = loggedEvents.length;
     // Only process events added since the last run
     const newEvents = loggedEvents.slice(lastProcessedEventCountRef.current);
-    console.log(`[Calc Effect] Run. Prev count: ${lastProcessedEventCountRef.current}, Current count: ${currentEventCount}, New events: ${newEvents.length}`); // Debug log
 
     // Update ref *before* processing, in case of errors
     lastProcessedEventCountRef.current = currentEventCount;
@@ -226,7 +225,7 @@ function Dashboard({ isExpanded, isDashboardEnabled, transcriptItems }: Dashboar
 
   // Tracking state for UI components
   const [logsExpanded, setLogsExpanded] = useState(false);
-  const [breadcrumbsExpanded, setBreadcrumbsExpanded] = useState(true);
+  const [breadcrumbsExpanded, setBreadcrumbsExpanded] = useState(false);
 
   const toggleLogsExpanded = () => {
     setLogsExpanded(!logsExpanded);
