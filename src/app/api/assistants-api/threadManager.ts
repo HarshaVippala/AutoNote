@@ -10,28 +10,14 @@ const API_BASE_URL = 'https://api.openai.com/v1';
  */
 export async function getOrCreateThread(): Promise<Thread> {
   try {
-    // Check local storage for existing thread ID
-    const storedThreadId = localStorage.getItem('assistantThreadId');
-    
-    if (storedThreadId) {
-      console.log(`[ThreadManager] Found existing thread ID: ${storedThreadId}`);
-      try {
-        // Try to retrieve the thread to verify it still exists
-        const thread = await fetchThread(storedThreadId);
-        return thread;
-      } catch (error) {
-        console.warn(`[ThreadManager] Failed to retrieve stored thread: ${error}`);
-        // If thread retrieval fails, create a new one
-      }
-    }
-    
-    // Create a new thread if none exists or retrieval failed
+    // SERVER-SAFE: Always create a new thread per session/request (no localStorage)
     console.log('[ThreadManager] Creating new thread...');
     const response = await fetch(`${API_BASE_URL}/threads`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${process.env.NEXT_PUBLIC_OPENAI_API_KEY}`
+        'Authorization': `Bearer ${process.env.OPENAI_API_KEY}`,
+        'OpenAI-Beta': 'assistants=v2'
       },
       body: JSON.stringify({}) // Empty body for default thread
     });
@@ -42,8 +28,6 @@ export async function getOrCreateThread(): Promise<Thread> {
     }
     
     const thread = await response.json();
-    // Store the thread ID for future sessions
-    localStorage.setItem('assistantThreadId', thread.id);
     console.log(`[ThreadManager] Created new thread with ID: ${thread.id}`);
     return thread;
   } catch (error) {
@@ -60,7 +44,8 @@ async function fetchThread(threadId: string): Promise<Thread> {
   const response = await fetch(`${API_BASE_URL}/threads/${threadId}`, {
     method: 'GET',
     headers: {
-      'Authorization': `Bearer ${process.env.NEXT_PUBLIC_OPENAI_API_KEY}`
+      'Authorization': `Bearer ${process.env.OPENAI_API_KEY}`,
+      'OpenAI-Beta': 'assistants=v2'
     }
   });
   
@@ -86,7 +71,8 @@ export async function addMessageToThread(
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      'Authorization': `Bearer ${process.env.NEXT_PUBLIC_OPENAI_API_KEY}`
+      'Authorization': `Bearer ${process.env.OPENAI_API_KEY}`,
+      'OpenAI-Beta': 'assistants=v2'
     },
     body: JSON.stringify({
       role,
@@ -126,7 +112,8 @@ export async function createRun(
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      'Authorization': `Bearer ${process.env.NEXT_PUBLIC_OPENAI_API_KEY}`
+      'Authorization': `Bearer ${process.env.OPENAI_API_KEY}`,
+      'OpenAI-Beta': 'assistants=v2'
     },
     body: JSON.stringify(body)
   });
@@ -148,7 +135,8 @@ export async function checkRunStatus(threadId: string, runId: string): Promise<R
   const response = await fetch(`${API_BASE_URL}/threads/${threadId}/runs/${runId}`, {
     method: 'GET',
     headers: {
-      'Authorization': `Bearer ${process.env.NEXT_PUBLIC_OPENAI_API_KEY}`
+      'Authorization': `Bearer ${process.env.OPENAI_API_KEY}`,
+      'OpenAI-Beta': 'assistants=v2'
     }
   });
   
@@ -203,7 +191,8 @@ export async function getThreadMessages(threadId: string, limit: number = 10): P
   const response = await fetch(`${API_BASE_URL}/threads/${threadId}/messages?limit=${limit}`, {
     method: 'GET',
     headers: {
-      'Authorization': `Bearer ${process.env.NEXT_PUBLIC_OPENAI_API_KEY}`
+      'Authorization': `Bearer ${process.env.OPENAI_API_KEY}`,
+      'OpenAI-Beta': 'assistants=v2'
     }
   });
   

@@ -15,16 +15,20 @@ function linearInterpolate(before: number, after: number, atPoint: number): numb
   return before + (after - before) * atPoint;
 }
 
+// Define the typical block size for AudioWorklets
+const BLOCK_SIZE = 128;
+
 class ResamplingProcessor extends AudioWorkletProcessor {
-  private inputBuffer: Float32Array[] = [];
-  private inputBufferLength = 0;
+  // Remove unused properties: inputBuffer, inputBufferLength
   private sourceSampleRate: number | null = null;
-  private lastInputFrame: Float32Array | null = null; // Store the last frame for interpolation
+  private lastInputSample: number = 0; // Store only the single last sample needed for interpolation
+  private workBuffer: Float32Array; // Pre-allocated buffer
 
   constructor(options?: AudioWorkletNodeOptions) {
     super();
-    // Use the globally available sampleRate from the AudioWorkletGlobalScope if sourceSampleRate isn't provided
-    // Though passing it via options is preferred for clarity and robustness.
+    // Pre-allocate work buffer: 1 for last sample + BLOCK_SIZE for current input block
+    this.workBuffer = new Float32Array(1 + BLOCK_SIZE);
+
     const processorSourceRate = options?.processorOptions?.sourceSampleRate || sampleRate;
 
     if (processorSourceRate) {
@@ -40,70 +44,77 @@ class ResamplingProcessor extends AudioWorkletProcessor {
   }
 
   process(inputs: Float32Array[][], outputs: Float32Array[][], parameters: Record<string, Float32Array>): boolean {
-    // Assuming mono input for simplicity, take the first channel of the first input
     const inputChannel = inputs[0]?.[0];
-    // Get the first output channel
     const outputChannel = outputs[0]?.[0];
 
     if (!inputChannel || !outputChannel || !this.sourceSampleRate) {
-      // Not enough data, processor not configured, or input/output structure unexpected
-      // console.warn('[ResamplingProcessor] Process called with invalid state or data.');
-      return true; // Keep processor alive
+      return true; // Keep processor alive if input/output/config is invalid
+    }
+    
+    // Ensure inputChannel length matches expected BLOCK_SIZE for buffer safety
+    // If not, we might need more complex buffer management, but worklets usually provide fixed blocks.
+    if (inputChannel.length !== BLOCK_SIZE) {
+        console.warn(`[ResamplingProcessor] Unexpected input block size: ${inputChannel.length}. Expected ${BLOCK_SIZE}.`);
+        // Handle this case: maybe return true, or try to process anyway if safe?
+        // For now, let's proceed cautiously, assuming the workBuffer is large enough.
+        // A more robust solution would resize workBuffer if needed, but adds complexity.
     }
 
     const sourceSr = this.sourceSampleRate;
     const targetSr = TARGET_SAMPLE_RATE;
     const resamplingRatio = sourceSr / targetSr;
-    const inputLength = inputChannel.length;
-    const outputLength = outputChannel.length; // Typically 128 for AudioWorklet
+    const outputLength = outputChannel.length; // Should also be BLOCK_SIZE (128)
 
-    // If we have a previous frame, prepend it for interpolation continuity
-    const effectiveInput = this.lastInputFrame
-      ? Float32Array.from([...this.lastInputFrame, ...inputChannel])
-      : inputChannel;
-    const effectiveInputLength = effectiveInput.length;
+    // --- Use pre-allocated workBuffer ---
+    // Copy the last sample from the previous block
+    this.workBuffer[0] = this.lastInputSample;
+    // Copy the current input block samples after the last sample
+    this.workBuffer.set(inputChannel, 1);
+    // Now, workBuffer contains [lastSample, currentSample0, currentSample1, ...]
+    const effectiveInputLength = 1 + inputChannel.length; // Total samples available in workBuffer
 
-    // Store the actual last frame of the *current* input for the *next* call
-    this.lastInputFrame = inputChannel.slice(-1); // Store the very last sample
+    // Store the actual last sample of the *current* input block for the *next* call
+    this.lastInputSample = inputChannel[inputChannel.length - 1];
+    // --- End buffer usage ---
 
     let outputIndex = 0;
-    let inputIndex = 0; // This tracks position in the *next required* input sample
 
-    while (outputIndex < outputLength && inputIndex < effectiveInputLength -1) { // Need at least 2 samples to interpolate
+    // Process using the workBuffer (effectiveInput)
+    while (outputIndex < outputLength) {
       const requiredInputExactIndex = outputIndex * resamplingRatio;
       const beforeInputIndex = Math.floor(requiredInputExactIndex);
       const afterInputIndex = beforeInputIndex + 1;
-      
+
+      // Check if we have enough samples in the workBuffer for interpolation
       if (afterInputIndex < effectiveInputLength) {
-          const beforeVal = effectiveInput[beforeInputIndex];
-          const afterVal = effectiveInput[afterInputIndex];
+          const beforeVal = this.workBuffer[beforeInputIndex];
+          const afterVal = this.workBuffer[afterInputIndex];
           const interpolationPoint = requiredInputExactIndex - beforeInputIndex;
-          
+
           outputChannel[outputIndex] = linearInterpolate(beforeVal, afterVal, interpolationPoint);
       } else {
-          // Not enough input samples to interpolate for this output sample, reuse last valid input
-          // This might happen at the very end if input buffer isn't perfectly aligned
-           if (beforeInputIndex < effectiveInputLength) {
-             outputChannel[outputIndex] = effectiveInput[beforeInputIndex];
+          // Not enough input samples in the current workBuffer to interpolate for this output sample.
+          // This might happen if the resampling ratio requires looking slightly beyond the current block + last sample.
+          // Use the last available sample from the workBuffer.
+          if (beforeInputIndex < effectiveInputLength) {
+             outputChannel[outputIndex] = this.workBuffer[beforeInputIndex];
+             // Log only once if this condition is repeatedly met to avoid spam
+             if (outputIndex === 0 || outputChannel[outputIndex -1] !== this.workBuffer[beforeInputIndex]) {
+                 console.warn(`[ResamplingProcessor] Insufficient lookahead in workBuffer for output index ${outputIndex}. Using last available sample.`);
+             }
            } else {
-            // Edge case: can't even get the 'before' sample? Use 0 or last known good output?
-             outputChannel[outputIndex] = 0; 
-             console.warn("[ResamplingProcessor] Ran out of input samples unexpectedly during interpolation.");
+             // Edge case: required index is beyond even the last sample in workBuffer. Use 0.
+             outputChannel[outputIndex] = 0;
+             console.error(`[ResamplingProcessor] Critical interpolation error at output index ${outputIndex}. Required input index ${requiredInputExactIndex} is out of bounds (${effectiveInputLength}).`);
            }
-           break; // Stop processing if we run out of input to interpolate between
+           // Don't necessarily 'break' here, maybe the next output sample maps back into the buffer.
+           // However, if this happens consistently, the resampling logic might need adjustment.
       }
 
       outputIndex++;
-      // We need to determine the input index required for the *next* output sample
-      inputIndex = Math.floor((outputIndex) * resamplingRatio);
     }
 
-    // Fill remaining output with silence if needed (shouldn't happen with correct logic)
-    while (outputIndex < outputLength) {
-      // console.warn('[ResamplingProcessor] Filling end of output buffer with silence.');
-      outputChannel[outputIndex++] = 0;
-    }
-
+    // No need for the second loop to fill with silence, as the main loop covers outputLength.
 
     // Keep the processor alive
     return true;

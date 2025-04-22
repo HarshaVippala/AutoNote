@@ -80,10 +80,6 @@ const Transcript: React.FC<TranscriptProps> = ({
     <div className="flex flex-col h-full bg-white rounded-xl shadow-md overflow-hidden pb-4">
       {/* Top bar with invisible border and JARVIS label */}
       <div className="relative w-full" style={{ minHeight: 36 }}>
-        {/* JARVIS label, top left, fits inside the border area */}
-        <div className="absolute left-4 top-0 flex items-center h-8 z-20">
-          <span className="font-bold text-lg tracking-wide text-gray-700" style={{ letterSpacing: 2, fontSize: '1.05rem', marginTop: 0 }}>JARVIS</span>
-        </div>
         {/* Up/down arrows, top right (existing, but now inside the border area) */}
         <div className="absolute right-4 top-0 flex items-center gap-2 z-20" style={{ marginTop: 4 }}>
           <button
@@ -111,7 +107,7 @@ const Transcript: React.FC<TranscriptProps> = ({
       <div className="relative flex-1 overflow-hidden">
         <div
           ref={transcriptRef}
-          className="overflow-auto p-4 pt-2 flex flex-col gap-y-2 h-full"
+          className="overflow-auto p-4 pt-0 flex flex-col gap-y-1 h-full"
           style={{ scrollPaddingTop: 56 }}
         >
           {transcriptItems.map((item, idx) => {
@@ -131,7 +127,10 @@ const Transcript: React.FC<TranscriptProps> = ({
             // reduce space between user and assistant by using no margin between different roles
             const isPrevAssistant = prev && prev.role === "assistant" && prev.type === "MESSAGE" && !prev.isHidden;
             const isNextAssistant = next && next.role === "assistant" && next.type === "MESSAGE" && !next.isHidden;
-            const containerClasses = `${baseContainer} ${isUser ? "items-end" : "items-start"} ${isUser && isPrevUser ? "mt-0" : isUser && isPrevAssistant ? "mt-0" : "mt-2"} ${isUser && isNextUser ? "mb-0" : isUser && isNextAssistant ? "mb-0" : "mb-2"}`;
+            // Simpler spacing: mt-1 unless previous was same role, mb-1 unless next is same role
+            const marginTop = (isUser && isPrevUser) || (!isUser && isPrevAssistant) ? 'mt-0' : 'mt-1';
+            const marginBottom = (isUser && isNextUser) || (!isUser && isNextAssistant) ? 'mb-0' : 'mb-1';
+            const containerClasses = `${baseContainer} ${isUser ? "items-end" : "items-start"} ${marginTop} ${marginBottom}`;
             // adjust border radius for grouped bubbles
             const bubbleBase = `max-w-lg p-3 ${isUser ? "bg-gray-900 text-gray-100" : "bg-gray-100 text-black"} rounded-xl ${isUser && isPrevUser ? "rounded-tr-md" : ""} ${isUser && isNextUser ? "rounded-br-md" : ""}`;
             const isBracketedMessage = title.startsWith("[") && title.endsWith("]");
@@ -147,9 +146,11 @@ const Transcript: React.FC<TranscriptProps> = ({
                 const showDot = !isPrevUser;
                 // if this is the last user message before an assistant, remove mb-2 from the parent container
                 const isLastUserBeforeAssistant = isUser && isNextAssistant;
-                const adjustedContainerClasses = isLastUserBeforeAssistant
-                  ? containerClasses.replace(/mb-\d+/, 'mb-0')
-                  : containerClasses;
+                // const adjustedContainerClasses = isLastUserBeforeAssistant
+                //   ? containerClasses.replace(/mb-\d+/, 'mb-0')
+                //   : containerClasses;
+                // Use the calculated containerClasses directly
+                const adjustedContainerClasses = containerClasses;
                 // find the full group of consecutive user messages starting at this index
                 let groupedMessages: { item: TranscriptItem, idx: number }[] = [];
                 let groupEndIdx = idx;

@@ -3,11 +3,19 @@
 import React, { useState, useEffect, useMemo, useRef } from "react";
 import { useEvent } from "../contexts/EventContext";
 import { ServerEvent, LoggedEvent } from "../types";
+import { useStatus } from "../contexts/StatusContext";
+import Image from 'next/image';
+
+// Define the type for connection status explicitly if not imported
+type WebRTCConnectionStatus = 'disconnected' | 'connecting' | 'connected' | 'failed' | 'error';
 
 export interface DashboardProps {
   isExpanded: boolean;
   isDashboardEnabled: boolean;
   transcriptItems: any[];
+  isMicrophoneMuted: boolean;
+  micConnectionStatus: WebRTCConnectionStatus;
+  onMuteToggle: () => void;
 }
 
 interface TokenUsage {
@@ -37,8 +45,21 @@ const TOKEN_RATES = {
 // OpenAI Project ID
 const OPENAI_PROJECT_ID = "proj_iwQ4RJz8jIk9GD62jdsDIfZE";
 
-function Dashboard({ isExpanded, isDashboardEnabled, transcriptItems }: DashboardProps) {
+function Dashboard({ 
+  isExpanded, 
+  isDashboardEnabled, 
+  transcriptItems,
+  isMicrophoneMuted,
+  micConnectionStatus,
+  onMuteToggle 
+}: DashboardProps) {
   const { loggedEvents, toggleExpand } = useEvent();
+  const {
+    userRealtimeStatus,
+    speakerRealtimeStatus,
+    chatStatus,
+    assistantStatus,
+  } = useStatus();
   const [tokenUsage, setTokenUsage] = useState<TokenUsage>({
     resetTimeSeconds: 60,
   });
@@ -223,17 +244,17 @@ function Dashboard({ isExpanded, isDashboardEnabled, transcriptItems }: Dashboar
     });
   }, [loggedEvents, selectedEventType]);
 
-  // Tracking state for UI components
-  const [logsExpanded, setLogsExpanded] = useState(false);
-  const [breadcrumbsExpanded, setBreadcrumbsExpanded] = useState(false);
+  // Tracking state for UI components - State and toggles removed
+  // const [logsExpanded, setLogsExpanded] = useState(false); // REMOVED
+  // const [breadcrumbsExpanded, setBreadcrumbsExpanded] = useState(false); // REMOVED
 
-  const toggleLogsExpanded = () => {
-    setLogsExpanded(!logsExpanded);
-  };
+  // const toggleLogsExpanded = () => { // REMOVED
+  //   setLogsExpanded(!logsExpanded); // REMOVED
+  // }; // REMOVED
 
-  const toggleBreadcrumbsExpanded = () => {
-    setBreadcrumbsExpanded(!breadcrumbsExpanded);
-  };
+  // const toggleBreadcrumbsExpanded = () => { // REMOVED
+  //   setBreadcrumbsExpanded(!breadcrumbsExpanded); // REMOVED
+  // }; // REMOVED
 
   const isNearingCostLimit = cost.total / cost.dailyLimit > 0.8;
   const showAlert = isNearingCostLimit;
@@ -257,155 +278,129 @@ function Dashboard({ isExpanded, isDashboardEnabled, transcriptItems }: Dashboar
     );
   }
 
+  // --- Helper Functions for Mute button (adapted from TopControls) ---
+  // Keep getMuteButtonStyle and its dependency micConnectionStatus
+  const getMuteButtonStyle = (): string => {
+    // Style for Mute button - mimics existing round buttons
+    if (micConnectionStatus !== "connected") {
+      return "bg-gray-100 text-gray-400 cursor-not-allowed";
+    } 
+    if (isMicrophoneMuted) {
+      return "bg-red-100 text-red-700 hover:bg-red-200 cursor-pointer";
+    } 
+    return "bg-green-100 text-green-700 hover:bg-green-200 cursor-pointer";
+  };
+  
+  // Remove helpers for I/O buttons
+  // const getStatusButtonStyle = ...
+  // const getStatusButtonTitle = ...
+
+  // Keep existing helper for U/S/Chat/Assistant buttons
+  const getStatusColor = (status: "idle" | "processing" | "done") => {
+    if (status === "processing") return "bg-orange-400";
+    if (status === "done") return "bg-green-500";
+    return "bg-gray-200"; // Assuming this is the intended 'idle'/default color
+  };
+
   return (
-    <div className="w-full h-full flex flex-col bg-white rounded-xl overflow-hidden">
-      <div className="relative w-full" style={{ minHeight: 36 }}>
-        {/* DASHBOARD label, top left, fits inside the border area */}
-        <div className="absolute left-4 top-0 flex items-center h-8 z-20">
-          <span className="font-bold text-lg tracking-wide text-gray-700" style={{ letterSpacing: 2, fontSize: '1.05rem', marginTop: 0 }}>DASHBOARD</span>
-        </div>
-        {/* Invisible border for scroll buffer */}
-        <div style={{ height: 36, width: '100%', pointerEvents: 'none', borderBottom: '2px solid transparent' }}></div>
-      </div>
-
-      <div className="flex-1 overflow-hidden flex flex-col">
-        {/* Empty space or other content could go here */}
-        <div className="flex-1">
-            {/* This div will grow to fill available space if needed */}
-        </div>
-
-        {/* Breadcrumbs Section (moved and made collapsible) */}
-        <div className="flex flex-col overflow-hidden border-t">
-             <div
-                className="flex justify-between items-center px-4 py-2 bg-gray-50 border-b cursor-pointer"
-                onClick={toggleBreadcrumbsExpanded}
-             >
-                <span className="font-semibold text-sm">Agent Breadcrumbs</span>
-                <button>
-                    {breadcrumbsExpanded ? '▼' : '▶'}
-                </button>
-             </div>
-
-             {breadcrumbsExpanded && (
-                <div className="px-4 py-3">
-                    <div className="max-h-64 overflow-auto">
-                        {transcriptItems
-                        .filter(item => item.type === "BREADCRUMB" && !item.isHidden)
-                        .map(item => (
-                            <div key={item.itemId} className="mb-3 border-b pb-2">
-                            <div className="flex items-center justify-between">
-                                <div className="text-xs font-medium">{item.title}</div>
-                                <div className="text-xs text-gray-500">{item.timestamp}</div>
-                            </div>
-                            {item.data && (
-                                <div className="mt-1">
-                                <details className="text-xs">
-                                    <summary className="cursor-pointer text-blue-600">View Details</summary>
-                                    <pre className="mt-1 text-[10px] bg-gray-50 p-2 rounded overflow-auto max-h-32">
-                                        {JSON.stringify(item.data, null, 2)}
-                                    </pre>
-                                </details>
-                                </div>
-                            )}
-                            </div>
-                        ))}
-                        {transcriptItems.filter(item => item.type === "BREADCRUMB" && !item.isHidden).length === 0 && (
-                            <div className="text-gray-500 text-xs italic text-center py-4">
-                                No breadcrumbs available
-                            </div>
-                        )}
-                    </div>
-                </div>
+    <div className="h-full flex flex-col bg-white rounded-xl overflow-hidden border border-gray-300">
+      {/* --- Main Vertical Stack --- */}
+      <div className="flex flex-col items-center justify-between pt-4 pb-4 h-full"> 
+        
+        {/* --- Top Group: U, S, Mute --- */}
+        <div className="flex flex-col items-center space-y-3"> 
+           {/* User Status Button (U) - Restore Original Style */}
+           <div 
+             title="User Status" 
+             className={`flex flex-col items-center justify-between h-14 w-8 border border-gray-300 rounded-lg ${getStatusColor(userRealtimeStatus)} p-1`}> 
+               <svg width="20" height="20" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24">
+                 <path d="M8 3a1 1 0 0 1 1 1v16a1 1 0 1 1-2 0V4a1 1 0 0 1 1-1Zm8 2a1 1 0 0 1 1 1v12a1 1 0 1 1-2 0V6a1 1 0 0 1 1-1Zm-4 2a1 1 0 0 1 1 1v8a1 1 0 1 1-2 0V8a1 1 0 0 1 1-1ZM4 9a1 1 0 0 1 1 1v4a1 1 0 1 1-2 0v-4a1 1 0 0 1 1-1Zm16 0a1 1 0 0 1 1 1v4a1 1 0 1 1-2 0v-4a1 1 0 0 1 1-1Z"></path>
+               </svg>
+               <span className="font-bold text-xs text-gray-700" style={{ display: "block" }}>U</span>
+           </div>
+           {/* Speaker Status Button (S) - Restore Original Style */}
+           <div 
+             title="Speaker Status" 
+             className={`flex flex-col items-center justify-between h-14 w-8 border border-gray-300 rounded-lg ${getStatusColor(speakerRealtimeStatus)} p-1`}> 
+               <svg width="20" height="20" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24">
+                 <path d="M8 3a1 1 0 0 1 1 1v16a1 1 0 1 1-2 0V4a1 1 0 0 1 1-1Zm8 2a1 1 0 0 1 1 1v12a1 1 0 1 1-2 0V6a1 1 0 0 1 1-1Zm-4 2a1 1 0 0 1 1 1v8a1 1 0 1 1-2 0V8a1 1 0 0 1 1-1ZM4 9a1 1 0 0 1 1 1v4a1 1 0 1 1-2 0v-4a1 1 0 0 1 1-1Zm16 0a1 1 0 0 1 1 1v4a1 1 0 1 1-2 0v-4a1 1 0 0 1 1-1Z"></path>
+               </svg>
+               <span className="font-bold text-xs text-gray-700" style={{ display: "block" }}>S</span>
+           </div>
+           {/* Mute Button - Round Style */}
+           <button
+             onClick={onMuteToggle}
+             disabled={micConnectionStatus !== "connected"}
+             title={isMicrophoneMuted ? "Unmute Microphone" : "Mute Microphone"}
+             className={`rounded-full flex items-center justify-center ${getMuteButtonStyle()} transition-colors border border-gray-300 w-9 h-9`}
+           >
+            {/* Mute Icons (SVGs - Ensure consistent size) */}
+             {isMicrophoneMuted ? (
+               <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16">
+                 {/* Muted path data */}
+                 <path d="M13 8c0 .564-.094 1.107-.266 1.613l-.814-.814A4.02 4.02 0 0 0 12 8V7a.5.5 0 0 1 1 0v1zm-5 4c.818 0 1.578-.245 2.212-.667l.718.719a4.973 4.973 0 0 1-2.43.923V15h3a.5.5 0 0 1 0 1h-7a.5.5 0 0 1 0-1h3v-2.025A5 5 0 0 1 3 8V7a.5.5 0 0 1 1 0v1a4 4 0 0 0 4 4zm3-9v4.879L5.158 2.037A3.001 3.001 0 0 1 11 3z"/>
+                 <path d="M9.486 10.607 5 6.12V8a3 3 0 0 0 4.486 2.607zm-7.84-9.253 12 12 .708-.708-12-12-.708.708z"/>
+               </svg>
+             ) : (
+               <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16">
+                 {/* Unmuted path data */}
+                 <path d="M5 3a3 3 0 0 1 6 0v5a3 3 0 0 1-6 0V3z"/>
+                 <path d="M3.5 6.5A.5.5 0 0 1 4 7v1a4 4 0 0 0 8 0V7a.5.5 0 0 1 1 0v1a5 5 0 0 1-4.5 4.975V15h3a.5.5 0 0 1 0 1h-7a.5.5 0 0 1 0-1h3v-2.025A5 5 0 0 1 3 8V7a.5.5 0 0 1 .5-.5z"/>
+               </svg>
              )}
+           </button>
         </div>
 
-        {/* Logs Explorer - Moved to the bottom */}
-        <div className="flex flex-col overflow-hidden border-t mt-auto">
-          <div 
-            className="flex justify-between items-center px-4 py-2 bg-gray-50 border-b cursor-pointer"
-            onClick={toggleLogsExpanded}
+        {/* --- Middle Group: Chat, Assistant, Screenshot, Voice Rec (All Round) --- */}
+        <div className="flex flex-col items-center space-y-3"> 
+          {/* chat completion */}
+          <div className={`rounded-full flex items-center justify-center w-9 h-9 ${getStatusColor(chatStatus)} border border-gray-300`}>
+            {/* Chat Icon SVG (Ensure consistent size) */}
+            <svg width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24">
+              <path d="M12 4.5c-4.473 0-8 3.41-8 7.5 0 1.696.6 3.263 1.62 4.525a1 1 0 0 1 .206.814 14.712 14.712 0 0 1-.37 1.501 15.17 15.17 0 0 0 1.842-.4 1 1 0 0 1 .745.08A8.371 8.371 0 0 0 12 19.5c4.473 0 8-3.41 8-7.5s-3.527-7.5-8-7.5ZM2 12c0-5.3 4.532-9.5 10-9.5S22 6.7 22 12s-4.532 9.5-10 9.5c-1.63 0-3.174-.371-4.539-1.032a17.88 17.88 0 0 1-3.4.53 1 1 0 0 1-.995-1.357c.29-.755.534-1.496.704-2.242A9.137 9.137 0 0 1 2 12Z"></path>
+            </svg>
+          </div>
+          {/* assistant */}
+          <div className={`rounded-full flex items-center justify-center w-9 h-9 ${getStatusColor(assistantStatus)} border border-gray-300`}>
+            {/* Assistant Icon SVG (Ensure consistent size) */}
+            <svg width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24">
+              <path d="M12 1a1 1 0 0 1 1 1v.5h2.87c.513 0 .955 0 1.32.029.384.03.767.098 1.137.28a3 3 0 0 1 1.364 1.364c.182.37.25.753.28 1.137.029.365.029.807.029 1.32v.078c0 1.054 0 1.903-.055 2.592-.056.709-.175 1.332-.46 1.911a5 5 0 0 1-2.274 2.273c-.579.286-1.202.405-1.911.461-.689.055-1.538.055-2.592.055h-1.416c-1.054 0-1.903 0-2.592-.055-.709-.056-1.332-.175-1.911-.46a5 5 0 0 1-2.273-2.274c-.286-.579-.405-1.202-.461-1.911C4 8.611 4 7.762 4 6.708V6.63c0-.512 0-.954.029-1.319.03-.384.098-.767.28-1.137A3 3 0 0 1 5.673 2.81c.37-.182.753-.25 1.137-.28.365-.029.807-.029 1.32-.029H11V2a1 1 0 0 1 1-1ZM6.969 4.523c-.265.02-.363.056-.411.08a1 1 0 0 0-.455.455c-.024.048-.06.146-.08.41A16.99 16.99 0 0 0 6 6.668c0 1.104 0 1.874.048 2.475.047.588.135.928.261 1.185a3 3 0 0 0 1.364 1.364c.257.127.597.214 1.185.26.6.048 1.37.049 2.475.049h1.334c1.104 0 1.874 0 2.475-.048.588-.047.928-.134 1.185-.261a3 3 0 0 0 1.364-1.364c.127-.257.214-.597.26-1.185.048-.6.049-1.37.049-2.475 0-.56 0-.922-.023-1.198-.02-.265-.056-.363-.08-.411a1 1 0 0 0-.455-.455c-.048-.024-.146-.06-.41-.08a16.993 16.993 0 0 0-1.199-.023H8.167c-.56 0-.922 0-1.198.023ZM6 21c0-.974.551-1.95 1.632-2.722C8.71 17.508 10.252 17 12 17c1.749 0 3.29.508 4.369 1.278C17.449 19.05 18 20.026 18 21a1 1 0 1 0 2 0c0-1.788-1.016-3.311-2.469-4.35-1.455-1.038-3.414-1.65-5.53-1.65-2.118 0-4.077.611-5.532 1.65C5.016 17.69 4 19.214 4 21a1 1 0 1 0 2 0Z"></path>
+            </svg>
+          </div>
+          {/* Screenshot Button (New) - Round Style */}
+          <button
+            title="Screenshot"
+            className={`rounded-full flex items-center justify-center font-bold text-xs bg-gray-100 text-gray-600 hover:bg-gray-200 cursor-pointer transition-colors border border-gray-300 w-9 h-9`}
           >
-            <span className="font-semibold text-sm">Logs Explorer</span>
-            <button>
-              {logsExpanded ? '▼' : '▶'}
-            </button>
-          </div>
-
-          {logsExpanded && (
-            <>
-              <div className="px-3 py-2 border-b flex gap-2 items-center">
-                <select 
-                  className="border rounded px-2 py-1 text-xs"
-                  value={selectedEventType || ""}
-                  onChange={(e) => setSelectedEventType(e.target.value || null)}
-                >
-                  <option value="">All Events</option>
-                  {eventTypes.map(type => (
-                    <option key={type} value={type}>{type}</option>
-                  ))}
-                </select>
-              </div>
-
-              <div className="overflow-auto flex-1 max-h-96">
-                <div className="divide-y">
-                  {[...filteredEvents].map((log) => {
-                    const isError = log.eventName.toLowerCase().includes("error");
-                    const directionIcon = log.direction === "client" ? "▲" : "▼";
-                    const directionColor = log.direction === "client" ? "text-purple-600" : "text-green-600";
-                    const isProjectEvent = log.eventData?.project_id === projectId;
-
-                    return (
-                      <div
-                        key={log.id}
-                        className={`py-1 px-4 text-xs hover:bg-gray-50 cursor-pointer ${isProjectEvent ? 'bg-blue-50' : ''}`}
-                        onClick={() => toggleExpand(log.id)}
-                      >
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center">
-                            <span className={`mr-2 ${directionColor}`}>
-                              {directionIcon}
-                            </span>
-                            <span className={isError ? "text-red-600" : ""}>
-                              {log.eventName}
-                            </span>
-                            {isProjectEvent && (
-                              <span className="ml-2 text-xs bg-blue-100 text-blue-800 px-1 rounded">
-                                project
-                              </span>
-                            )}
-                          </div>
-                          <div className="text-xs text-gray-500">
-                            {/* Use the original formatted timestamp string for display */}
-                            {log.timestamp}
-                          </div>
-                        </div>
-
-                        {log.expanded && (
-                          <div className="mt-1 border-t pt-1">
-                            <pre className="text-[10px] overflow-auto whitespace-pre-wrap text-gray-700 bg-gray-50 p-2 rounded">
-                              {JSON.stringify(log.eventData, null, 2)}
-                            </pre>
-                          </div>
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            </>
-          )}
+            {/* Screenshot Icon SVG (Placeholder - Ensure consistent size) */}
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16">
+              <path d="M10.5 8.5a2.5 2.5 0 1 1-5 0 2.5 2.5 0 0 1 5 0z"/>
+              <path d="M2 4a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2h-1.172a2 2 0 0 1-1.414-.586l-.828-.828A2 2 0 0 0 9.172 2H6.828a2 2 0 0 0-1.414.586l-.828.828A2 2 0 0 1 3.172 4H2zm.5 2a.5.5 0 1 1 0-1 .5.5 0 0 1 0 1zm9 2.5a3.5 3.5 0 1 1-7 0 3.5 3.5 0 0 1 7 0z"/>
+            </svg>
+          </button>
+           {/* Voice Recognition Button (New) - Round Style */}
+           <button
+            title="Voice Recognition Toggle"
+            className={`rounded-full flex items-center justify-center font-bold text-xs bg-gray-100 text-gray-600 hover:bg-gray-200 cursor-pointer transition-colors border border-gray-300 w-9 h-9`}
+          >
+            {/* Voice Rec Image (Ensure consistent size) */}
+            <Image src="/voice-recognition.png" alt="Voice Recognition" width={16} height={16} />
+          </button>
         </div>
+
+        {/* --- Bottom Group: Settings/Key Button --- */}
+        <div className="flex flex-col items-center space-y-3"> 
+          {/* Key/Settings Button - Round Style */}
+          <button
+            title="Settings"
+            className={`rounded-full flex items-center justify-center font-bold text-xs bg-gray-100 text-gray-600 hover:bg-gray-200 cursor-pointer transition-colors border border-gray-300 w-9 h-9`}
+          >
+            {/* Settings Image (Ensure consistent size) */}
+            <Image src="/setting.png" alt="Settings" width={16} height={16} />
+          </button>
+        </div>
+
       </div>
-
-      {/* Alert Banner */}
-      {showAlert && (
-        <div className="px-4 py-2 text-white bg-orange-500">
-          <div className="flex items-center">
-            <span className="mr-2">⚠️</span>
-            <span>Warning: Approaching daily cost limit (${cost.total.toFixed(2)} / ${cost.dailyLimit.toFixed(2)})</span>
-          </div>
-        </div>
-      )}
     </div>
   );
 }

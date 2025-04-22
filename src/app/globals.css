@@ -2,6 +2,18 @@
 @tailwind components;
 @tailwind utilities;
 
+@layer utilities {
+  .animate-blink {
+    animation: blinker 1s linear infinite;
+  }
+
+  @keyframes blinker {
+    50% {
+      opacity: 0.5; /* Adjust opacity for desired 'darkness' */
+    }
+  }
+}
+
 :root {
   --background: #fafafa;
   --foreground: #171717;

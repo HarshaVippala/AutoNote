@@ -26,28 +26,79 @@ export async function POST(request: Request) {
     );
   }
 
-  // Later, we might pass parameters from the client if needed,
-  // like user ID or specific session requirements.
-  // const body = await request.json();
+  // Read the sessionType from the request body
+  let sessionType: 'mic' | 'speaker' | undefined;
+  let sessionConfigFromClient: Record<string, any> | undefined;
+  try {
+    const body = await request.json();
+    sessionType = body.sessionType;
+    sessionConfigFromClient = body.sessionConfig; // Extract sessionConfig too
 
-  // Define desired session parameters
-  // TODO: Make model configurable or read from env vars
-  const sessionParams: OpenAI.Beta.Realtime.Sessions.SessionCreateParams = {
-    model: 'gpt-4o-mini-realtime-preview-2024-12-17', // Use a specific, available realtime model
-    modalities: ['text'], // Default to text-only output
-    // Add other parameters as needed, e.g.:
-    // instructions: "You are a helpful assistant.",
-    // voice: "alloy",
-    // input_audio_format: "pcm16",
-    // output_audio_format: "pcm16",
-    // turn_detection: { type: "server_vad" }
+    if (!sessionType || (sessionType !== 'mic' && sessionType !== 'speaker')) {
+      console.warn('Invalid or missing sessionType in request body:', sessionType);
+      // Default to 'mic' or return an error, depending on desired behavior
+      // For now, let's default to 'mic' if unspecified/invalid for broader compatibility initially
+      sessionType = 'mic'; 
+      // Alternatively, return an error:
+      // return NextResponse.json({ error: "Invalid or missing 'sessionType'. Must be 'mic' or 'speaker'." }, { status: 400 });
+    }
+    console.log(`Requested sessionType: ${sessionType}`);
+  } catch (e) {
+     console.error('Failed to parse request body:', e);
+     return NextResponse.json({ error: 'Invalid request body.' }, { status: 400 });
+  }
+
+
+  // Define base session parameters
+  const baseSessionParams: Omit<OpenAI.Beta.Realtime.Sessions.SessionCreateParams, 'model' | 'modalities'> = {
+     input_audio_transcription: {
+      model: 'whisper-1', // Use whisper-1 for transcription
+      language: 'en',   // Set language to English (can be customized per type if needed)
+    },
+     // Common parameters can go here
   };
+
+  // Customize parameters based on sessionType (these act as defaults)
+  let specificSessionParams: Partial<OpenAI.Beta.Realtime.Sessions.SessionCreateParams> = {};
+  if (sessionType === 'mic') {
+    // Parameters specific to the user's microphone session
+    specificSessionParams = {
+      // Example: Add specific instructions or slightly different config if needed later
+      // instructions: "Focus on the user's speech.",
+      model: 'gpt-4o-mini-realtime-preview-2024-12-17', // Keep the main model
+      modalities: ['text'], // Text modality for user mic input processing
+    };
+    console.log("Configuring for 'mic' session.");
+  } else { // sessionType === 'speaker'
+     // Parameters specific to the speaker's audio session
+    specificSessionParams = {
+      // Example: Add specific instructions or slightly different config if needed later
+      // instructions: "Focus on transcribing the other participant's speech accurately.",
+      model: 'gpt-4o-mini-realtime-preview-2024-12-17', // Keep the main model (or use transcription-focused if preferred)
+      modalities: ['text'], // Text modality for speaker transcription processing
+      // Potentially disable VAD or use different settings if speaker audio is continuous?
+      // turn_detection: { type: "none" } // Example: disable server VAD if not needed for pure transcription
+    };
+    console.log("Configuring for 'speaker' session.");
+  }
+
+  // Merge base, type-specific defaults, and client-provided config
+  // Client config takes precedence over type-specific defaults
+  const finalSessionParams: OpenAI.Beta.Realtime.Sessions.SessionCreateParams = {
+    ...baseSessionParams,             // Start with base
+    ...specificSessionParams,         // Add/override with type-specific defaults
+    ...(sessionConfigFromClient || {}), // Override with client config if provided
+    // Ensure required fields like model and modalities are present after merge
+    model: sessionConfigFromClient?.model || specificSessionParams.model || 'gpt-4o-mini-realtime-preview-2024-12-17',
+    modalities: sessionConfigFromClient?.modalities || specificSessionParams.modalities || ['text'],
+  } as OpenAI.Beta.Realtime.Sessions.SessionCreateParams;
+
 
   try {
     console.log('Attempting to create realtime session and get ephemeral token...');
-    console.log('Using params:', JSON.stringify(sessionParams));
+    console.log(`Using final params for ${sessionType}:`, JSON.stringify(finalSessionParams));
 
-    const session = await openai.beta.realtime.sessions.create(sessionParams);
+    const session = await openai.beta.realtime.sessions.create(finalSessionParams);
 
     if (!session.client_secret) {
       console.error('Failed to retrieve client_secret from session response');

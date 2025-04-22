@@ -25,11 +25,22 @@ interface ConnectionCallbacks {
  * @returns {Promise<string>} The ephemeral token.
  * @throws {Error} If fetching the token fails.
  */
-async function fetchEphemeralToken(): Promise<string> {
-  console.log(`Fetching ephemeral token from ${REALTIME_TOKEN_ENDPOINT}...`);
+async function fetchEphemeralToken(
+  sessionType: 'mic' | 'speaker',
+  sessionConfig?: Record<string, any> // Add optional sessionConfig param
+): Promise<string> {
+  console.log(`Fetching ephemeral token for session type '${sessionType}' from ${REALTIME_TOKEN_ENDPOINT}...`);
+  if (sessionConfig) {
+    console.log('With session config:', sessionConfig);
+  }
   try {
     const response = await fetch(REALTIME_TOKEN_ENDPOINT, {
       method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      // Send both sessionType and sessionConfig
+      body: JSON.stringify({ sessionType, sessionConfig }), 
     });
 
     if (!response.ok) {
@@ -114,9 +125,19 @@ export const connectionManager = {
     console.error(`Error in connection [${id}] during ${context}:`, error);
     const conn = this.connections.get(id);
     if (conn) {
+      // Report the error via callback
       conn.callbacks.onError(error);
+      // Update the state to 'failed', but don't trigger cleanup directly from here
+      // Let the state change handler or component logic decide on disconnect/cleanup
+      if (conn.state !== 'failed' && conn.state !== 'closed') { // Avoid redundant state updates
+          console.log(`Connection [${id}] state changing from ${conn.state} to failed due to error.`);
+          conn.state = 'failed';
+          conn.callbacks.onStateChange('failed');
+      }
+    } else {
+        console.warn(`_handleError called for non-existent connection [${id}]`);
     }
-    this._updateState(id, 'failed'); // Trigger state change and cleanup
+    // REMOVED: this._updateState(id, 'failed'); // Decouple immediate cleanup trigger
   },
 
   _cleanupConnection(id: string) {
@@ -182,7 +203,8 @@ export const connectionManager = {
 
     try {
       console.log(`Connecting [${id}]...`);
-      const ephemeralToken = await fetchEphemeralToken();
+      // Pass the id (as sessionType) and the sessionConfig
+      const ephemeralToken = await fetchEphemeralToken(id as 'mic' | 'speaker', sessionConfig);
 
       // 1. Create PeerConnection
       console.log(`[${id}] Creating RTCPeerConnection...`);
@@ -241,9 +263,9 @@ export const connectionManager = {
 
 
       // 4. Set up the data channel for events
-      console.log(`[${id}] Creating data channel "oai-events-${id}"...`);
+      console.log(`[${id}] Creating data channel "oai-events"...`);
       // Ensure the creation happens before SDP offer
-       dc = pc.createDataChannel(`oai-events-${id}`);
+       dc = pc.createDataChannel(`oai-events`);
        managedConn.dc = dc; // Update managedConn with the created dc
 
       dc.onopen = () => {
@@ -284,121 +306,66 @@ export const connectionManager = {
       // 6. Send Offer to OpenAI and get Answer
       console.log(`[${id}] Sending offer to ${REALTIME_CONNECTION_URL}...`);
       
-      // Function to handle SDP exchange errors and potentially retry with different format
-      const attemptSdpExchange = async (attempt = 1): Promise<string> => {
-        try {
-          // Build the URL with session config as query parameters if provided
-          let url = REALTIME_CONNECTION_URL;
-          if (sessionConfig) {
-            console.log(`[${id}] Using session config:`, sessionConfig);
-            // Convert the session config to a URL-encoded query string
-            const queryParams = new URLSearchParams();
-            queryParams.append('session', JSON.stringify(sessionConfig));
-            url = `${url}?${queryParams.toString()}`;
-          }
-          
-          console.log(`[${id}] Attempt ${attempt}: Sending offer with Content-Type: application/sdp`);
-          console.log(`[${id}] SDP offer (first 100 chars):`, offer.sdp?.substring(0, 100) + "...");
-          
-          // Send the SDP offer directly, not as JSON
-          const sdpResponse = await fetch(url, {
-            method: 'POST',
-            body: offer.sdp, // Send SDP directly, not wrapped in JSON
-            headers: {
-              Authorization: `Bearer ${ephemeralToken}`,
-              'Content-Type': 'application/sdp',
-            },
-          });
+      // REMOVED: Complex attemptSdpExchange function with fallback logic.
+      // Simplify to directly send SDP offer with model in query param.
 
-          if (!sdpResponse.ok) {
-            const errorText = await sdpResponse.text();
-            console.error(`[${id}] SDP exchange failed (attempt ${attempt}) with status ${sdpResponse.status}:`, errorText);
-            console.error(`[${id}] Response headers:`, JSON.stringify(Object.fromEntries([...sdpResponse.headers.entries()])));
-            
-            // If this is the first attempt and we got a content type error, try fallback format
-            if (attempt === 1 && 
-                (errorText.includes('unsupported_content_type') || 
-                 errorText.includes('Unsupported content type'))) {
-              console.log(`[${id}] Content type error detected, trying fallback format...`);
-              return attemptSdpExchange(2);
-            }
-            
-            throw new Error(`SDP exchange failed: ${sdpResponse.status} ${sdpResponse.statusText} - ${errorText}`);
-          }
-
-          const answerText = await sdpResponse.text();
-          console.log(`[${id}] SDP answer received (first 100 chars):`, answerText.substring(0, 100) + "...");
-          
-          // Success - return the SDP answer
-          return answerText;
-          
-        } catch (error) {
-          // If this is the first attempt and it might be a content type issue, try the fallback
-          if (attempt === 1 && 
-              error instanceof Error && 
-              (error.message.includes('content type') || error.message.includes('Content-Type'))) {
-            console.log(`[${id}] Possible content type error, trying fallback format...`);
-            
-            try {
-              // Fallback: Try with application/json format
-              console.log(`[${id}] Attempt ${attempt+1}: Sending offer with Content-Type: application/json`);
-              
-              // Prepare request body with session config if provided
-              const requestBody: Record<string, any> = {
-                sdp: offer.sdp,
-              };
-              
-              // Only include session config if it was provided
-              if (sessionConfig) {
-                requestBody.session = sessionConfig;
-              }
-              
-              console.log(`[${id}] JSON request body (first 100 chars):`, JSON.stringify(requestBody).substring(0, 100) + "...");
-              
-              const fallbackResponse = await fetch(REALTIME_CONNECTION_URL, {
-                method: 'POST',
-                body: JSON.stringify(requestBody),
-                headers: {
-                  Authorization: `Bearer ${ephemeralToken}`,
-                  'Content-Type': 'application/json',
-                },
-              });
-              
-              if (!fallbackResponse.ok) {
-                const fallbackErrorText = await fallbackResponse.text();
-                console.error(`[${id}] Fallback SDP exchange failed with status ${fallbackResponse.status}:`, fallbackErrorText);
-                console.error(`[${id}] Fallback response headers:`, JSON.stringify(Object.fromEntries([...fallbackResponse.headers.entries()])));
-                throw new Error(`Fallback SDP exchange failed: ${fallbackResponse.status} - ${fallbackErrorText}`);
-              }
-              
-              const answerText = await fallbackResponse.text();
-              console.log(`[${id}] SDP answer received from fallback (first 100 chars):`, answerText.substring(0, 100) + "...");
-              return answerText;
-            } catch (fallbackError) {
-              console.error(`[${id}] Fallback attempt also failed:`, fallbackError);
-              throw fallbackError;
-            }
-          }
-          
-          // Otherwise, just rethrow the original error
-          throw error;
+      try {
+        // --- NEW: Construct URL with model from sessionConfig ---
+        let url = REALTIME_CONNECTION_URL;
+        const model = sessionConfig?.model; // Assuming model is in sessionConfig
+        if (model) {
+          // Use the specific model from the config
+          url = `${url}?model=${encodeURIComponent(model)}`;
+          console.log(`[${id}] Using model from sessionConfig: ${model}`);
+        } else {
+          // Fallback to a default model if not provided in config (adjust as needed)
+          const defaultModel = "gpt-4o-realtime-preview-2024-12-17"; // Default model from example
+          url = `${url}?model=${defaultModel}`;
+          console.warn(`[${id}] Model not found in sessionConfig, using default: ${defaultModel}`);
         }
-      };
-      
-      // Attempt the SDP exchange with potential fallback
-      const answerSdp = await attemptSdpExchange();
-      console.log(`[${id}] Received SDP answer.`);
+        // --- END NEW ---
 
-      const answer: RTCSessionDescriptionInit = {
-        type: 'answer',
-        sdp: answerSdp,
-      };
+        console.log(`[${id}] Sending offer with Content-Type: application/sdp to ${url}`);
+        console.log(`[${id}] SDP offer (first 100 chars):`, offer.sdp?.substring(0, 100) + "...");
+        
+        // Send the SDP offer directly, not as JSON
+        const sdpResponse = await fetch(url, { // Use the constructed URL with model
+          method: 'POST',
+          body: offer.sdp, // Send SDP directly
+          headers: {
+            Authorization: `Bearer ${ephemeralToken}`,
+            'Content-Type': 'application/sdp', // Use correct content type
+          },
+        });
 
-      // 7. Set Remote Description
-      console.log(`[${id}] Setting remote description...`);
-      await pc.setRemoteDescription(answer);
-      console.log(`[${id}] Remote description set. WebRTC connection established (pending ICE completion).`);
-      // State will transition to 'connected' via onconnectionstatechange listener
+        if (!sdpResponse.ok) {
+          const errorText = await sdpResponse.text();
+          console.error(`[${id}] SDP exchange failed with status ${sdpResponse.status}:`, errorText);
+          console.error(`[${id}] Response headers:`, JSON.stringify(Object.fromEntries([...sdpResponse.headers.entries()])));
+          throw new Error(`SDP exchange failed: ${sdpResponse.status} ${sdpResponse.statusText} - ${errorText}`);
+        }
+
+        const answerSdp = await sdpResponse.text(); // Get answer SDP directly
+        console.log(`[${id}] SDP answer received (first 100 chars):`, answerSdp.substring(0, 100) + "...");
+        // --- END SIMPLIFIED SDP EXCHANGE ---
+
+        const answer: RTCSessionDescriptionInit = {
+          type: 'answer',
+          sdp: answerSdp,
+        };
+
+        // 7. Set Remote Description
+        console.log(`[${id}] Setting remote description...`);
+        await pc.setRemoteDescription(answer);
+        console.log(`[${id}] Remote description set. WebRTC connection established (pending ICE completion).`);
+        // State will transition to 'connected' via onconnectionstatechange listener
+
+      } catch (error) {
+        console.error(`[${id}] Failed to establish WebRTC connection:`, error);
+        const err = error instanceof Error ? error : new Error(String(error));
+        this._handleError(id, err, 'connect setup');
+        // Cleanup is handled by _handleError -> _updateState -> _cleanupConnection
+      }
 
     } catch (error) {
       console.error(`[${id}] Failed to establish WebRTC connection:`, error);

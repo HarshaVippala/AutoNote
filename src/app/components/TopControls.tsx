@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, memo, useCallback, useRef } from 'react';
 import Image from 'next/image';
-import { ConnectionState as AppConnectionState } from "@/app/types";
+import { ConnectionState as AppConnectionState, TranscriptTurn } from "@/app/types";
 import { connectionManager } from '@/app/api/realtime-assistant-webRTC/webRTCConnection-webRTC';
 import ErrorDialog from './ErrorDialog';
 // Define the target sample rate directly
@@ -118,64 +118,70 @@ const AudioLevelMeter: React.FC<AudioLevelMeterProps> = ({ audioSource, isActive
 const micSessionConfig_AuxAssistant = {
   model: "gpt-4o-mini-realtime-preview-2024-12-17",
   modalities: ["text"],
-  instructions: `You are an auxiliary assistant providing immediate, concise information based ONLY on the user's LATEST utterance and the conversation history. The history may include messages labeled 'SYSTEM_AUDIO_TRANSCRIPT' representing what the system/speaker just said.
-DO NOT engage in lengthy conversation (no greetings, apologies, or excessive filler).
-DO NOT ask clarifying questions.
-FOCUS on providing relevant factual snippets or definitions related to the user's topic or the preceding SYSTEM_AUDIO_TRANSCRIPT.
-If the user sounds hesitant (umm, hmm, uh), proactively offer a brief, relevant suggestion based on the preceding topic.
-Keep responses very short.`,
-  temperature: 0.5,
+  instructions: `You are an auxiliary assistant providing immediate, concise information based ONLY on the user's conversation history . The history may include messages labeled 'SYSTEM_AUDIO_TRANSCRIPT' representing what the system/speaker just said.\nDO NOT engage in lengthy conversation (no greetings, apologies, or excessive filler).DO NOT ask clarifying questions.\nFOCUS on providing relevant factual snippets or definitions related to the user's topic or the preceding SYSTEM_AUDIO_TRANSCRIPT.\nIf the user sounds hesitant (umm, hmm, uh), proactively offer a brief, relevant suggestion based on the preceding topic.\nKeep responses very short.`,
+  temperature: 0.7,
   input_audio_transcription: {
-    model: "gpt-4o-transcribe",
+    model: "whisper-1",
     language: "en",
-    prompt: "This is a technical discussion about software development, system design, data structures, algorithms, and related technologies. Expect technical jargon. Include filler words like umm, uh, hmm.",
+  },
+  input_audio_noise_reduction: {
+    type: "near_field"
   },
   turn_detection: {
     type: "server_vad",
     silence_duration_ms: 600,
     create_response: true,
-    interrupt_response: true
+    interrupt_response: false
   },
+  input_audio_format: "pcm16",
 };
 
 const speakerSessionConfig_Transcription = {
+  model: "gpt-4o-mini-realtime-preview-2024-12-17", // Match mic's model for consistency
   modalities: ["text"],
-  instructions: "Transcribe system audio accurately. No response needed.",
+  instructions: "Transcribe system audio with high accuracy and completeness. Capture all spoken content fully.",
+  temperature: 0.7,
   input_audio_transcription: {
-    model: "gpt-4o-transcribe",
-    language: "en", // Or null for auto-detect
-    prompt: "This is system audio output, likely questions or statements in a technical discussion. Transcribe verbatim.",
+    model: "whisper-1",
+    language: "en",
   },
-  turn_detection: null, // Disable VAD
+  turn_detection: {
+    type: "server_vad",
+    silence_duration_ms: 500, // Increase to capture longer audio segments
+    create_response: false,
+    interrupt_response: false
+  }, // Enable VAD to detect audio for transcription
+  input_audio_format: "pcm16",
 };
 
 // <<< ADD Back the type definition here >>>
 type WebRTCConnectionStatus = 'disconnected' | 'connecting' | 'connected' | 'failed' | 'error';
 
+// Use central types - REVERTED FOR NOW
+// import { TranscriptTurn, ErrorState } from "@/app/types";
+
 interface TopControlsProps {
-  appConnectionState: AppConnectionState; // Main state from App, potentially derived from mic status
+  appConnectionState: AppConnectionState;
   isMicrophoneMuted: boolean;
   setIsMicrophoneMuted: (muted: boolean) => void;
   onToggleConnection: () => void;
   isMobileView: boolean | null;
-  isEventsPaneExpanded: boolean;
-  setIsEventsPaneExpanded: (expanded: boolean) => void;
-  handleDashboardToggle: (expanded: boolean) => void;
   setActiveMobilePanel: (panel: number) => void;
   activeMobilePanel: number;
   triggerConnect: number;
   triggerDisconnect: number;
   onMicStatusChange: (status: WebRTCConnectionStatus) => void;
-  addTranscriptMessage: (itemId: string, role: 'user' | 'assistant', text: string, hidden?: boolean, agentName?: string) => void;
+  onProcessTurn: (turn: TranscriptTurn) => void;
 }
 
-// Add at the appropriate location:
-// State to track transcripts for Assistant API
-interface TranscriptTurn {
-  micTranscript?: string;
-  speakerTranscript?: string;
-  timestamp: number;
-  processed: boolean;
+// <<< REMOVED: Local definition - now imported >>>
+
+interface ErrorState {
+    isOpen: boolean;
+    title: string;
+    message: string;
+    details: string;
+    retryAction: (() => void) | null;
 }
 
 const TopControls: React.FC<TopControlsProps> = memo(({
@@ -184,15 +190,12 @@ const TopControls: React.FC<TopControlsProps> = memo(({
   setIsMicrophoneMuted,
   onToggleConnection,
   isMobileView,
-  isEventsPaneExpanded,
-  setIsEventsPaneExpanded,
-  handleDashboardToggle,
   setActiveMobilePanel,
   activeMobilePanel,
   triggerConnect,
   triggerDisconnect,
   onMicStatusChange,
-  addTranscriptMessage,
+  onProcessTurn,
 }) => {
   const [micConnectionStatus, setMicConnectionStatus] = useState<WebRTCConnectionStatus>('disconnected');
   const [speakerConnectionStatus, setSpeakerConnectionStatus] = useState<WebRTCConnectionStatus>('disconnected');
@@ -201,140 +204,74 @@ const TopControls: React.FC<TopControlsProps> = memo(({
   const micTrackRef = useRef<MediaStreamTrack | null>(null);
   const speakerTrackRef = useRef<MediaStreamTrack | null>(null);
   const rawMicStreamRef = useRef<MediaStream | null>(null); // <<< Add ref for raw mic stream
+  const rawSpeakerStreamRef = useRef<MediaStream | null>(null); // <<< Add ref for raw speaker stream
 
-  // Refs for AudioContext and nodes to manage their lifecycle
-  const audioContextRef = useRef<AudioContext | null>(null);
-  const micSourceNodeRef = useRef<MediaStreamAudioSourceNode | null>(null);
-  const micWorkletNodeRef = useRef<AudioWorkletNode | null>(null);
-  const micDestinationNodeRef = useRef<MediaStreamAudioDestinationNode | null>(null);
-  const speakerSourceNodeRef = useRef<MediaStreamAudioSourceNode | null>(null);
-  const speakerWorkletNodeRef = useRef<AudioWorkletNode | null>(null);
-  const speakerDestinationNodeRef = useRef<MediaStreamAudioDestinationNode | null>(null);
-
-  // Add transcript collection state
+  // Transcript collection state (remains, uses local type)
   const [transcriptTurn, setTranscriptTurn] = useState<TranscriptTurn>({
     timestamp: Date.now(),
     processed: true // Start with processed=true so we don't try to process empty turn
   });
-  const [assistantRunInProgress, setAssistantRunInProgress] = useState(false);
-  const [currentRunInfo, setCurrentRunInfo] = useState<{threadId?: string, runId?: string}>({});
+  // Comment out state related to legacy assistant processing
+  // const [assistantRunInProgress, setAssistantRunInProgress] = useState(false);
+  // const [currentRunInfo, setCurrentRunInfo] = useState<{threadId?: string, runId?: string}>({});
 
   // Add a ref to defer the connectMic and connectSpeaker functions
   const connectMicRef = useRef<(() => Promise<void>) | null>(null);
   const connectSpeakerRef = useRef<(() => Promise<void>) | null>(null);
   
-  // Add a simple error state without dependencies on connectMic/connectSpeaker
-  const [errorState, setErrorState] = useState({
+  // Update error state to use local type
+  const [errorState, setErrorState] = useState<ErrorState>({
     isOpen: false,
     title: '',
     message: '',
     details: '',
-    retryAction: null as (() => void) | null
+    retryAction: null
   });
 
   // Close the error dialog
   const handleErrorDismiss = useCallback(() => {
-    setErrorState(prev => ({ ...prev, isOpen: false }));
-  }, []);
-
-  // Define initAudioProcessing without any dependencies
-  const initAudioProcessing = useCallback(async (): Promise<AudioContext> => {
-    if (audioContextRef.current && audioContextRef.current.state === 'running') {
-      try {
-        await audioContextRef.current.audioWorklet.addModule('/worklets/resampling-processor.js');
-      } catch (e) { console.warn("[Audio Processing] Worklet already added or failed to re-add:", e); }
-      return audioContextRef.current;
-    }
-
-    console.log(`[Audio Processing] Creating new AudioContext with target rate: ${TARGET_SAMPLE_RATE} Hz`);
-    const context = new AudioContext({ sampleRate: TARGET_SAMPLE_RATE });
-    audioContextRef.current = context;
-
-    try {
-      console.log("[Audio Processing] Adding resampling worklet module...");
-      await context.audioWorklet.addModule('/worklets/resampling-processor.js');
-      console.log("[Audio Processing] Resampling worklet module added.");
-    } catch (error) {
-      console.error("[Audio Processing] Failed to load resampling worklet module:", error);
-      context.close();
-      audioContextRef.current = null;
-      throw new Error(`Failed to load audio processing module: ${error}`);
-    }
-
-    if (context.state === 'suspended') {
-      await context.resume();
-    }
-
-    return context;
-  }, []);
-
-  // Define cleanupAudioNodes without any dependencies
-  const cleanupAudioNodes = useCallback((type: 'mic' | 'speaker') => {
-    console.log(`[Audio Processing] Cleaning up ${type} audio nodes...`);
-    if (type === 'mic') {
-      micSourceNodeRef.current?.disconnect();
-      micWorkletNodeRef.current?.disconnect();
-      micSourceNodeRef.current = null;
-      micWorkletNodeRef.current = null;
-      micDestinationNodeRef.current = null;
-    } else {
-      speakerSourceNodeRef.current?.disconnect();
-      speakerWorkletNodeRef.current?.disconnect();
-      speakerSourceNodeRef.current = null;
-      speakerWorkletNodeRef.current = null;
-      speakerDestinationNodeRef.current = null;
-    }
+    setErrorState((prev: ErrorState) => ({ ...prev, isOpen: false })); // Add explicit type
   }, []);
 
   // Define message handlers without dependencies to connectMic/connectSpeaker
   const handleMicMessage = useCallback((message: any) => {
-    console.log("[TopControls] Received MIC message:", message);
-    
-    // Handle audio transcripts (user speech)
-    if (message.type === 'response.audio_transcript.delta' && message.delta) {
-      console.log(`[MIC] Partial transcript: ${message.delta}`);
-    } else if (message.type === 'response.audio_transcript.done' && message.transcript) {
-      // Process final transcript
-      const messageId = message.item_id || `mic-${Date.now()}`;
-      const finalTranscript = message.transcript;
-      console.log(`[TopControls] Adding FINAL MIC transcript: ID=${messageId}, Text=${finalTranscript}`);
+    // Handle FINAL audio transcripts (user speech)
+    if (message.type === 'response.audio_transcript.done' || message.type === 'conversation.item.input_audio_transcription.completed') {
+      // Determine the transcript text based on the event type
+      const finalTranscript = message.transcript || message.item?.content?.[0]?.text; // Adjust based on actual structure
       
-      // Add user transcript to the UI
-      addTranscriptMessage(messageId, 'user', finalTranscript);
-      
-      // Queue this transcript for the main Assistant API
-      setTranscriptTurn(prev => ({
-        ...prev,
-        micTranscript: finalTranscript,
-        processed: false, // Mark for processing
-        timestamp: Date.now()
-      }));
-    }
-    
-    // Handle auxiliary assistant text responses
-    if (message.type === 'response.text.delta' && message.delta) {
-      // Process streamed text response from auxiliary assistant
-      console.log(`[MIC] Auxiliary assistant response delta: ${message.delta}`);
-      
-      // Create a unique ID for the first delta if not already created
-      if (!message.item_id) {
-        console.warn("[MIC] Missing item_id in response.text.delta message");
+      // Check if we actually got a transcript
+      if (finalTranscript) {
+        const messageId = message.item_id || message.item?.id || `mic-${Date.now()}`;
+        // Keep this log for the final transcript -- Simplified Log
+        console.log(`Mic Transcript: ${finalTranscript}`);
+
+        // Queue this transcript for the main Assistant API
+        setTranscriptTurn((prev: TranscriptTurn) => ({
+          ...prev,
+          micTranscript: finalTranscript,
+          processed: false, // Mark for processing
+          timestamp: Date.now()
+        }));
+      } else {
+         console.warn(`[TopControls:Mic] Received ${message.type} but no transcript found:`, message);
       }
-      
-      // Add or update assistant response in UI with the auxiliary response
-      // Use a dedicated agentName to distinguish from main assistant
-      addTranscriptMessage(
-        message.item_id || `aux-${Date.now()}`, 
-        'assistant', 
-        message.delta,
-        false, // Not hidden
-        'Aux' // Shorter tag for auxiliary assistant to make it visually distinct
-      );
-    } else if (message.type === 'response.text.done') {
-      // Optional: Handle completion of auxiliary assistant response
-      console.log(`[MIC] Auxiliary assistant response complete: ${message.item_id}`);
     }
-  }, [addTranscriptMessage]);
+    
+    // Keep DONE handling in case it's useful later
+    else if (message.type === 'response.text.done') {
+       // Add specific log if needed
+       console.log(`[TopControls:Mic] Auxiliary assistant response complete event: ${message.item_id}`);
+    }
+    // Add logs for other specific message types if desired
+    // else if (message.type === 'input_audio_buffer.speech_started') {
+    //    console.log('[TopControls:Mic] Speech started event received.');
+    // }
+     else {
+       // Optionally log unexpected/unhandled message types
+       // console.log("[TopControls:Mic] Received unhandled message type:", message.type, message);
+     }
+  }, []);
 
   const handleMicStateChange = useCallback((state: string) => {
     console.log("Mic connection state changed:", state);
@@ -387,47 +324,53 @@ const TopControls: React.FC<TopControlsProps> = memo(({
   }, [onMicStatusChange]);
 
   const handleSpeakerMessage = useCallback((message: any) => {
-    // Process speaker transcript if needed
-    console.log("[TopControls] Received SPEAKER message:", message);
-    if (message.type === 'response.audio_transcript.done' && message.transcript) {
-      const messageId = message.item_id || `spk-${Date.now()}`;
-      const finalTranscript = message.transcript;
-      // Assuming speaker is 'assistant' for now, adjust as needed
-      console.log(`[TopControls] Adding FINAL SPEAKER transcript: ID=${messageId}, Text=${finalTranscript}`);
-       
-      // Inject the speaker transcript into the mic connection's context
-      if (finalTranscript.trim() && micConnectionStatus === 'connected') {
-        try {
-          console.log(`[Context Injection] Injecting speaker transcript into mic connection...`);
-          // Create a conversation item with the speaker transcript
-          const contextEvent = {
-            type: 'conversation.item.create',
-            item: {
-              role: 'assistant',
-              content: [
-                {
-                  type: 'text',
-                  text: `SYSTEM_AUDIO_TRANSCRIPT: ${finalTranscript}`
-                }
-              ]
-            }
-          };
-           
-          // Send the context event to the mic connection
-          connectionManager.sendMessage('mic', contextEvent);
-          console.log(`[Context Injection] Speaker context injected into mic connection`);
-        } catch (error) {
-          console.error('[Context Injection] Failed to inject speaker context:', error);
+    // Handle FINAL speaker transcripts
+    if (message.type === 'response.audio_transcript.done' || message.type === 'conversation.item.input_audio_transcription.completed') {
+      const finalTranscript = message.transcript || message.item?.content?.[0]?.text; // Adjust based on actual structure
+
+      if (finalTranscript) {
+        const messageId = message.item_id || message.item?.id || `spk-${Date.now()}`;
+        // Keep this log for the final transcript -- Simplified Log
+        console.log(`Speaker Transcript: ${finalTranscript}`);
+
+        // Inject the speaker transcript into the mic connection's context (Keep this logic)
+        if (finalTranscript.trim() && micConnectionStatus === 'connected') {
+          try {
+            console.log(`[Context Injection] Injecting speaker transcript into mic connection...`);
+            const contextEvent = {
+              type: 'conversation.item.create',
+              item: {
+                role: 'assistant', // Or maybe 'system'? Check API nuances if needed
+                content: [
+                  {
+                    type: 'text',
+                    text: `SYSTEM_AUDIO_TRANSCRIPT: ${finalTranscript}`
+                  }
+                ]
+              }
+            };
+            connectionManager.sendMessage('mic', contextEvent);
+            console.log(`[Context Injection] Speaker context injected into mic connection`);
+          } catch (error) {
+            console.error('[Context Injection] Failed to inject speaker context:', error);
+          }
         }
+        
+        // Queue this transcript for the main Assistant API (Keep this logic)
+        setTranscriptTurn((prev: TranscriptTurn) => ({
+          ...prev,
+          speakerTranscript: finalTranscript,
+          processed: false, // Mark for processing
+          timestamp: Date.now()
+        }));
+      } else {
+        console.warn(`[TopControls:Speaker] Received ${message.type} but no transcript found:`, message);
       }
-       
-      // Queue this transcript for the main Assistant API
-      setTranscriptTurn(prev => ({
-        ...prev,
-        speakerTranscript: finalTranscript,
-        processed: false, // Mark for processing
-        timestamp: Date.now()
-      }));
+    }
+    // Add logs for other specific message types if desired
+    else {
+      // Optionally log unexpected/unhandled message types
+      // console.log("[TopControls:Speaker] Received unhandled message type:", message.type, message);
     }
   }, [micConnectionStatus]);
 
@@ -482,9 +425,6 @@ const TopControls: React.FC<TopControlsProps> = memo(({
     }
     setMicConnectionStatus('connecting');
     try {
-      const audioContext = await initAudioProcessing();
-      if (!audioContext) throw new Error("Failed to initialize AudioContext.");
-
       console.log('Requesting microphone access for connection...');
 
       // --- Find Specific Microphone Device ---
@@ -503,79 +443,51 @@ const TopControls: React.FC<TopControlsProps> = memo(({
         // Fallback to default if specific device isn't found
       }
 
-      const constraints: MediaStreamConstraints = {
+      const micConstraints: MediaStreamConstraints = {
         audio: micDevice ? { deviceId: { exact: micDevice.deviceId } } : true
       };
-      console.log('[Device Selection] Using constraints:', constraints);
-      // --- End Device Selection ---
+      console.log('[Device Selection] Using constraints:', { audio: micConstraints.audio });
+      console.log('[Audio Routing Check] Mic source selected:', micDevice ? `${micDevice.label} (ID: ${micDevice.deviceId})` : 'Default audio input');
 
-      const rawStream = await navigator.mediaDevices.getUserMedia(constraints);
-      rawMicStreamRef.current = rawStream; // Store the raw stream
-      const rawTrack = rawStream.getAudioTracks()[0];
-      if (!rawTrack) {
-        // Clean up raw stream if track acquisition failed immediately
-        rawMicStreamRef.current?.getTracks().forEach(t => t.stop());
-        rawMicStreamRef.current = null;
-        throw new Error('No audio track found in microphone stream');
+      // Get the raw microphone stream
+      const rawMicStream = await navigator.mediaDevices.getUserMedia({ audio: micConstraints.audio });
+      rawMicStreamRef.current = rawMicStream; // Store raw stream for level meter
+
+      // Get the raw audio track
+      const rawMicTrack = rawMicStream.getAudioTracks()[0];
+      if (!rawMicTrack) {
+        throw new Error("No audio track found in the microphone stream.");
       }
+      micTrackRef.current = rawMicTrack; // Store raw track ref
 
-      // --- Resampling Setup ---
-      console.log("[Mic Processing] Setting up resampling node chain...");
-      const sourceNode = audioContext.createMediaStreamSource(rawStream);
-      micSourceNodeRef.current = sourceNode;
+      console.log('Attempting to connect mic with raw track...');
 
-      // Pass the original source sample rate to the processor
-      const sourceSampleRate = rawTrack.getSettings().sampleRate;
-      if (!sourceSampleRate) {
-          console.warn("[Mic Processing] Could not get source sample rate from track settings. Using AudioContext's default.");
-      }
-
-      const workletNode = new AudioWorkletNode(audioContext, 'resampling-processor', {
-         processorOptions: {
-           sourceSampleRate: sourceSampleRate || audioContext.sampleRate // Fallback, though context rate is target
-         }
-      });
-      micWorkletNodeRef.current = workletNode;
-
-      const destinationNode = audioContext.createMediaStreamDestination();
-      micDestinationNodeRef.current = destinationNode;
-
-      sourceNode.connect(workletNode).connect(destinationNode);
-      console.log("[Mic Processing] Resampling node chain connected.");
-
-      const resampledStream = destinationNode.stream;
-      const resampledTrack = resampledStream.getAudioTracks()[0];
-      // --- End Resampling Setup ---
-
-      if (!resampledTrack) {
-        throw new Error('No audio track found after resampling');
-      }
-
-      micTrackRef.current = resampledTrack; // Store the RESAMPLED track
-      // Apply initial mute state from props to the RESAMPLED track
-      resampledTrack.enabled = !isMicrophoneMuted;
-
-      await connectionManager.connect('mic', resampledTrack, resampledStream, {
-        onMessage: handleMicMessage,
-        onStateChange: handleMicStateChange,
-        onError: handleMicError,
-      },
-      micSessionConfig_AuxAssistant // <<< Pass mic config
+      // Pass the raw track and stream directly to the connection manager
+      await connectionManager.connect(
+        'mic',
+        rawMicTrack, // Pass the raw track
+        rawMicStream, // Pass the raw stream
+        {
+          onMessage: handleMicMessage,
+          onStateChange: handleMicStateChange,
+          onError: handleMicError,
+        },
+        micSessionConfig_AuxAssistant // Pass the mic config
       );
-      // Note: Actual 'connected' state is set by onStateChange callback
-    } catch (error) {
-      console.error('Failed to connect mic:', error);
-      handleMicError(error instanceof Error ? error : new Error(String(error)));
-      // Clean up audio nodes if connection fails mid-setup
-      cleanupAudioNodes('mic');
-      // Also stop the raw track if we obtained it
-      if (rawMicStreamRef.current) {
-          console.log('[Mic Cleanup] Stopping raw mic stream tracks...');
-          rawMicStreamRef.current.getTracks().forEach(t => t.stop());
-          rawMicStreamRef.current = null;
+
+      // Enable the track if it wasn't muted before connection
+      if (!isMicrophoneMuted) {
+        rawMicTrack.enabled = true;
+      } else {
+        rawMicTrack.enabled = false; // Ensure it respects the muted state
       }
+
+    } catch (error) {
+      console.error("Failed to connect microphone:", error);
+      const err = error instanceof Error ? error : new Error(String(error));
+      handleMicError(err); // Use the existing error handler
     }
-  }, [micConnectionStatus, initAudioProcessing, isMicrophoneMuted, handleMicMessage, handleMicStateChange, handleMicError, cleanupAudioNodes]);
+  }, [micConnectionStatus, handleMicMessage, handleMicStateChange, handleMicError, isMicrophoneMuted]);
 
   // Update the ref after connectMic is defined
   useEffect(() => {
@@ -583,26 +495,16 @@ const TopControls: React.FC<TopControlsProps> = memo(({
   }, [connectMic]);
 
   const disconnectMic = useCallback(() => {
-    console.log('Disconnecting mic...');
-    connectionManager.disconnect('mic');
-    // State update handled by onStateChange
-
-    // Stop the resampled track (important for MediaStreamDestinationNode)
-    if (micTrackRef.current) {
-      micTrackRef.current.stop();
+    if (micConnectionStatus !== 'disconnected') {
+      console.log('Disconnecting microphone...');
+      connectionManager.disconnect('mic');
+      setMicConnectionStatus('disconnected');
+      onMicStatusChange('disconnected'); // Propagate state
+      micTrackRef.current?.stop(); // Stop the raw track
       micTrackRef.current = null;
+      rawMicStreamRef.current = null; // Clear raw stream ref
     }
-    // Stop the original raw track
-    if (rawMicStreamRef.current) {
-        console.log('[Mic Cleanup] Stopping raw mic stream tracks...');
-        rawMicStreamRef.current.getTracks().forEach(t => t.stop());
-        rawMicStreamRef.current = null;
-    }
-
-    // Disconnect and release audio nodes
-    cleanupAudioNodes('mic');
-
-  }, [cleanupAudioNodes]);
+  }, [micConnectionStatus, onMicStatusChange]);
 
   const connectSpeaker = useCallback(async () => {
     if (speakerConnectionStatus === 'connecting' || speakerConnectionStatus === 'connected') {
@@ -611,73 +513,60 @@ const TopControls: React.FC<TopControlsProps> = memo(({
     }
     setSpeakerConnectionStatus('connecting');
     try {
-        const audioContext = await initAudioProcessing();
-        if (!audioContext) throw new Error("Failed to initialize AudioContext.");
-
-      console.log('Requesting display media (screen/tab) with audio for SPEAKER connection...');
-      const rawStream = await navigator.mediaDevices.getDisplayMedia({
-        video: true,
-        audio: true,
-      });
-
-      const rawAudioTracks = rawStream.getAudioTracks();
-      if (!rawAudioTracks || rawAudioTracks.length === 0) {
-        rawStream.getTracks().forEach(track => track.stop());
-        throw new Error('No audio track found or permission denied for display media audio.');
-      }
-      const rawTrack = rawAudioTracks[0];
-
-      // Stop the video track immediately
-      rawStream.getVideoTracks().forEach(videoTrack => videoTrack.stop());
-
-      // --- Resampling Setup for Speaker ---
-       console.log("[Speaker Processing] Setting up resampling node chain...");
-      const sourceNode = audioContext.createMediaStreamSource(new MediaStream([rawTrack])); // Create stream with only audio track
-      speakerSourceNodeRef.current = sourceNode;
-
-      const sourceSampleRate = rawTrack.getSettings().sampleRate;
-        if (!sourceSampleRate) {
-            console.warn("[Speaker Processing] Could not get source sample rate from track settings. Using AudioContext's default.");
-        }
-
-      const workletNode = new AudioWorkletNode(audioContext, 'resampling-processor', {
-        processorOptions: {
-           sourceSampleRate: sourceSampleRate || audioContext.sampleRate
-         }
-      });
-      speakerWorkletNodeRef.current = workletNode;
-
-      const destinationNode = audioContext.createMediaStreamDestination();
-      speakerDestinationNodeRef.current = destinationNode;
-
-      sourceNode.connect(workletNode).connect(destinationNode);
-      console.log("[Speaker Processing] Resampling node chain connected.");
-
-      const resampledStream = destinationNode.stream;
-      const resampledTrack = resampledStream.getAudioTracks()[0];
-      // --- End Resampling Setup ---
-
-      if (!resampledTrack) {
-          throw new Error('No audio track found after resampling speaker audio');
-      }
-
-      speakerTrackRef.current = resampledTrack; // Store the RESAMPLED audio track
-      // Note: Mute state applies only to the mic connection
-
-      await connectionManager.connect('speaker', resampledTrack, resampledStream, {
-        onMessage: handleSpeakerMessage,
-        onStateChange: handleSpeakerStateChange,
-        onError: handleSpeakerError,
-      },
-      speakerSessionConfig_Transcription // <<< Pass speaker config
+      console.log('[Device Selection] Enumerating devices for SPEAKER connection...');
+      const devices = await navigator.mediaDevices.enumerateDevices();
+      const systemAudioDevice = devices.find(device => 
+        device.kind === 'audioinput' && 
+        // Adjust this label if it's different on your system
+        device.label.includes('systemAudio') 
       );
+
+      if (systemAudioDevice) {
+        console.log(`[Device Selection] Found specific speaker source: ${systemAudioDevice.label} (ID: ${systemAudioDevice.deviceId})`);
+      } else {
+        console.warn('[Device Selection] Specific systemAudio device not found. Cannot connect speaker stream.');
+        // Optionally fall back to default or throw error
+         throw new Error('Required audio device "systemAudio" not found.');
+      }
+
+      const speakerConstraints: MediaStreamConstraints = {
+         // Use the specific device ID found
+        audio: { deviceId: { exact: systemAudioDevice.deviceId } }
+      };
+      console.log('[Device Selection] Using constraints for speaker:', { audio: speakerConstraints.audio });
+      
+      // Get the raw speaker stream
+      const rawSpeakerStream = await navigator.mediaDevices.getUserMedia({ audio: speakerConstraints.audio });
+      rawSpeakerStreamRef.current = rawSpeakerStream; // Store raw stream
+
+      // Get the raw audio track
+      const rawSpeakerTrack = rawSpeakerStream.getAudioTracks()[0];
+      if (!rawSpeakerTrack) {
+        throw new Error("No audio track found in the speaker stream.");
+      }
+      speakerTrackRef.current = rawSpeakerTrack; // Store raw track ref
+
+      console.log('Attempting to connect speaker with raw track...');
+
+      // Pass the raw track and stream directly to the connection manager
+      await connectionManager.connect(
+        'speaker',
+        rawSpeakerTrack, // Pass the raw track
+        rawSpeakerStream, // Pass the raw stream
+        {
+          onMessage: handleSpeakerMessage,
+          onStateChange: handleSpeakerStateChange,
+          onError: handleSpeakerError,
+        },
+        speakerSessionConfig_Transcription // Pass the speaker config
+      );
+
     } catch (error) {
-      console.error('Failed to connect speaker (display media):' , error);
-      handleSpeakerError(error instanceof Error ? error : new Error(String(error)));
-      cleanupAudioNodes('speaker');
-      // Stop raw track?
+      console.error("Failed to connect speaker:", error);
+      const err = error instanceof Error ? error : new Error(String(error));
+      handleSpeakerError(err); // Use the existing error handler
     }
-  }, [speakerConnectionStatus, initAudioProcessing, handleSpeakerMessage, handleSpeakerStateChange, handleSpeakerError, cleanupAudioNodes]);
+  }, [speakerConnectionStatus, handleSpeakerMessage, handleSpeakerStateChange, handleSpeakerError]);
 
   // Update the ref after connectSpeaker is defined
   useEffect(() => {
@@ -685,18 +574,15 @@ const TopControls: React.FC<TopControlsProps> = memo(({
   }, [connectSpeaker]);
 
   const disconnectSpeaker = useCallback(() => {
-    console.log('Disconnecting speaker...');
-    connectionManager.disconnect('speaker');
-
-    if (speakerTrackRef.current) {
-      speakerTrackRef.current.stop();
+    if (speakerConnectionStatus !== 'disconnected') {
+      console.log('Disconnecting speaker...');
+      connectionManager.disconnect('speaker');
+      setSpeakerConnectionStatus('disconnected');
+      speakerTrackRef.current?.stop(); // Stop the raw track
       speakerTrackRef.current = null;
+      rawSpeakerStreamRef.current = null; // Clear raw stream ref
     }
-    // Stop raw track?
-
-    cleanupAudioNodes('speaker');
-
-  }, [cleanupAudioNodes]);
+  }, [speakerConnectionStatus]);
 
   // Now that connectMic and connectSpeaker are defined, we can create the error retry handler
   const handleErrorRetry = useCallback(() => {
@@ -706,117 +592,6 @@ const TopControls: React.FC<TopControlsProps> = memo(({
       errorState.retryAction();
     }
   }, [errorState.retryAction]);
-
-  // // Handle API and processing errors without retry
-  const pollRunStatus = useCallback(async (threadId: string, runId: string) => {
-    try {
-      const response = await fetch(`/api/assistants-api/check-run?threadId=${threadId}&runId=${runId}`);
-      
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(`Failed to check run status: ${response.status} - ${errorData.error || 'Unknown error'}`);
-      }
-      
-      const data = await response.json();
-      console.log('[Assistant Processing] Run status:', data);
-      
-      if (data.complete) {
-        // Run is complete, show the message
-        console.log('[Assistant Processing] Run complete, message:', data.message);
-        setAssistantRunInProgress(false);
-        
-        // Add the assistant's response to the transcript
-        if (data.message) {
-          addTranscriptMessage(
-            `main-${Date.now()}`,
-            'assistant',
-            data.message,
-            false,
-            'Assistant' // Tag as coming from the main assistant
-          );
-        }
-        
-        // Clear the current run info
-        setCurrentRunInfo({});
-      } else {
-        // Run is still in progress, poll again after a delay
-        setTimeout(() => pollRunStatus(threadId, runId), 1000);
-      }
-    } catch (error) {
-      const err = error instanceof Error ? error : new Error(String(error));
-      console.error('[Assistant Processing] Error polling run status:', err);
-      setAssistantRunInProgress(false);
-      
-      // Show error dialog
-      setErrorState({
-        isOpen: true,
-        title: 'Run Status Error',
-        message: 'There was an error checking the run status. The system will continue to work but some responses may be missing.',
-        details: err.message,
-        retryAction: null
-      });
-    }
-  }, [addTranscriptMessage]);
-
-  const processTranscriptTurn = useCallback(async (turn: TranscriptTurn) => {
-    if (!turn.micTranscript && !turn.speakerTranscript) {
-      console.log('[Assistant Processing] No transcripts to process');
-      return;
-    }
-    
-    if (!ASSISTANT_ID) {
-      console.error('[Assistant Processing] No assistant ID configured');
-      return;
-    }
-    
-    try {
-      setAssistantRunInProgress(true);
-      console.log('[Assistant Processing] Sending transcripts to API:', turn);
-      
-      const response = await fetch('/api/assistants-api/process-transcript', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          micTranscript: turn.micTranscript,
-          speakerTranscript: turn.speakerTranscript,
-          assistantId: ASSISTANT_ID
-        })
-      });
-      
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(`Failed to process transcripts: ${response.status} - ${errorData.error || 'Unknown error'}`);
-      }
-      
-      const data = await response.json();
-      console.log('[Assistant Processing] Run created:', data);
-      
-      // Store the run info for polling
-      setCurrentRunInfo({
-        threadId: data.threadId,
-        runId: data.runId
-      });
-      
-      // Start polling for run completion
-      pollRunStatus(data.threadId, data.runId);
-      
-    } catch (error) {
-      const err = error instanceof Error ? error : new Error(String(error));
-      console.error('[Assistant Processing] Error processing transcripts:', err);
-      setAssistantRunInProgress(false);
-      
-      // Show error dialog
-      setErrorState({
-        isOpen: true,
-        title: 'Processing Error',
-        message: 'There was an error processing your conversation. The system will continue to work but some responses may be missing.',
-        details: err.message,
-        retryAction: null
-      });
-    }
-  }, [pollRunStatus]);
 
   // Add useEffects
   useEffect(() => {
@@ -837,18 +612,28 @@ const TopControls: React.FC<TopControlsProps> = memo(({
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [triggerDisconnect]);
 
-  // Process transcript turn
+  // Process transcript turn - COMMENTED OUT
+  /*
   useEffect(() => {
-    if (transcriptTurn && !transcriptTurn.processed && !assistantRunInProgress) {
-      processTranscriptTurn(transcriptTurn)
+    // only trigger the assistant run when a new speaker transcript is present and not processed
+    if (
+      transcriptTurn &&
+      !transcriptTurn.processed &&
+      !assistantRunInProgress && // This state is now commented out
+      transcriptTurn.speakerTranscript // only run if there's a new speaker transcript
+    ) {
+      // Need to initialize the processor first if re-enabled
+      // const processor = initializeLegacyAssistantProcessor({ ... needed props ... });
+      // processor.processTranscriptTurn(transcriptTurn)
+      processTranscriptTurn(transcriptTurn) // This function is removed
         .then(() => {
           // Mark the turn as processed
-          setTranscriptTurn(prev => ({...prev, processed: true}));
+          setTranscriptTurn((prev: TranscriptTurn) => ({...prev, processed: true}));
         })
         .catch((error: unknown) => {
           const err = error instanceof Error ? error : new Error(String(error));
           console.error('[Assistant Processing] Error in processTranscriptTurn:', err);
-          setTranscriptTurn(prev => ({...prev, processed: true})); // Mark as processed anyway to avoid retry loop
+          setTranscriptTurn((prev: TranscriptTurn) => ({...prev, processed: true})); // Mark as processed anyway to avoid retry loop
           
           // Show error dialog
           setErrorState({
@@ -860,15 +645,56 @@ const TopControls: React.FC<TopControlsProps> = memo(({
           });
         });
     }
-  }, [transcriptTurn, assistantRunInProgress, processTranscriptTurn]);
+    // Add dependencies if re-enabled: [transcriptTurn, assistantRunInProgress, processTranscriptTurn]
+  }, [transcriptTurn]); // Simplified dependencies for now
+  */
+
+  // <<< ADDED: Process transcript turn using the new handler >>>
+  useEffect(() => {
+    // Trigger when a turn has new data (mic OR speaker) and hasn't been processed
+    if (
+      transcriptTurn &&
+      !transcriptTurn.processed &&
+      (transcriptTurn.micTranscript || transcriptTurn.speakerTranscript) // Process if either exists
+    ) {
+      console.log('[Turn Processing] Triggering onProcessTurn with turn:', transcriptTurn);
+      try {
+         // Call the handler passed from the parent (App.tsx)
+        onProcessTurn(transcriptTurn);
+
+        // Mark the turn as processed immediately after initiating the call
+        // If processing fails in App.tsx, it should handle its own errors.
+        // We prevent re-triggering for the same data here.
+        setTranscriptTurn((prev: TranscriptTurn) => ({...prev, processed: true}));
+
+        // Optionally: Reset for the *next* turn immediately, or maybe App clears it?
+        // setTranscriptTurn({ timestamp: Date.now(), processed: true }); // Reset for next turn
+
+      } catch (error) {
+         // Catch sync errors in the handler call itself, though most API calls will be async
+        const err = error instanceof Error ? error : new Error(String(error));
+        console.error('[Turn Processing] Error calling onProcessTurn handler:', err);
+        // Still mark as processed to avoid potential infinite loops if the handler always throws
+        setTranscriptTurn((prev: TranscriptTurn) => ({...prev, processed: true}));
+
+        // Show error dialog (consider if App should handle API errors more gracefully)
+        setErrorState({
+          isOpen: true,
+          title: 'Processing Error',
+          message: 'Could not initiate processing for the latest conversation turn.',
+          details: err.message,
+          retryAction: null // Or maybe allow retry? Depends on handler.
+        });
+      }
+    }
+  }, [transcriptTurn, onProcessTurn]); // Dependencies: the turn data and the handler function
 
   // Cleanup on unmount
   useEffect(() => {
     return () => {
-      console.log("TopControls unmounting, disconnecting all...");
-      disconnectMic();
-      disconnectSpeaker();
-      connectionManager.disconnectAll();
+      console.log("TopControls unmounting, skipping disconnection to preserve connections...");
+      // Avoid disconnecting on unmount to prevent premature disconnection during hot reload or navigation.
+      // Only disconnect if explicitly triggered via triggerDisconnect prop.
     };
   }, [disconnectMic, disconnectSpeaker]);
 
@@ -1006,61 +832,51 @@ const TopControls: React.FC<TopControlsProps> = memo(({
 
   return (
     <>
+      {/* Restore original container styling */}
       <div className="border-b border-gray-200 bg-white flex items-center justify-between overflow-hidden" style={{ height: 56 }}>
+        {/* Keep Logo/Title section */}
         <div className="flex items-center h-full">
           <div 
+            className="flex items-center h-full pl-2"
             onClick={() => {
               if (effectiveIsMobileView) {
-                setActiveMobilePanel(1); // Switch to AgentAnswers panel (index 1)
+                setActiveMobilePanel(1); // Or adjust as needed
               } else {
-                window.location.reload(); // Keep reload for desktop
+                window.location.reload(); // Keep reload for desktop? Review this later.
               }
             }}
-            style={{ cursor: 'pointer', height: '100%' }}
+            style={{ cursor: 'pointer' }}
           >
             <Image
-              src="/logo.png"
+              src="/logo.png" // Keep original logo path
               alt="Logo"
               width={56}
               height={56}
               className="block sm:hidden"
               style={{ height: '100%', width: 'auto' }}
-              priority // Add priority for LCP element
+              priority
             />
             <Image
-              src="/logo.png"
+              src="/logo.png" // Keep original logo path
               alt="Logo"
               width={56}
               height={56}
               className="hidden sm:block"
               style={{ height: '100%', width: 'auto' }}
-              priority // Add priority for LCP element
+              priority
             />
+            <span className="ml-2 font-bold text-lg tracking-wide text-gray-700" style={{ letterSpacing: 2, fontSize: '1.05rem' }}>JARVIS</span>
           </div>
         </div>
 
-        <div className="flex items-center">
-          {assistantRunInProgress && (
-            <div className="flex items-center bg-teal-100 text-teal-800 px-2 py-1 rounded-full text-xs mr-2 animate-pulse">
-              <div className="w-2 h-2 bg-teal-500 rounded-full mr-1"></div>
-              <span>Processing...</span>
-            </div>
-          )}
-
-          {micConnectionStatus === 'connected' && !isMicrophoneMuted && (
-            <AudioLevelMeter 
-              audioSource={rawMicStreamRef.current}
-              isActive={micConnectionStatus === 'connected' && !isMicrophoneMuted}
-            />
-          )}
-        </div>
-
-        <div className={`flex items-center mr-4 ${effectiveIsMobileView ? 'space-x-1.5' : 'space-x-4'}`}>
+        {/* Keep button container, push right, ensure only power button remains */}
+        <div className={`flex items-center mr-4 ml-auto ${effectiveIsMobileView ? 'space-x-1.5' : 'space-x-4'}`}> 
+          {/* Only Power Button */}
           <button
             onClick={onToggleConnection}
             title={connectButtonTitle}
             className={`rounded-full flex items-center justify-center transition-colors ${ 
-              effectiveIsMobileView ? 'h-8 w-8' : 'h-9 w-9'} ${
+              effectiveIsMobileView ? 'h-8 w-8' : 'h-9 w-9'} ${ // Keep original size for now
               appConnectionState === "CONNECTED"
                 ? "bg-red-600 hover:bg-red-700 text-white"
                 : (appConnectionState === "CONNECTING" || appConnectionState === "FETCHING_KEY")
@@ -1075,140 +891,26 @@ const TopControls: React.FC<TopControlsProps> = memo(({
               </div>
             ) : (
                <Image 
-                 src="/power.png"
+                 src="/power.png" // Keep original icon
                  alt="Connect/Disconnect"
-                 width={18}
-                 height={18}
+                 width={18} // Keep original size
+                 height={18} // Keep original size
                  priority
                />
             )}
           </button>
 
-          <button
-            onClick={() => {
-              if (micConnectionStatus === 'disconnected' || micConnectionStatus === 'failed' || micConnectionStatus === 'error') {
-                connectMic();
-              } else if (micConnectionStatus === 'connected' || micConnectionStatus === 'connecting') {
-                disconnectMic();
-              }
-            }}
-            title={getStatusButtonTitle('mic', micConnectionStatus)}
-            className={`rounded-full flex items-center justify-center font-bold text-sm ${getStatusButtonStyle(micConnectionStatus)} cursor-pointer transition-colors border border-gray-300 ${effectiveIsMobileView ? 'h-8 w-8' : 'h-9 w-9'}`}
-            disabled={micConnectionStatus === 'connecting'}
-          >
-            I
-          </button>
+          {/* 'I', 'O', Mute, Key buttons are removed from here */}
 
-          <button
-            onClick={() => {
-              if (speakerConnectionStatus === 'disconnected' || speakerConnectionStatus === 'failed' || speakerConnectionStatus === 'error') {
-                connectSpeaker();
-              } else if (speakerConnectionStatus === 'connected' || speakerConnectionStatus === 'connecting') {
-                disconnectSpeaker();
-              }
-            }}
-            title={getStatusButtonTitle('speaker', speakerConnectionStatus)}
-            className={`rounded-full flex items-center justify-center font-bold text-sm ${getStatusButtonStyle(speakerConnectionStatus)} cursor-pointer transition-colors border border-gray-300 ${effectiveIsMobileView ? 'h-8 w-8' : 'h-9 w-9'}`}
-            disabled={speakerConnectionStatus === 'connecting'}
-          >
-            O
-          </button>
-
-          <button
-            onClick={handleMuteToggle}
-            disabled={micConnectionStatus !== "connected"}
-            title={isMicrophoneMuted ? "Unmute Microphone" : "Mute Microphone"}
-            className={`flex items-center justify-center rounded-full ${ 
-              micConnectionStatus !== "connected"
-                ? "bg-gray-100 text-gray-400 cursor-not-allowed"
-                : isMicrophoneMuted
-                ? "bg-red-100 text-red-700 hover:bg-red-200 cursor-pointer"
-                : "bg-green-100 text-green-700 hover:bg-green-200 cursor-pointer"
-            } transition-colors border border-gray-300 ${effectiveIsMobileView ? 'h-8 w-8' : 'h-9 w-9'}`}
-          >
-            {isMicrophoneMuted ? (
-              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16">
-                <path d="M13 8c0 .564-.094 1.107-.266 1.613l-.814-.814A4.02 4.02 0 0 0 12 8V7a.5.5 0 0 1 1 0v1zm-5 4c.818 0 1.578-.245 2.212-.667l.718.719a4.973 4.973 0 0 1-2.43.923V15h3a.5.5 0 0 1 0 1h-7a.5.5 0 0 1 0-1h3v-2.025A5 5 0 0 1 3 8V7a.5.5 0 0 1 1 0v1a4 4 0 0 0 4 4zm3-9v4.879L5.158 2.037A3.001 3.001 0 0 1 11 3z"/>
-                <path d="M9.486 10.607 5 6.12V8a3 3 0 0 0 4.486 2.607zm-7.84-9.253 12 12 .708-.708-12-12-.708.708z"/>
-              </svg>
-            ) : (
-              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16">
-                <path d="M5 3a3 3 0 0 1 6 0v5a3 3 0 0 1-6 0V3z"/>
-                <path d="M3.5 6.5A.5.5 0 0 1 4 7v1a4 4 0 0 0 8 0V7a.5.5 0 0 1 1 0v1a5 5 0 0 1-4.5 4.975V15h3a.5.5 0 0 1 0 1h-7a.5.5 0 0 1 0-1h3v-2.025A5 5 0 0 1 3 8V7a.5.5 0 0 1 .5-.5z"/>
-              </svg>
-            )}
-          </button>
-
-          <div
-            className="relative group"
-            title={apiKeyStatusMessage}
-          >
-            <div className={`flex items-center justify-center rounded-full ${ 
-              isApiKeyPresent
-                ? 'bg-green-100 text-green-700'
-                : 'bg-red-100 text-red-700'
-            } border border-gray-300 ${effectiveIsMobileView ? 'h-8 w-8' : 'h-9 w-9'}`}>
-              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16">
-                <path d="M0 8a4 4 0 0 1 7.465-2H14a.5.5 0 0 1 .354.146l1.5 1.5a.5.5 0 0 1 0 .708l-1.5 1.5a.5.5 0 0 1-.708 0L13 9.207l-.646.647a.5.5 0 0 1-.708 0L11 9.207l-.646.647a.5.5 0 0 1-.708 0L9 9.207l-.646.647A.5.5 0 0 1 8 10h-.535A4 4 0 0 1 0 8zm4-3a3 3 0 1 0 2.712 4.285A.5.5 0 0 1 7.163 9h.63l.853-.854a.5.5 0 0 1 .708 0l.646.647.646-.647a.5.5 0 0 1 .708 0l.646.647.646-.647a.5.5 0 0 1 .708 0l.646.647.793-.793-1-1h-6.63a.5.5 0 0 1-.451-.285A3 3 0 0 0 4 5z"/>
-                <path d="M4 8a1 1 0 1 1-2 0 1 1 0 0 1 2 0z"/>
-              </svg>
-            </div>
-            <div className="hidden group-hover:block absolute top-full right-0 mt-2 p-2 bg-gray-800 text-white shadow-lg rounded-md text-xs w-48 z-10">
-              {apiKeyStatusMessage}
-            </div>
-          </div>
-
-          {!effectiveIsMobileView && (
-            <button
-              onClick={() => handleDashboardToggle(!isEventsPaneExpanded)}
-              title="Toggle Dashboard"
-              className={`flex items-center justify-center h-9 w-9 rounded-full ${ 
-                isEventsPaneExpanded
-                  ? "bg-blue-100 text-blue-700"
-                  : "bg-gray-100 text-gray-600"
-              } transition-colors border border-gray-300`}
-            >
-              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16">
-                <path d="M11 2a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1v12h.5a.5.5 0 0 1 0 1H.5a.5.5 0 0 1 0-1H1v-3a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1v3h1V7a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1v7h1V2z"/>
-              </svg>
-            </button>
-          )}
-
-          {effectiveIsMobileView && (
-            <div className="flex">
-              <button
-                onClick={() => {
-                  const newState = !isEventsPaneExpanded;
-                  setIsEventsPaneExpanded(newState);
-                  if (newState) {
-                    setActiveMobilePanel(2);
-                  } else if (activeMobilePanel === 2) {
-                    setActiveMobilePanel(1);
-                  }
-                }}
-                title="Toggle Dashboard"
-                className={`flex items-center justify-center h-8 w-8 rounded-full ${ 
-                  isEventsPaneExpanded
-                    ? "bg-blue-100 text-blue-700"
-                    : "bg-gray-100 text-gray-600"
-                } transition-colors border border-gray-300`}
-              >
-                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" fill="currentColor" viewBox="0 0 16 16">
-                   <path d="M11 2a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1v12h.5a.5.5 0 0 1 0 1H.5a.5.5 0 0 1 0-1H1v-3a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1v3h1V7a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1v7h1V2z"/>
-                </svg>
-              </button>
-            </div>
-          )}
         </div>
       </div>
       
-      <ErrorDialog
-        isOpen={errorState.isOpen}
-        title={errorState.title}
-        message={errorState.message}
-        details={errorState.details}
-        onRetry={errorState.retryAction || undefined}
-        onDismiss={handleErrorDismiss}
+      {/* Fix prop name: onClose -> onDismiss */}
+      <ErrorDialog 
+        {...errorState} 
+        onDismiss={handleErrorDismiss} // Corrected prop name
+        // Pass other required props if any, based on definition 
+        // (isOpen, title, message, details, onRetry seem spread correctly)
       />
     </>
   );

@@ -125,3 +125,11 @@ export interface LoggedEvent {
   eventName: string;
   eventData: Record<string, any>; // can have arbitrary objects logged
 }
+
+// <<< ADDED: Shared type for transcript turns >>>
+export interface TranscriptTurn {
+  micTranscript?: string;
+  speakerTranscript?: string;
+  timestamp: number;
+  processed: boolean;
+}
