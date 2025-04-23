@@ -18,27 +18,59 @@ export const runtime = 'edge'; // Optional: Use edge runtime for lower latency
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const { messages } = body;
+    const { messages, stream = false } = body;
 
     if (!messages) {
       return NextResponse.json({ error: "Messages are required" }, { status: 400 });
     }
 
     console.log('[API Route] Received messages:', messages);
+    console.log('[API Route] Streaming mode:', stream);
 
-    // Call the actual OpenAI API
-    const completion = await openaiSDK.chat.completions.create({
-      model: "gpt-4.1-mini", // Or your preferred model
-      messages: messages,
-      // Add any other parameters like temperature, max_tokens, etc.
-      stream: false, // Assuming non-streaming for now
-    });
+    // Handle streaming mode
+    if (stream) {
+      const streamingResponse = await openaiSDK.chat.completions.create({
+        model: "gpt-4.1-mini", // Or your preferred model
+        messages: messages,
+        stream: true,
+      });
 
-    console.log('[API Route] OpenAI completion received:', completion);
+      // Return a streaming response
+      return new Response(
+        new ReadableStream({
+          async start(controller) {
+            // Send each chunk as it comes
+            for await (const chunk of streamingResponse) {
+              const text = chunk.choices[0]?.delta?.content || '';
+              if (text) {
+                // Format as SSE (Server-Sent Events)
+                controller.enqueue(new TextEncoder().encode(`data: ${JSON.stringify(chunk)}\n\n`));
+              }
+            }
+            // Send the [DONE] message to signal completion
+            controller.enqueue(new TextEncoder().encode('data: [DONE]\n\n'));
+            controller.close();
+          },
+        }),
+        {
+          headers: {
+            'Content-Type': 'text/event-stream',
+            'Cache-Control': 'no-cache',
+            'Connection': 'keep-alive',
+          },
+        }
+      );
+    } else {
+      // Non-streaming mode (original behavior)
+      const completion = await openaiSDK.chat.completions.create({
+        model: "gpt-4.1-mini", // Or your preferred model
+        messages: messages,
+        stream: false,
+      });
 
-    // Send the response from OpenAI back to the frontend
-    return NextResponse.json(completion);
-
+      console.log('[API Route] OpenAI completion received:', completion);
+      return NextResponse.json(completion);
+    }
   } catch (error) {
     console.error('[API Route] Error processing chat completion:', error);
     // Check if it's an OpenAI API error

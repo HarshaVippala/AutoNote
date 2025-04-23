@@ -172,6 +172,9 @@ interface TopControlsProps {
   triggerDisconnect: number;
   onMicStatusChange: (status: WebRTCConnectionStatus) => void;
   onProcessTurn: (turn: TranscriptTurn) => void;
+  onSpeakerStatusChange: (status: WebRTCConnectionStatus) => void;
+  onReconnectMic?: () => void;
+  onReconnectSpeaker?: () => void;
 }
 
 // <<< REMOVED: Local definition - now imported >>>
@@ -196,6 +199,9 @@ const TopControls: React.FC<TopControlsProps> = memo(({
   triggerDisconnect,
   onMicStatusChange,
   onProcessTurn,
+  onSpeakerStatusChange,
+  onReconnectMic,
+  onReconnectSpeaker
 }) => {
   const [micConnectionStatus, setMicConnectionStatus] = useState<WebRTCConnectionStatus>('disconnected');
   const [speakerConnectionStatus, setSpeakerConnectionStatus] = useState<WebRTCConnectionStatus>('disconnected');
@@ -374,26 +380,39 @@ const TopControls: React.FC<TopControlsProps> = memo(({
     }
   }, [micConnectionStatus]);
 
-  const handleSpeakerStateChange = useCallback((state: string) => {
-    console.log("Speaker connection state changed:", state);
-    switch (state) {
-      case 'connecting': setSpeakerConnectionStatus('connecting'); break;
-      case 'connected': setSpeakerConnectionStatus('connected'); break;
-      case 'disconnected':
+  const handleSpeakerStateChange = useCallback((status: string) => {
+    console.log(`Speaker connection state changed: ${status}`);
+    let newStatus: WebRTCConnectionStatus;
+    
+    switch (status) {
+      case 'connected': 
+        newStatus = 'connected'; 
+        break;
+      case 'connecting': 
+        newStatus = 'connecting'; 
+        break;
+      case 'disconnected': 
       case 'closed':
-        setSpeakerConnectionStatus('disconnected');
+        newStatus = 'disconnected'; 
+        // Reset the speaker track
         speakerTrackRef.current = null;
         break;
-      case 'failed':
-        setSpeakerConnectionStatus('failed');
+      case 'failed': 
+      case 'error': 
+        newStatus = 'failed'; 
+        // Reset the speaker track
         speakerTrackRef.current = null;
         break;
-      default:
-        setSpeakerConnectionStatus('error');
+      default: 
+        newStatus = 'disconnected';
+        // Reset the speaker track
         speakerTrackRef.current = null;
-        break;
     }
-  }, []);
+    
+    setSpeakerConnectionStatus(newStatus);
+    // Call the new callback
+    onSpeakerStatusChange(newStatus);
+  }, [onSpeakerStatusChange]);
 
   const handleSpeakerError = useCallback((error: Error) => {
     console.error("Speaker connection error:", error);
@@ -612,44 +631,11 @@ const TopControls: React.FC<TopControlsProps> = memo(({
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [triggerDisconnect]);
 
-  // Process transcript turn - COMMENTED OUT
-  /*
-  useEffect(() => {
-    // only trigger the assistant run when a new speaker transcript is present and not processed
-    if (
-      transcriptTurn &&
-      !transcriptTurn.processed &&
-      !assistantRunInProgress && // This state is now commented out
-      transcriptTurn.speakerTranscript // only run if there's a new speaker transcript
-    ) {
-      // Need to initialize the processor first if re-enabled
-      // const processor = initializeLegacyAssistantProcessor({ ... needed props ... });
-      // processor.processTranscriptTurn(transcriptTurn)
-      processTranscriptTurn(transcriptTurn) // This function is removed
-        .then(() => {
-          // Mark the turn as processed
-          setTranscriptTurn((prev: TranscriptTurn) => ({...prev, processed: true}));
-        })
-        .catch((error: unknown) => {
-          const err = error instanceof Error ? error : new Error(String(error));
-          console.error('[Assistant Processing] Error in processTranscriptTurn:', err);
-          setTranscriptTurn((prev: TranscriptTurn) => ({...prev, processed: true})); // Mark as processed anyway to avoid retry loop
-          
-          // Show error dialog
-          setErrorState({
-            isOpen: true,
-            title: 'Processing Error',
-            message: 'There was an error processing your conversation. The system will continue to work but some responses may be missing.',
-            details: err.message,
-            retryAction: null
-          });
-        });
-    }
-    // Add dependencies if re-enabled: [transcriptTurn, assistantRunInProgress, processTranscriptTurn]
-  }, [transcriptTurn]); // Simplified dependencies for now
-  */
+  // Add state for debouncing
+  const [debounceTimeout, setDebounceTimeout] = useState<NodeJS.Timeout | null>(null);
+  const [pendingTurn, setPendingTurn] = useState<TranscriptTurn | null>(null);
 
-  // <<< ADDED: Process transcript turn using the new handler >>>
+  // <<< UPDATED: Process transcript turn with debouncing >>>
   useEffect(() => {
     // Trigger when a turn has new data (mic OR speaker) and hasn't been processed
     if (
@@ -657,37 +643,59 @@ const TopControls: React.FC<TopControlsProps> = memo(({
       !transcriptTurn.processed &&
       (transcriptTurn.micTranscript || transcriptTurn.speakerTranscript) // Process if either exists
     ) {
-      console.log('[Turn Processing] Triggering onProcessTurn with turn:', transcriptTurn);
-      try {
-         // Call the handler passed from the parent (App.tsx)
-        onProcessTurn(transcriptTurn);
-
-        // Mark the turn as processed immediately after initiating the call
-        // If processing fails in App.tsx, it should handle its own errors.
-        // We prevent re-triggering for the same data here.
-        setTranscriptTurn((prev: TranscriptTurn) => ({...prev, processed: true}));
-
-        // Optionally: Reset for the *next* turn immediately, or maybe App clears it?
-        // setTranscriptTurn({ timestamp: Date.now(), processed: true }); // Reset for next turn
-
-      } catch (error) {
-         // Catch sync errors in the handler call itself, though most API calls will be async
-        const err = error instanceof Error ? error : new Error(String(error));
-        console.error('[Turn Processing] Error calling onProcessTurn handler:', err);
-        // Still mark as processed to avoid potential infinite loops if the handler always throws
-        setTranscriptTurn((prev: TranscriptTurn) => ({...prev, processed: true}));
-
-        // Show error dialog (consider if App should handle API errors more gracefully)
-        setErrorState({
-          isOpen: true,
-          title: 'Processing Error',
-          message: 'Could not initiate processing for the latest conversation turn.',
-          details: err.message,
-          retryAction: null // Or maybe allow retry? Depends on handler.
-        });
+      console.log('[Turn Processing] Received unprocessed turn:', transcriptTurn);
+      
+      // Mark the current turn as processed to prevent duplicate processing
+      setTranscriptTurn(prev => ({...prev, processed: true}));
+      
+      // Store the turn for potential debounce processing
+      setPendingTurn(transcriptTurn);
+      
+      // Clear any existing timeout
+      if (debounceTimeout) {
+        console.log('[Turn Processing] Clearing existing debounce timeout');
+        clearTimeout(debounceTimeout);
       }
+      
+      // Set a new debounce timeout (500ms as suggested in strategy doc)
+      console.log('[Turn Processing] Setting debounce timeout (500ms)');
+      const timeout = setTimeout(() => {
+        // When the timeout completes, process the most recent pending turn
+        if (pendingTurn) {
+          console.log('[Turn Processing] Debounce complete, triggering onProcessTurn with:', pendingTurn);
+          try {
+            // Call the handler passed from the parent (App.tsx)
+            onProcessTurn(pendingTurn);
+            
+            // Clear the pending turn after processing
+            setPendingTurn(null);
+          } catch (error) {
+            // Catch sync errors in the handler call itself
+            const err = error instanceof Error ? error : new Error(String(error));
+            console.error('[Turn Processing] Error calling onProcessTurn handler:', err);
+            
+            // Show error dialog
+            setErrorState({
+              isOpen: true,
+              title: 'Processing Error',
+              message: 'Could not initiate processing for the latest conversation turn.',
+              details: err.message,
+              retryAction: null
+            });
+          }
+        }
+      }, 500); // 500ms debounce
+      
+      setDebounceTimeout(timeout);
     }
-  }, [transcriptTurn, onProcessTurn]); // Dependencies: the turn data and the handler function
+    
+    // Cleanup timeout on unmount
+    return () => {
+      if (debounceTimeout) {
+        clearTimeout(debounceTimeout);
+      }
+    };
+  }, [transcriptTurn, onProcessTurn, debounceTimeout, pendingTurn]);
 
   // Cleanup on unmount
   useEffect(() => {

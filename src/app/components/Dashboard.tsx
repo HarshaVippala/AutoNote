@@ -1,13 +1,23 @@
 "use client";
 
-import React, { useState, useEffect, useMemo, useRef } from "react";
+import React, { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import { useEvent } from "../contexts/EventContext";
 import { ServerEvent, LoggedEvent } from "../types";
 import { useStatus } from "../contexts/StatusContext";
 import Image from 'next/image';
+import { connectionManager } from '@/app/api/realtime-assistant-webRTC/webRTCConnection-webRTC';
 
 // Define the type for connection status explicitly if not imported
 type WebRTCConnectionStatus = 'disconnected' | 'connecting' | 'connected' | 'failed' | 'error';
+
+// Add interface for Electron API
+declare global {
+  interface Window {
+    electronAPI?: {
+      takeScreenshot: () => Promise<{ success: boolean; filePath?: string; error?: string }>;
+    };
+  }
+}
 
 export interface DashboardProps {
   isExpanded: boolean;
@@ -16,6 +26,10 @@ export interface DashboardProps {
   isMicrophoneMuted: boolean;
   micConnectionStatus: WebRTCConnectionStatus;
   onMuteToggle: () => void;
+  // Add new props for speaker status and reconnection capabilities
+  speakerConnectionStatus?: WebRTCConnectionStatus;
+  onReconnectMic?: () => void;
+  onReconnectSpeaker?: () => void;
 }
 
 interface TokenUsage {
@@ -51,7 +65,10 @@ function Dashboard({
   transcriptItems,
   isMicrophoneMuted,
   micConnectionStatus,
-  onMuteToggle 
+  onMuteToggle,
+  speakerConnectionStatus = 'disconnected', // Default value if not provided
+  onReconnectMic = () => console.log('Mic reconnect handler not provided'),
+  onReconnectSpeaker = () => console.log('Speaker reconnect handler not provided')
 }: DashboardProps) {
   const { loggedEvents, toggleExpand } = useEvent();
   const {
@@ -59,6 +76,8 @@ function Dashboard({
     speakerRealtimeStatus,
     chatStatus,
     assistantStatus,
+    setUserRealtimeStatus,
+    setSpeakerRealtimeStatus
   } = useStatus();
   const [tokenUsage, setTokenUsage] = useState<TokenUsage>({
     resetTimeSeconds: 60,
@@ -83,6 +102,10 @@ function Dashboard({
   const [developerMode, setDeveloperMode] = useState<boolean>(false);
   const [projectId, setProjectId] = useState<string>(OPENAI_PROJECT_ID);
   const lastProcessedEventCountRef = useRef(0); // Ref to track processed events
+
+  // Add new state for screenshot status
+  const [screenshotStatus, setScreenshotStatus] = useState<'idle' | 'taking' | 'success' | 'error'>('idle');
+  const [screenshotPath, setScreenshotPath] = useState<string | null>(null);
 
   // Agent processes state removed
 
@@ -259,6 +282,149 @@ function Dashboard({
   const isNearingCostLimit = cost.total / cost.dailyLimit > 0.8;
   const showAlert = isNearingCostLimit;
 
+  // Map WebRTC connection status to UI status 
+  useEffect(() => {
+    // Update user status based on mic connection status
+    if (micConnectionStatus === 'connected') {
+      setUserRealtimeStatus('done');
+    } else if (micConnectionStatus === 'connecting') {
+      setUserRealtimeStatus('processing');
+    } else if (micConnectionStatus === 'failed' || micConnectionStatus === 'error') {
+      setUserRealtimeStatus('error');
+    } else {
+      setUserRealtimeStatus('idle');
+    }
+
+    // Update speaker status based on speaker connection status
+    if (speakerConnectionStatus === 'connected') {
+      setSpeakerRealtimeStatus('done');
+    } else if (speakerConnectionStatus === 'connecting') {
+      setSpeakerRealtimeStatus('processing');
+    } else if (speakerConnectionStatus === 'failed' || speakerConnectionStatus === 'error') {
+      setSpeakerRealtimeStatus('error');
+    } else {
+      setSpeakerRealtimeStatus('idle');
+    }
+  }, [micConnectionStatus, speakerConnectionStatus, setUserRealtimeStatus, setSpeakerRealtimeStatus]);
+
+  // Handle button clicks for reconnection
+  const handleUserButtonClick = useCallback(() => {
+    if (micConnectionStatus === 'disconnected' || micConnectionStatus === 'failed' || micConnectionStatus === 'error') {
+      onReconnectMic();
+    }
+  }, [micConnectionStatus, onReconnectMic]);
+
+  const handleSpeakerButtonClick = useCallback(() => {
+    if (speakerConnectionStatus === 'disconnected' || speakerConnectionStatus === 'failed' || speakerConnectionStatus === 'error') {
+      onReconnectSpeaker();
+    }
+  }, [speakerConnectionStatus, onReconnectSpeaker]);
+
+  // Keep existing helper for U/S/Chat/Assistant buttons
+  const getStatusColor = (status: "idle" | "processing" | "done" | "error") => {
+    if (status === "processing") return "bg-orange-400";
+    if (status === "done") return "bg-green-500";
+    if (status === "error") return "bg-red-400";
+    return "bg-gray-200"; // Assuming this is the intended 'idle'/default color
+  };
+
+  // Helper to determine if a button should be clickable
+  const isButtonClickable = (connectionStatus: WebRTCConnectionStatus): boolean => {
+    return connectionStatus === 'disconnected' || 
+           connectionStatus === 'failed' || 
+           connectionStatus === 'error';
+  };
+
+  // Helper to get button cursor style
+  const getButtonCursorStyle = (connectionStatus: WebRTCConnectionStatus): string => {
+    return isButtonClickable(connectionStatus) ? "cursor-pointer" : "cursor-default";
+  };
+
+  // Helper to get button title text
+  const getButtonTitle = (type: 'user' | 'speaker', connectionStatus: WebRTCConnectionStatus): string => {
+    const streamName = type === 'user' ? 'User Input' : 'Speaker Output';
+    
+    if (connectionStatus === 'connected') return `${streamName} Connected`;
+    if (connectionStatus === 'connecting') return `${streamName} Connecting...`;
+    if (connectionStatus === 'disconnected') return `Click to Connect ${streamName}`;
+    if (connectionStatus === 'failed' || connectionStatus === 'error') return `Click to Reconnect ${streamName} (Error)`;
+    
+    return `${streamName} Status Unknown`;
+  };
+
+  // --- Helper Functions for Mute button (adapted from TopControls) ---
+  // Keep getMuteButtonStyle and its dependency micConnectionStatus
+  const getMuteButtonStyle = (): string => {
+    // Style for Mute button - mimics existing round buttons
+    if (micConnectionStatus !== "connected") {
+      return "bg-gray-100 text-gray-400 cursor-not-allowed";
+    } 
+    if (isMicrophoneMuted) {
+      return "bg-red-100 text-red-700 hover:bg-red-200 cursor-pointer";
+    } 
+    return "bg-green-100 text-green-700 hover:bg-green-200 cursor-pointer";
+  };
+  
+  // Remove helpers for I/O buttons
+  // const getStatusButtonStyle = ...
+  // const getStatusButtonTitle = ...
+
+  // Handle screenshot button click
+  const handleScreenshot = useCallback(async () => {
+    // Only proceed if we're in an Electron environment
+    if (!window.electronAPI?.takeScreenshot) {
+      console.log('Screenshot functionality is only available in the Electron app');
+      return;
+    }
+
+    try {
+      setScreenshotStatus('taking');
+      const result = await window.electronAPI.takeScreenshot();
+      
+      if (result.success && result.filePath) {
+        setScreenshotStatus('success');
+        setScreenshotPath(result.filePath);
+        // Optional: Show a success notification or preview
+        console.log(`Screenshot saved to: ${result.filePath}`);
+        
+        // Reset status after a delay
+        setTimeout(() => {
+          setScreenshotStatus('idle');
+        }, 2000);
+      } else {
+        setScreenshotStatus('error');
+        console.error('Screenshot failed:', result.error || 'No file path returned');
+        
+        // Reset status after a delay
+        setTimeout(() => {
+          setScreenshotStatus('idle');
+        }, 2000);
+      }
+    } catch (error) {
+      setScreenshotStatus('error');
+      console.error('Error taking screenshot:', error);
+      
+      // Reset status after a delay
+      setTimeout(() => {
+        setScreenshotStatus('idle');
+      }, 2000);
+    }
+  }, []);
+
+  // Helper to get screenshot button style based on status
+  const getScreenshotButtonStyle = useCallback(() => {
+    switch (screenshotStatus) {
+      case 'taking':
+        return 'bg-yellow-100 text-yellow-600 cursor-wait';
+      case 'success':
+        return 'bg-green-100 text-green-600';
+      case 'error':
+        return 'bg-red-100 text-red-600';
+      default:
+        return 'bg-gray-100 text-gray-600 hover:bg-gray-200 cursor-pointer';
+    }
+  }, [screenshotStatus]);
+
   // Early return if dashboard is not enabled and not expanded
   if (!isDashboardEnabled && !isExpanded) {
     return null;
@@ -278,30 +444,6 @@ function Dashboard({
     );
   }
 
-  // --- Helper Functions for Mute button (adapted from TopControls) ---
-  // Keep getMuteButtonStyle and its dependency micConnectionStatus
-  const getMuteButtonStyle = (): string => {
-    // Style for Mute button - mimics existing round buttons
-    if (micConnectionStatus !== "connected") {
-      return "bg-gray-100 text-gray-400 cursor-not-allowed";
-    } 
-    if (isMicrophoneMuted) {
-      return "bg-red-100 text-red-700 hover:bg-red-200 cursor-pointer";
-    } 
-    return "bg-green-100 text-green-700 hover:bg-green-200 cursor-pointer";
-  };
-  
-  // Remove helpers for I/O buttons
-  // const getStatusButtonStyle = ...
-  // const getStatusButtonTitle = ...
-
-  // Keep existing helper for U/S/Chat/Assistant buttons
-  const getStatusColor = (status: "idle" | "processing" | "done") => {
-    if (status === "processing") return "bg-orange-400";
-    if (status === "done") return "bg-green-500";
-    return "bg-gray-200"; // Assuming this is the intended 'idle'/default color
-  };
-
   return (
     <div className="h-full flex flex-col bg-white rounded-xl overflow-hidden border border-gray-300">
       {/* --- Main Vertical Stack --- */}
@@ -309,24 +451,40 @@ function Dashboard({
         
         {/* --- Top Group: U, S, Mute --- */}
         <div className="flex flex-col items-center space-y-3"> 
-           {/* User Status Button (U) - Restore Original Style */}
-           <div 
-             title="User Status" 
-             className={`flex flex-col items-center justify-between h-14 w-8 border border-gray-300 rounded-lg ${getStatusColor(userRealtimeStatus)} p-1`}> 
+           {/* User Status Button (U) - Now Interactive */}
+           <button 
+             onClick={handleUserButtonClick}
+             disabled={!isButtonClickable(micConnectionStatus)}
+             title={getButtonTitle('user', micConnectionStatus)} 
+             className={`flex flex-col items-center justify-between h-14 w-8 border border-gray-300 rounded-lg ${getStatusColor(userRealtimeStatus)} p-1 ${getButtonCursorStyle(micConnectionStatus)} transition-colors hover:opacity-90`}> 
                <svg width="20" height="20" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24">
                  <path d="M8 3a1 1 0 0 1 1 1v16a1 1 0 1 1-2 0V4a1 1 0 0 1 1-1Zm8 2a1 1 0 0 1 1 1v12a1 1 0 1 1-2 0V6a1 1 0 0 1 1-1Zm-4 2a1 1 0 0 1 1 1v8a1 1 0 1 1-2 0V8a1 1 0 0 1 1-1ZM4 9a1 1 0 0 1 1 1v4a1 1 0 1 1-2 0v-4a1 1 0 0 1 1-1Zm16 0a1 1 0 0 1 1 1v4a1 1 0 1 1-2 0v-4a1 1 0 0 1 1-1Z"></path>
                </svg>
                <span className="font-bold text-xs text-gray-700" style={{ display: "block" }}>U</span>
-           </div>
-           {/* Speaker Status Button (S) - Restore Original Style */}
-           <div 
-             title="Speaker Status" 
-             className={`flex flex-col items-center justify-between h-14 w-8 border border-gray-300 rounded-lg ${getStatusColor(speakerRealtimeStatus)} p-1`}> 
+               {/* Show loading spinner when connecting */}
+               {micConnectionStatus === 'connecting' && (
+                 <div className="absolute inset-0 flex items-center justify-center">
+                   <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                 </div>
+               )}
+           </button>
+           {/* Speaker Status Button (S) - Now Interactive */}
+           <button 
+             onClick={handleSpeakerButtonClick}
+             disabled={!isButtonClickable(speakerConnectionStatus)}
+             title={getButtonTitle('speaker', speakerConnectionStatus)}
+             className={`flex flex-col items-center justify-between h-14 w-8 border border-gray-300 rounded-lg ${getStatusColor(speakerRealtimeStatus)} p-1 ${getButtonCursorStyle(speakerConnectionStatus)} transition-colors hover:opacity-90`}> 
                <svg width="20" height="20" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24">
                  <path d="M8 3a1 1 0 0 1 1 1v16a1 1 0 1 1-2 0V4a1 1 0 0 1 1-1Zm8 2a1 1 0 0 1 1 1v12a1 1 0 1 1-2 0V6a1 1 0 0 1 1-1Zm-4 2a1 1 0 0 1 1 1v8a1 1 0 1 1-2 0V8a1 1 0 0 1 1-1ZM4 9a1 1 0 0 1 1 1v4a1 1 0 1 1-2 0v-4a1 1 0 0 1 1-1Zm16 0a1 1 0 0 1 1 1v4a1 1 0 1 1-2 0v-4a1 1 0 0 1 1-1Z"></path>
                </svg>
                <span className="font-bold text-xs text-gray-700" style={{ display: "block" }}>S</span>
-           </div>
+               {/* Show loading spinner when connecting */}
+               {speakerConnectionStatus === 'connecting' && (
+                 <div className="absolute inset-0 flex items-center justify-center">
+                   <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                 </div>
+               )}
+           </button>
            {/* Mute Button - Round Style */}
            <button
              onClick={onMuteToggle}
@@ -367,16 +525,23 @@ function Dashboard({
               <path d="M12 1a1 1 0 0 1 1 1v.5h2.87c.513 0 .955 0 1.32.029.384.03.767.098 1.137.28a3 3 0 0 1 1.364 1.364c.182.37.25.753.28 1.137.029.365.029.807.029 1.32v.078c0 1.054 0 1.903-.055 2.592-.056.709-.175 1.332-.46 1.911a5 5 0 0 1-2.274 2.273c-.579.286-1.202.405-1.911.461-.689.055-1.538.055-2.592.055h-1.416c-1.054 0-1.903 0-2.592-.055-.709-.056-1.332-.175-1.911-.46a5 5 0 0 1-2.273-2.274c-.286-.579-.405-1.202-.461-1.911C4 8.611 4 7.762 4 6.708V6.63c0-.512 0-.954.029-1.319.03-.384.098-.767.28-1.137A3 3 0 0 1 5.673 2.81c.37-.182.753-.25 1.137-.28.365-.029.807-.029 1.32-.029H11V2a1 1 0 0 1 1-1ZM6.969 4.523c-.265.02-.363.056-.411.08a1 1 0 0 0-.455.455c-.024.048-.06.146-.08.41A16.99 16.99 0 0 0 6 6.668c0 1.104 0 1.874.048 2.475.047.588.135.928.261 1.185a3 3 0 0 0 1.364 1.364c.257.127.597.214 1.185.26.6.048 1.37.049 2.475.049h1.334c1.104 0 1.874 0 2.475-.048.588-.047.928-.134 1.185-.261a3 3 0 0 0 1.364-1.364c.127-.257.214-.597.26-1.185.048-.6.049-1.37.049-2.475 0-.56 0-.922-.023-1.198-.02-.265-.056-.363-.08-.411a1 1 0 0 0-.455-.455c-.048-.024-.146-.06-.41-.08a16.993 16.993 0 0 0-1.199-.023H8.167c-.56 0-.922 0-1.198.023ZM6 21c0-.974.551-1.95 1.632-2.722C8.71 17.508 10.252 17 12 17c1.749 0 3.29.508 4.369 1.278C17.449 19.05 18 20.026 18 21a1 1 0 1 0 2 0c0-1.788-1.016-3.311-2.469-4.35-1.455-1.038-3.414-1.65-5.53-1.65-2.118 0-4.077.611-5.532 1.65C5.016 17.69 4 19.214 4 21a1 1 0 1 0 2 0Z"></path>
             </svg>
           </div>
-          {/* Screenshot Button (New) - Round Style */}
+          {/* Screenshot Button - Now with functionality */}
           <button
-            title="Screenshot"
-            className={`rounded-full flex items-center justify-center font-bold text-xs bg-gray-100 text-gray-600 hover:bg-gray-200 cursor-pointer transition-colors border border-gray-300 w-9 h-9`}
+            onClick={handleScreenshot}
+            title={screenshotStatus === 'taking' ? 'Taking screenshot...' : 'Take screenshot'}
+            className={`rounded-full flex items-center justify-center font-bold text-xs ${getScreenshotButtonStyle()} transition-colors border border-gray-300 w-9 h-9`}
+            disabled={screenshotStatus === 'taking'}
           >
-            {/* Screenshot Icon SVG (Placeholder - Ensure consistent size) */}
-            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16">
-              <path d="M10.5 8.5a2.5 2.5 0 1 1-5 0 2.5 2.5 0 0 1 5 0z"/>
-              <path d="M2 4a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2h-1.172a2 2 0 0 1-1.414-.586l-.828-.828A2 2 0 0 0 9.172 2H6.828a2 2 0 0 0-1.414.586l-.828.828A2 2 0 0 1 3.172 4H2zm.5 2a.5.5 0 1 1 0-1 .5.5 0 0 1 0 1zm9 2.5a3.5 3.5 0 1 1-7 0 3.5 3.5 0 0 1 7 0z"/>
-            </svg>
+            {screenshotStatus === 'taking' ? (
+              // Show spinner when taking screenshot
+              <div className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin"></div>
+            ) : (
+              // Camera icon SVG
+              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16">
+                <path d="M10.5 8.5a2.5 2.5 0 1 1-5 0 2.5 2.5 0 0 1 5 0z"/>
+                <path d="M2 4a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2h-1.172a2 2 0 0 1-1.414-.586l-.828-.828A2 2 0 0 0 9.172 2H6.828a2 2 0 0 0-1.414.586l-.828.828A2 2 0 0 1 3.172 4H2zm.5 2a.5.5 0 1 1 0-1 .5.5 0 0 1 0 1zm9 2.5a3.5 3.5 0 1 1-7 0 3.5 3.5 0 0 1 7 0z"/>
+              </svg>
+            )}
           </button>
            {/* Voice Recognition Button (New) - Round Style */}
            <button

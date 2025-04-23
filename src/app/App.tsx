@@ -33,6 +33,7 @@ interface AppContentProps {
   setIsMicrophoneMuted: (muted: boolean) => void;
   onToggleConnection: () => void;
   handleMicStatusUpdate: (status: WebRTCConnectionStatus) => void;
+  handleSpeakerStatusUpdate: (status: WebRTCConnectionStatus) => void;
   connectTrigger: number;
   disconnectTrigger: number;
   // Add any other props passed down from App
@@ -43,6 +44,10 @@ interface AppContentProps {
   isMobileView: boolean | null;
   setActiveMobilePanel: (panel: number) => void;
   activeMobilePanel: number;
+  micConnectionStatus: WebRTCConnectionStatus;
+  speakerConnectionStatus: WebRTCConnectionStatus;
+  onReconnectMic: () => void;
+  onReconnectSpeaker: () => void;
 }
 
 // --- New Inner Component --- 
@@ -52,6 +57,7 @@ function AppContent({
   setIsMicrophoneMuted, 
   onToggleConnection, 
   handleMicStatusUpdate,
+  handleSpeakerStatusUpdate,
   connectTrigger,
   disconnectTrigger,
   transcriptItems, // Destructure props
@@ -61,10 +67,18 @@ function AppContent({
   isMobileView,
   setActiveMobilePanel,
   activeMobilePanel,
+  micConnectionStatus,
+  speakerConnectionStatus,
+  onReconnectMic,
+  onReconnectSpeaker,
 }: AppContentProps) {
   // Hooks that need context can be called here
   const { setChatStatus, setPreviousChatSuccess } = useStatus();
   const { addTranscriptMessage } = useTranscript(); // Assuming TranscriptProvider wraps App
+  
+  // Add state for conversation history
+  const [conversationHistory, setConversationHistory] = useState<Array<{role: string, content: string}>>([]);
+  const MAX_HISTORY_LENGTH = 10; // Maximum number of messages to keep in history
 
   // Move handleProcessTurn here as it uses context hooks
   const handleProcessTurn = useCallback(async (turn: TranscriptTurn) => {
@@ -73,46 +87,145 @@ function AppContent({
     const userSaid = turn.micTranscript;
     const speakerSaid = turn.speakerTranscript;
 
-    if (speakerSaid) {
-      console.log(`[AppContent] Speaker finished saying: "${speakerSaid}" - Triggering Chat API...`);
-      
-      setChatStatus('processing');
-      setPreviousChatSuccess(false);
-
-      try {
-        console.log('[AppContent] Attempting fetch to /api/chat/completions...');
-        const response = await fetch('/api/chat/completions', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({ 
-            messages: [{ role: 'user', content: speakerSaid }] 
-          }),
-        });
-
-        if (!response.ok) {
-          const errorData = await response.json().catch(() => ({ message: 'Failed to parse error response' }));
-          console.error('[AppContent] Chat API Error:', response.status, errorData);
-          setChatStatus('error');
-          setPreviousChatSuccess(false); 
-        } else {
-          const result = await response.json();
-          console.log('[AppContent] Chat API Success:', result);
-          setChatStatus('done');
-          setPreviousChatSuccess(true);
-          const assistantMessage = result.choices?.[0]?.message?.content || result.message || 'No content received'; 
-          addTranscriptMessage(uuidv4(), 'assistant', assistantMessage);
-        }
-      } catch (error) {
-        console.error('[AppContent] CAUGHT fetch error:', error);
-        setChatStatus('error');
-        setPreviousChatSuccess(false);
-      }
-    } else if (userSaid) {
-      console.log(`[AppContent] User finished saying: "${userSaid}"`);
+    // Only proceed if we have some transcript content
+    if (!userSaid && !speakerSaid) {
+      console.log('[AppContent] No transcript content to process, skipping API call');
+      return;
     }
-  }, [addTranscriptMessage, setChatStatus, setPreviousChatSuccess]);
+
+    // Determine which transcript to use - prefer speaker transcript if available
+    const transcriptToProcess = speakerSaid || userSaid;
+    console.log(`[AppContent] Processing transcript: "${transcriptToProcess}"`);
+    
+    setChatStatus('processing');
+    setPreviousChatSuccess(false);
+
+    // Create AbortController for cancellation support
+    const abortController = new AbortController();
+    const signal = abortController.signal;
+
+    try {
+      console.log('[AppContent] Preparing fetch to /api/chat/completions...');
+      
+      // Define the messages array including the refined developer instruction
+      const messagesToSend = [
+        {
+          role: 'developer',
+          content: "Your response must strictly follow this structure: 1. **Analysis & Approach:** Briefly analyze the user's query and outline your plan. 2. **Plan:** Present a clear, numbered list of steps. 3. **Execution:** For each step, use a bold title and provide the content/action for that step. 4. **Review & Conclusion:** Briefly review your reasoning, check for errors, and state your final conclusion or answer. Absolutely avoid conversational fluff, greetings (like 'Hello!'), or closing remarks (like 'Let me know if you need anything else!'). Focus *only* on executing the request according to the structure."
+        },
+        // Include conversation history
+        ...conversationHistory,
+        // Add the current user message
+        { role: 'user', content: transcriptToProcess }
+      ];
+
+      console.log('[AppContent] Sending messages:', messagesToSend);
+
+      // Using streaming as recommended in the strategy document
+      const response = await fetch('/api/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ 
+          messages: messagesToSend,
+          stream: true // Enable streaming for better responsiveness
+        }),
+        signal // Pass AbortController signal for cancellation
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ message: 'Failed to parse error response' }));
+        console.error('[AppContent] Chat API Error:', response.status, errorData);
+        setChatStatus('error');
+        setPreviousChatSuccess(false); 
+        return;
+      }
+
+      // Handle streaming response
+      if (!response.body) {
+        throw new Error('Response body is null');
+      }
+
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let accumulatedResponse = '';
+
+      console.log('[AppContent] Starting to process streaming response');
+
+      // Process the stream
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        
+        const chunk = decoder.decode(value, { stream: true });
+        // Process each chunk (lines starting with "data: ")
+        const lines = chunk.split('\n');
+        for (const line of lines) {
+          if (line.startsWith('data: ')) {
+            const data = line.substring(6);
+            if (data === '[DONE]') {
+              // Stream completed
+              console.log('[AppContent] Stream completed');
+              break;
+            }
+            
+            try {
+              const parsed = JSON.parse(data);
+              const content = parsed.choices?.[0]?.delta?.content || '';
+              if (content) {
+                accumulatedResponse += content;
+                // You can update UI incrementally here if desired
+              }
+            } catch (e) {
+              console.error('[AppContent] Error parsing chunk:', e);
+            }
+          }
+        }
+      }
+
+      console.log('[AppContent] Chat API Success - accumulated response:', accumulatedResponse);
+      setChatStatus('done');
+      setPreviousChatSuccess(true);
+      
+      if (accumulatedResponse) {
+        // Add the message to the transcript
+        addTranscriptMessage(uuidv4(), 'assistant', accumulatedResponse);
+        
+        // Update conversation history with proper typing
+        setConversationHistory(prev => {
+          // Ensure all content values are strings
+          const userMessage = { role: 'user', content: transcriptToProcess || '' };
+          const assistantMessage = { role: 'assistant', content: accumulatedResponse || '' };
+          
+          const newHistory = [
+            ...prev,
+            userMessage,
+            assistantMessage
+          ];
+          
+          // Limit history length, keeping only the most recent messages
+          if (newHistory.length > MAX_HISTORY_LENGTH) {
+            return newHistory.slice(newHistory.length - MAX_HISTORY_LENGTH);
+          }
+          
+          return newHistory;
+        });
+      } else {
+        console.warn('[AppContent] No content received from API');
+      }
+    } catch (error) {
+      // Check if this was an abort error (user interruption)
+      if (error instanceof DOMException && error.name === 'AbortError') {
+        console.log('[AppContent] Fetch aborted by user - skipping error handling');
+        return;
+      }
+
+      console.error('[AppContent] CAUGHT fetch error:', error);
+      setChatStatus('error');
+      setPreviousChatSuccess(false);
+    }
+  }, [addTranscriptMessage, setChatStatus, setPreviousChatSuccess, conversationHistory]);
 
   // Return the main layout structure
   return (
@@ -129,6 +242,9 @@ function AppContent({
           triggerDisconnect={disconnectTrigger}
           onMicStatusChange={handleMicStatusUpdate}
           onProcessTurn={handleProcessTurn} // Use the locally defined handler
+          onSpeakerStatusChange={handleSpeakerStatusUpdate}
+          onReconnectMic={onReconnectMic}
+          onReconnectSpeaker={onReconnectSpeaker}
         />
 
         {/* --- Render content based on isMobileView --- */}
@@ -193,8 +309,11 @@ function AppContent({
                           isDashboardEnabled={true}
                           transcriptItems={transcriptItems}
                           isMicrophoneMuted={isMicrophoneMuted}
-                          micConnectionStatus={connectionState === 'CONNECTED' ? 'connected' : connectionState === 'CONNECTING' ? 'connecting' : 'disconnected'} 
-                          onMuteToggle={() => setIsMicrophoneMuted(!isMicrophoneMuted)} // Pass setter directly
+                          micConnectionStatus={micConnectionStatus}
+                          speakerConnectionStatus={speakerConnectionStatus}
+                          onMuteToggle={() => setIsMicrophoneMuted(!isMicrophoneMuted)}
+                          onReconnectMic={onReconnectMic}
+                          onReconnectSpeaker={onReconnectSpeaker}
                         />
                       </div>
                     </div>
@@ -241,8 +360,11 @@ function AppContent({
                         isDashboardEnabled={true}
                         transcriptItems={transcriptItems}
                         isMicrophoneMuted={isMicrophoneMuted}
-                        micConnectionStatus={connectionState === 'CONNECTED' ? 'connected' : connectionState === 'CONNECTING' ? 'connecting' : 'disconnected'}
-                        onMuteToggle={() => setIsMicrophoneMuted(!isMicrophoneMuted)} // Pass setter directly
+                        micConnectionStatus={micConnectionStatus}
+                        speakerConnectionStatus={speakerConnectionStatus}
+                        onMuteToggle={() => setIsMicrophoneMuted(!isMicrophoneMuted)}
+                        onReconnectMic={onReconnectMic}
+                        onReconnectSpeaker={onReconnectSpeaker}
                       />
                     </div>
                   </MobileSwipeContainer>
@@ -282,10 +404,14 @@ function App() {
   const [isMobileView, setIsMobileView] = useState<boolean | null>(null);
   const [connectTrigger, setConnectTrigger] = useState(0);
   const [disconnectTrigger, setDisconnectTrigger] = useState(0);
+  // Add state for speaker connection status
+  const [micConnectionStatus, setMicConnectionStatus] = useState<WebRTCConnectionStatus>('disconnected');
+  const [speakerConnectionStatus, setSpeakerConnectionStatus] = useState<WebRTCConnectionStatus>('disconnected');
 
   // --- Callbacks modifying App state --- 
   const handleMicStatusUpdate = useCallback((status: WebRTCConnectionStatus) => {
     console.log(`App received mic status update: ${status}`);
+    setMicConnectionStatus(status); // Track mic connection status
     switch (status) {
       case 'connecting': setConnectionState('CONNECTING'); break;
       case 'connected': setConnectionState('CONNECTED'); break;
@@ -293,6 +419,25 @@ function App() {
       case 'failed': case 'error': setConnectionState('ERROR'); break;
       default: setConnectionState('INITIAL');
     }
+  }, []);
+
+  // Add handler for speaker status updates
+  const handleSpeakerStatusUpdate = useCallback((status: WebRTCConnectionStatus) => {
+    console.log(`App received speaker status update: ${status}`);
+    setSpeakerConnectionStatus(status); // Track speaker connection status
+  }, []);
+
+  // Add reconnection functions
+  const handleReconnectMic = useCallback(() => {
+    console.log("App: Requesting mic reconnection...");
+    setConnectTrigger(c => c + 1);
+  }, []);
+
+  const handleReconnectSpeaker = useCallback(() => {
+    console.log("App: Requesting speaker reconnection...");
+    // For specific speaker reconnection, we'll need to create a new trigger
+    // or modify the TopControls to accept a stream type parameter
+    setConnectTrigger(c => c + 1);
   }, []);
 
   const onToggleConnection = useCallback(() => {
@@ -374,6 +519,7 @@ function App() {
         setIsMicrophoneMuted={setIsMicrophoneMuted}
         onToggleConnection={onToggleConnection}
         handleMicStatusUpdate={handleMicStatusUpdate}
+        handleSpeakerStatusUpdate={handleSpeakerStatusUpdate}
         connectTrigger={connectTrigger}
         disconnectTrigger={disconnectTrigger}
         transcriptItems={transcriptItems}
@@ -383,6 +529,10 @@ function App() {
         isMobileView={isMobileView}
         setActiveMobilePanel={setActiveMobilePanel}
         activeMobilePanel={activeMobilePanel}
+        micConnectionStatus={micConnectionStatus}
+        speakerConnectionStatus={speakerConnectionStatus}
+        onReconnectMic={handleReconnectMic}
+        onReconnectSpeaker={handleReconnectSpeaker}
       />
     </StatusProvider>
   );

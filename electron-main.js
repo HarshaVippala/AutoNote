@@ -1,26 +1,32 @@
 // electron-main.js
+const { app, BrowserWindow, ipcMain } = require('electron');
 const path = require('path');
-const { app, BrowserWindow, globalShortcut, ipcMain } = require('electron');
-const { execFileSync } = require('child_process');
+const { execFile } = require('child_process');
 const fs = require('fs');
 const os = require('os');
 
-let mainWindow;
+// Keep a global reference of the window object, if you don't, the window will
+// be closed automatically when the JavaScript object is garbage collected.
+let mainWindow = null;
 
 function createWindow() {
   mainWindow = new BrowserWindow({
-    width: 1280,
-    height: 800,
+    width: 1200, // Example width
+    height: 800, // Example height
     webPreferences: {
-      nodeIntegration: false,
-      contextIsolation: true,
-      preload: path.join(__dirname, 'preload.js'), // we'll add this for IPC
+      preload: path.join(__dirname, 'preload.js'),
+      contextIsolation: true, // Recommended for security
+      nodeIntegration: false, // Recommended for security
     },
-    contentProtection: true,
+    // Example: Add other configurations like frame: false, etc.
   });
-  mainWindow.setContentProtection(true);
 
-  mainWindow.loadURL('http://localhost:3000');
+  const startUrl = process.env.ELECTRON_START_URL || `file://${path.join(__dirname, '../index.html')}`;
+  console.log(`Loading URL: ${startUrl}`);
+  mainWindow.loadURL(startUrl);
+
+  // Open the DevTools (optional)
+  // mainWindow.webContents.openDevTools();
 
   mainWindow.on('closed', () => {
     mainWindow = null;
@@ -30,45 +36,58 @@ function createWindow() {
 app.whenReady().then(() => {
   createWindow();
 
-  // Register global hotkey: Command+Shift+Tab
-  const hotkey = 'CommandOrControl+Shift+Tab';
-  globalShortcut.register(hotkey, async () => {
-    try {
-      // AppleScript to get the frontmost window's bounds and app name
-      const script = `
-        tell application "System Events"
-          set frontApp to first application process whose frontmost is true
-          set appName to name of frontApp
-          tell frontApp
-            set win to first window
-            set {x, y} to position of win
-            set {w, h} to size of win
-            return appName & "|" & x & "|" & y & "|" & w & "|" & h
-          end tell
-        end tell
-      `;
-      const osaResult = execFileSync('/usr/bin/osascript', ['-e', script], { encoding: 'utf8' }).trim();
-      const [appName, x, y, w, h] = osaResult.split('|');
-      // Use screencapture to capture the region
-      const tmpFile = path.join(os.tmpdir(), `electron_screenshot_${Date.now()}.png`);
-      execFileSync('/usr/sbin/screencapture', [
-        '-x', // no sound
-        '-R', `${x},${y},${w},${h}`,
-        tmpFile,
-      ]);
-      const imageBuffer = fs.readFileSync(tmpFile);
-      fs.unlinkSync(tmpFile);
+  // Make sure the temp directory exists
+  const tempDir = path.join(os.tmpdir(), 'AgentAssistScreenshots');
+  if (!fs.existsSync(tempDir)) {
+    fs.mkdirSync(tempDir, { recursive: true });
+    console.log(`Created screenshot temp directory: ${tempDir}`);
+  }
 
-      // Send the screenshot buffer to the renderer
-      if (mainWindow) {
-        mainWindow.webContents.send('screenshot-captured', {
-          buffer: imageBuffer,
-          appName,
-          bounds: { x: Number(x), y: Number(y), width: Number(w), height: Number(h) }
+  // Handle 'take-screenshot' request from renderer
+  ipcMain.handle('take-screenshot', async () => {
+    console.log('Main process received take-screenshot request.');
+    if (!mainWindow) {
+        console.error('Main window not available for screenshot.');
+        return { success: false, error: 'Main window not found.' };
+    }
+
+    // Generate unique filename
+    const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+    const screenshotPath = path.join(tempDir, `screenshot-${timestamp}.png`);
+
+    // Arguments for screencapture: -C (capture cursor), -x (no sound), path
+    const args = ['-C', '-x', screenshotPath];
+
+    // Hide window briefly
+    mainWindow.hide();
+    // Add a small delay to ensure the window is hidden before capturing
+    await new Promise(resolve => setTimeout(resolve, 300)); // 300ms delay
+
+    try {
+      // Execute the screencapture command
+      await new Promise((resolve, reject) => {
+        execFile('/usr/sbin/screencapture', args, (error, stdout, stderr) => {
+          if (error) {
+            console.error(`screencapture error: ${error.message}`);
+            console.error(`screencapture stderr: ${stderr}`);
+            reject(error);
+          } else {
+            console.log(`Screenshot saved to: ${screenshotPath}`);
+            resolve();
+          }
         });
-      }
-    } catch (err) {
-      console.error('Screenshot hotkey error:', err);
+      });
+      return { success: true, filePath: screenshotPath };
+    } catch (error) {
+      console.error('Failed to take screenshot:', error);
+      return { success: false, error: error.message || 'Unknown error occurred' };
+    } finally {
+        // Show the window again after capture attempt
+        if (mainWindow && !mainWindow.isDestroyed()) {
+            // Add a small delay before showing again (optional)
+            await new Promise(resolve => setTimeout(resolve, 100));
+            mainWindow.show();
+        }
     }
   });
 });
