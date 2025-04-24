@@ -25,10 +25,9 @@ const nextApp = next({ dev: DEV, dir: __dirname });
 const handle = nextApp.getRequestHandler();
 
 // --- Cursor Following Logic ---
+// ... (startCursorFollowing function remains the same) ...
 function startCursorFollowing() {
-  // Only start if not already running and following is enabled
   if (followInterval || !isFollowingCursor) return;
-
   console.log('Starting cursor following interval...');
   followInterval = setInterval(() => {
     if (!mainWindow) {
@@ -39,41 +38,23 @@ function startCursorFollowing() {
       const cursorPoint = screen.getCursorScreenPoint();
       const currentDisplay = screen.getDisplayNearestPoint(cursorPoint);
       const workArea = currentDisplay.workArea;
-
-      // 1. Calculate DEFAULT target position (top-left corner relative to cursor)
       const defaultTargetX = cursorPoint.x + CURSOR_OFFSET_X;
       const defaultTargetY = cursorPoint.y + CURSOR_OFFSET_Y;
-
-      // Initialize target position with default
       let targetX = defaultTargetX;
       let targetY = defaultTargetY;
-
-      // 2. Check for RIGHT edge overflow and potentially "flip" X anchor
       if (defaultTargetX + WINDOW_WIDTH > workArea.x + workArea.width) {
-        // Calculate position so the WINDOW'S RIGHT edge aligns with the cursor offset point
         targetX = cursorPoint.x + CURSOR_OFFSET_X - WINDOW_WIDTH;
-        // console.log("Flipping X anchor"); // Optional debug log
       }
-
-      // 3. Check for BOTTOM edge overflow and potentially "flip" Y anchor
       if (defaultTargetY + WINDOW_HEIGHT > workArea.y + workArea.height) {
-        // Calculate position so the WINDOW'S BOTTOM edge aligns with the cursor offset point
         targetY = cursorPoint.y + CURSOR_OFFSET_Y - WINDOW_HEIGHT;
-        // console.log("Flipping Y anchor"); // Optional debug log
       }
-
-      // 4. Clamp final position to TOP and LEFT boundaries
       if (targetX < workArea.x) {
         targetX = workArea.x;
       }
       if (targetY < workArea.y) {
         targetY = workArea.y;
       }
-
-      // --- End Boundary Checks/Flipping ---
-
       if (mainWindow && typeof mainWindow.setPosition === 'function') {
-        // Ensure coordinates are integers
         mainWindow.setPosition(Math.round(targetX), Math.round(targetY), false);
       }
     } catch (error) {
@@ -81,9 +62,11 @@ function startCursorFollowing() {
     }
   }, POLLING_INTERVAL_MS);
 }
+
 // --- End Cursor Following Logic ---
 
 // --- Make sure stopCursorFollowing is also present ---
+// ... (stopCursorFollowing function remains the same) ...
 function stopCursorFollowing() {
   if (followInterval) {
     console.log('Stopping cursor following interval.');
@@ -93,24 +76,22 @@ function stopCursorFollowing() {
 }
 
 // --- Toggle Function ---
+// ... (toggleCursorFollowing function remains the same) ...
 function toggleCursorFollowing() {
-  isFollowingCursor = !isFollowingCursor; // Flip the state
+  isFollowingCursor = !isFollowingCursor;
   console.log(`Cursor following ${isFollowingCursor ? 'enabled' : 'disabled'}`);
-
   if (isFollowingCursor) {
-      // ENABLE following: Ignore mouse events again, start interval
       if (mainWindow) {
-          mainWindow.setIgnoreMouseEvents(true); // <<< Make click-through
+          mainWindow.setIgnoreMouseEvents(true);
           console.log('Window ignoring mouse events: true');
       }
-      startCursorFollowing(); // Start interval
+      startCursorFollowing();
   } else {
-      // DISABLE following: Stop ignoring mouse events, stop interval
       if (mainWindow) {
-          mainWindow.setIgnoreMouseEvents(false); // <<< Make interactive
+          mainWindow.setIgnoreMouseEvents(false);
           console.log('Window ignoring mouse events: false');
       }
-      stopCursorFollowing(); // Stop interval
+      stopCursorFollowing();
   }
 }
 // --- End Toggle Function ---
@@ -133,47 +114,80 @@ async function startServer() {
 }
 
 function createWindow(url) {
-  // ... (createWindow function mostly the same) ...
-  if (mainWindow) { mainWindow.show(); return; }
+  if (mainWindow) {
+    mainWindow.show();
+    return;
+  }
   console.log('Creating window...');
-  mainWindow = new BrowserWindow({ /* ... options ... */ });
+  mainWindow = new BrowserWindow({
+    width: WINDOW_WIDTH,
+    height: WINDOW_HEIGHT,
+    frame: false,            // Recommended for overlays
+    transparent: true,       // Recommended for overlays
+    skipTaskbar: true,       // Keep it out of the taskbar/dock
+    alwaysOnTop: true,       // Already set later, but doesn't hurt here
+    show: false,             // Don't show until ready
+    webPreferences: {
+      // Consider adding preload script if needed for security
+      // preload: path.join(__dirname, 'preload.js'),
+      nodeIntegration: false, // Best practice: Disable Node integration in renderer
+      contextIsolation: true, // Best practice: Enable context isolation
+    },
+    // --- ADD THIS LINE ---
+    contentProtection: true // Prevent content capture (screen sharing, recording)
+    // --------------------
+  });
+
   console.log(`Loading URL: ${url}`);
   mainWindow.loadURL(url).catch(err => { console.error(`Failed to load URL ${url}:`, err); });
 
   mainWindow.once('ready-to-show', () => {
     console.log('Window ready-to-show.');
+    // These settings ensure the overlay stays visible and behaves correctly
     mainWindow.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
-    mainWindow.setAlwaysOnTop(true, 'screen-saver');
-    mainWindow.setIgnoreMouseEvents(true); // Keep ignoring mouse events for the overlay itself
+    mainWindow.setAlwaysOnTop(true, 'screen-saver'); // 'screen-saver' is a high level
+    // mainWindow.setIgnoreMouseEvents(true); // Set initially based on isFollowingCursor state below
+    mainWindow.setContentProtection(true);
     mainWindow.show();
     console.log('Window shown.');
-    // Start following only if initially enabled
+
+    // Set initial mouse event state and start following if needed
     if (isFollowingCursor) {
+        mainWindow.setIgnoreMouseEvents(true);
+        console.log('Initial state: Window ignoring mouse events: true');
         startCursorFollowing();
+    } else {
+        mainWindow.setIgnoreMouseEvents(false); // Ensure it's interactive if starting paused
+         console.log('Initial state: Window ignoring mouse events: false');
     }
   });
+
   mainWindow.on('closed', () => {
     console.log('Window closed.');
     stopCursorFollowing(); // Always stop on close
     mainWindow = null;
   });
+
   mainWindow.webContents.on('did-fail-load', (event, errorCode, errorDescription, validatedURL) => {
     console.error(`Failed to load window content: ${errorDescription} (Code: ${errorCode}) URL: ${validatedURL}`);
   });
+
+  // Optional: If you wanted to use the method call instead, you'd put it here or in ready-to-show:
+  // mainWindow.setContentProtection(true);
 }
 
 // --- App Lifecycle Events ---
+// ... (app.whenReady remains the same) ...
 app.whenReady().then(async () => {
   console.log('App ready. Starting server...');
   try {
     const port = await startServer();
     createWindow(`http://localhost:${port}`);
 
-    // Register the global shortcut
     if (!globalShortcut.isRegistered(FOLLOW_TOGGLE_SHORTCUT)) {
         const ret = globalShortcut.register(FOLLOW_TOGGLE_SHORTCUT, () => {
             console.log(`${FOLLOW_TOGGLE_SHORTCUT} is pressed`);
-            toggleCursorFollowing(); // Call toggle function on hotkey press
+            toggleCursorFollowing();
         });
         if (!ret) {
             console.error('Failed to register global shortcut:', FOLLOW_TOGGLE_SHORTCUT);
@@ -182,24 +196,64 @@ app.whenReady().then(async () => {
         }
     }
 
-    // Setup basic menu
-    const menu = Menu.buildFromTemplate([ /* ... basic menu ... */ ]);
+    // Setup basic menu (Example - Customize as needed)
+    const menu = Menu.buildFromTemplate([
+      {
+        label: app.name,
+        submenu: [
+          { role: 'about' },
+          { type: 'separator' },
+          { role: 'quit' }
+        ]
+      },
+      {
+        label: 'View',
+        submenu: [
+          { role: 'reload' },
+          { role: 'forceReload' },
+          { role: 'toggleDevTools' }, // Useful for debugging
+        ]
+      },
+      {
+        label: 'Window',
+        submenu: [
+           {
+            label: 'Toggle Follow Cursor',
+            accelerator: FOLLOW_TOGGLE_SHORTCUT,
+            click: () => toggleCursorFollowing()
+           }
+        ]
+      }
+    ]);
     Menu.setApplicationMenu(menu);
 
   } catch (err) { console.error("Failed to start server during app startup:", err); app.quit(); }
 
-  app.on('activate', () => { /* ... same activate logic ... */ });
+  app.on('activate', () => {
+    // On macOS it's common to re-create a window in the app when the
+    // dock icon is clicked and there are no other windows open.
+    if (BrowserWindow.getAllWindows().length === 0 && serverPort) {
+       console.log('App activated, creating window.');
+      createWindow(`http://localhost:${serverPort}`);
+    } else if (mainWindow) {
+        console.log('App activated, showing existing window.');
+        mainWindow.show(); // Ensure window is visible if activated
+    }
+  });
 });
 
-app.on('window-all-closed', () => { if (process.platform !== 'darwin') { app.quit(); } });
+// ... (window-all-closed remains the same) ...
+app.on('window-all-closed', () => {
+  if (process.platform !== 'darwin') {
+    app.quit();
+  }
+});
 
-// Make sure to unregister shortcuts on quit
+// ... (will-quit remains the same) ...
 app.on('will-quit', () => { // Changed from before-quit for shortcut cleanup
   console.log('App will-quit event.');
-  // Unregister all shortcuts.
   globalShortcut.unregisterAll();
   console.log('Global shortcuts unregistered.');
-  // Stop following and close server
   stopCursorFollowing();
   if (server) { console.log('Closing server...'); server.close(); }
 });

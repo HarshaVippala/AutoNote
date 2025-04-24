@@ -3,12 +3,10 @@ npm run electron:prod
 new terminal tab
 
 npm install --save-dev @electron/packager
-npm run package-mac
+npm run package-mac ("package-mac": "electron-packager . MyAppName --platform=darwin --extend-info=build/Info.plist --arch=x64 --out=release-builds --overwrite")
 "codesign --force --deep --sign - \
 release-builds/MyAppName-darwin-x64/MyAppName.app"
 open release-builds/MyAppName-darwin-x64/MyAppName.app
-
-
 
 Run this command in your terminal, from the project's root directory:
 
@@ -26,11 +24,18 @@ Your node_modules (ideally pruned to production dependencies, though the simple 
 Your build/Info.plist.
 Any other files not explicitly ignored.
 
-
-mann@Mahas-MacBook-Pro openai-realtime-agents % cd release-builds/MyAppName-darwin-x64 
+mann@Mahas-MacBook-Pro openai-realtime-agents % cd release-builds/MyAppName-darwin-x64
 mann@Mahas-MacBook-Pro MyAppName-darwin-x64 % ./MyAppName.app/Contents/MacOS/MyAppName
-
 
 Go back because release will be purged, can't run from there.
 
 Hotkey Cmd+Shift+P (on macOS) or Ctrl+Shift+P (on Windows/Linux)
+
+Latest:
+
+npm cache clean --force
+rm -rf node_modules package-lock.json
+npm install
+rm -rf release-builds # Manual clean again
+npm run package-mac
+open release-builds/MyAppName6-darwin-x64/MyAppName6.app

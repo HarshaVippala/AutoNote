@@ -11,8 +11,8 @@
   "build-check": "./scripts/build.sh",
   "electron": "electron .",
   "prepackage-mac": "npm run build",
-  "package-mac": "electron-packager . MyAppName --platform=darwin --extend-info=build/Info.plist --arch=x64 --out=release-builds --overwrite --ignore='^/release-builds' --ignore='^/build' --ignore='\\.git' --ignore='\\.vscode'"
-},
+  "package-mac": "electron-packager . MyAppName6 --platform=darwin --extend-info=build/Info.plist --arch=x64 --out=release-builds --overwrite --ignore='^/release-builds' --ignore='^/build' --ignore='\\.git' --ignore='\\.vscode' && codesign --force --deep --sign - release-builds/MyAppName6-darwin-x64/MyAppName6.app"
+    },
   "dependencies": {
     "next": "^15.2.4",
     "openai": "^4.77.3",
