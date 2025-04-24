@@ -13,7 +13,7 @@
     --foreground: #ededed;
   }
 }
-
+/*
 body {
   color: var(--foreground);
   background: var(--background);
@@ -23,6 +23,14 @@ body {
   touch-action: manipulation;
   -webkit-tap-highlight-color: transparent;
 }
+*/
+
+/* global.css */
+html, body, #root {
+  background: transparent !important;
+  margin: 0;
+}
+
 
 /* Mobile optimizations */
 @media (max-width: 640px) {

@@ -4,17 +4,17 @@
   "private": true,
   "main": "electron-main.js",
   "scripts": {
-    "dev": "next dev",
-    "build": "next build",
-    "start": "next start",
-    "lint": "next lint",
-    "build-check": "./scripts/build.sh",
-    "electron": "electron .",
-    "electron:prod": "npm run build && npm run start && npm run electron",
-    "package-mac": "electron-packager . MyAppName --platform=darwin --extend-info=build/Info.plist --arch=x64 --out=release-builds --overwrite"
-  },
+  "dev": "next dev",
+  "build": "next build",
+  "start": "next start",
+  "lint": "next lint",
+  "build-check": "./scripts/build.sh",
+  "electron": "electron .",
+  "prepackage-mac": "npm run build",
+  "package-mac": "electron-packager . MyAppName --platform=darwin --extend-info=build/Info.plist --arch=x64 --out=release-builds --overwrite --ignore='^/release-builds' --ignore='^/build' --ignore='\\.git' --ignore='\\.vscode'"
+},
   "dependencies": {
-    "next": "15.2.4",
+    "next": "^15.2.4",
     "openai": "^4.77.3",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",

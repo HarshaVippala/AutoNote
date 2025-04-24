@@ -7,3 +7,30 @@ npm run package-mac
 "codesign --force --deep --sign - \
 release-builds/MyAppName-darwin-x64/MyAppName.app"
 open release-builds/MyAppName-darwin-x64/MyAppName.app
+
+
+
+Run this command in your terminal, from the project's root directory:
+
+Bash
+npm run package-mac
+Here's what should happen when you run this:
+
+prepackage-mac runs: This script executes npm run build.
+npm run build runs: This executes next build, which (since output: 'export' is removed) will create the production server build in the .next folder.
+package-mac runs: This executes the electron-packager . MyAppName ... command. Because we adjusted the --ignore flags (or removed some), it should now bundle:
+Your electron-main.js.
+Your package.json.
+The .next folder containing the Next.js production build.
+Your node_modules (ideally pruned to production dependencies, though the simple ignore flags might grab everything).
+Your build/Info.plist.
+Any other files not explicitly ignored.
+
+
+mann@Mahas-MacBook-Pro openai-realtime-agents % cd release-builds/MyAppName-darwin-x64 
+mann@Mahas-MacBook-Pro MyAppName-darwin-x64 % ./MyAppName.app/Contents/MacOS/MyAppName
+
+
+Go back because release will be purged, can't run from there.
+
+Hotkey Cmd+Shift+P (on macOS) or Ctrl+Shift+P (on Windows/Linux)
