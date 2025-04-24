@@ -10,3 +10,8 @@
 </p>
 
 This repository demonstrates advanced, agentic patterns built on top of the Realtime API, currently focusing on the implementation of a **Conversation Assistant**. 
+
+## Requirements
+
+- Node.js v22.0.0 or higher
+- npm or yarn 

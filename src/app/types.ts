@@ -133,3 +133,14 @@ export interface TranscriptTurn {
   timestamp: number;
   processed: boolean;
 }
+
+export type LogLevel = "DEBUG" | "INFO" | "WARN" | "ERROR";
+
+// Add the TabData interface definition here
+export interface TabData {
+  key: string; // Unique identifier, e.g., filename or a generated ID
+  filename: string; // Display name for the tab trigger
+  language: string; // Language for syntax highlighting
+  code: string; // The actual code content
+  analysis: string; // The analysis content
+}

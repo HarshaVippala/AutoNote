@@ -5,6 +5,7 @@ import Image from 'next/image';
 import { ConnectionState as AppConnectionState, TranscriptTurn } from "@/app/types";
 import { connectionManager } from '@/app/api/realtime-assistant-webRTC/webRTCConnection-webRTC';
 import ErrorDialog from './ErrorDialog';
+import { useTheme } from "@/app/contexts/ThemeContext";
 // Define the target sample rate directly
 const TARGET_SAMPLE_RATE = 24000;
 
@@ -23,6 +24,7 @@ const AudioLevelMeter: React.FC<AudioLevelMeterProps> = ({ audioSource, isActive
   const animationFrameRef = useRef<number | null>(null);
   const analyserRef = useRef<AnalyserNode | null>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
+  const { theme } = useTheme();
   
   useEffect(() => {
     if (!isActive || !audioSource) {
@@ -106,7 +108,9 @@ const AudioLevelMeter: React.FC<AudioLevelMeterProps> = ({ audioSource, isActive
         <div 
           key={i} 
           className={`w-1 h-${1 + i} rounded-full transition-colors duration-100 ${
-            i < filledSegments ? 'bg-green-500' : 'bg-gray-300'
+            i < filledSegments 
+              ? theme === 'dark' ? 'bg-green-600' : 'bg-green-500'
+              : theme === 'dark' ? 'bg-gray-600' : 'bg-gray-300'
           }`}
         />
       ))}
@@ -205,6 +209,7 @@ const TopControls: React.FC<TopControlsProps> = memo(({
 }) => {
   const [micConnectionStatus, setMicConnectionStatus] = useState<WebRTCConnectionStatus>('disconnected');
   const [speakerConnectionStatus, setSpeakerConnectionStatus] = useState<WebRTCConnectionStatus>('disconnected');
+  const { theme } = useTheme(); // Add theme hook
 
   // Ref to store the actual mic track to toggle its enabled state
   const micTrackRef = useRef<MediaStreamTrack | null>(null);
@@ -478,6 +483,9 @@ const TopControls: React.FC<TopControlsProps> = memo(({
         throw new Error("No audio track found in the microphone stream.");
       }
       micTrackRef.current = rawMicTrack; // Store raw track ref
+      
+      // Debug log for mic track initial state
+      console.log(`[Mute Debug] Mic track initial state - enabled: ${rawMicTrack.enabled}, muted: ${rawMicTrack.muted}, readyState: ${rawMicTrack.readyState}`);
 
       console.log('Attempting to connect mic with raw track...');
 
@@ -496,10 +504,15 @@ const TopControls: React.FC<TopControlsProps> = memo(({
 
       // Enable the track if it wasn't muted before connection
       if (!isMicrophoneMuted) {
+        console.log('[Mute Debug] Setting initial mic track enabled=true because isMicrophoneMuted is false');
         rawMicTrack.enabled = true;
       } else {
+        console.log('[Mute Debug] Setting initial mic track enabled=false because isMicrophoneMuted is true');
         rawMicTrack.enabled = false; // Ensure it respects the muted state
       }
+      
+      // Verify track state after connection
+      console.log(`[Mute Debug] Mic track state after connection - enabled: ${rawMicTrack.enabled}, muted: ${rawMicTrack.muted}, readyState: ${rawMicTrack.readyState}`);
 
     } catch (error) {
       console.error("Failed to connect microphone:", error);
@@ -533,36 +546,62 @@ const TopControls: React.FC<TopControlsProps> = memo(({
     setSpeakerConnectionStatus('connecting');
     try {
       console.log('[Device Selection] Enumerating devices for SPEAKER connection...');
-      const devices = await navigator.mediaDevices.enumerateDevices();
-      const systemAudioDevice = devices.find(device => 
+      const devices = await navigator.mediaDevices.enumerateDevices()
+      console.log('[Device Selection] Devices:', devices);
+      
+      // Log all audio devices for debugging
+      console.log('[Device Selection] Available audio devices:');
+      devices.forEach((device, index) => {
+        console.log(`Device ${index}: kind=${device.kind}, label="${device.label}", id=${device.deviceId}`);
+      });
+      
+      // Look specifically for BlackHole 2ch as audioinput
+      const blackholeDevice = devices.find(device => 
         device.kind === 'audioinput' && 
-        // Adjust this label if it's different on your system
-        device.label.includes('systemAudio') 
+        device.label.includes('BlackHole 2ch') &&
+        device.label.includes('Virtual')
       );
 
-      if (systemAudioDevice) {
-        console.log(`[Device Selection] Found specific speaker source: ${systemAudioDevice.label} (ID: ${systemAudioDevice.deviceId})`);
+      if (blackholeDevice) {
+        console.log(`[Device Selection] Found BlackHole virtual device: ${blackholeDevice.label}`);
+        console.log(`[Device Selection] Device ID: ${blackholeDevice.deviceId}`);
+        console.log(`[Device Selection] Group ID: ${blackholeDevice.groupId}`);
       } else {
-        console.warn('[Device Selection] Specific systemAudio device not found. Cannot connect speaker stream.');
-        // Optionally fall back to default or throw error
-         throw new Error('Required audio device "systemAudio" not found.');
+        console.warn('[Device Selection] BlackHole 2ch (Virtual) device not found. Available audioinput devices:');
+        devices
+          .filter(device => device.kind === 'audioinput')
+          .forEach(device => console.warn(`- ${device.label} (ID: ${device.deviceId})`));
+          
+        throw new Error('Required audio device "BlackHole 2ch (Virtual)" not found. Please ensure it is properly installed and configured.');
       }
 
       const speakerConstraints: MediaStreamConstraints = {
-         // Use the specific device ID found
-        audio: { deviceId: { exact: systemAudioDevice.deviceId } }
+        // Use the specific BlackHole device ID
+        audio: { 
+          deviceId: { exact: blackholeDevice.deviceId },
+          echoCancellation: false,
+          noiseSuppression: false,
+          autoGainControl: false
+        }
       };
       console.log('[Device Selection] Using constraints for speaker:', { audio: speakerConstraints.audio });
       
       // Get the raw speaker stream
-      const rawSpeakerStream = await navigator.mediaDevices.getUserMedia({ audio: speakerConstraints.audio });
+      console.log('speakerConstraints', speakerConstraints);
+      const rawSpeakerStream = await navigator.mediaDevices.getUserMedia(speakerConstraints);
       rawSpeakerStreamRef.current = rawSpeakerStream; // Store raw stream
 
+      console.log('[Device Selection] Raw speaker stream:', rawSpeakerStream);
       // Get the raw audio track
       const rawSpeakerTrack = rawSpeakerStream.getAudioTracks()[0];
+      console.log('[Device Selection] Raw speaker track:', rawSpeakerTrack);
       if (!rawSpeakerTrack) {
         throw new Error("No audio track found in the speaker stream.");
       }
+      
+      // Debug log for speaker track initial state
+      console.log(`[Audio Debug] Speaker track initial state - enabled: ${rawSpeakerTrack.enabled}, muted: ${rawSpeakerTrack.muted}, readyState: ${rawSpeakerTrack.readyState}`);
+      
       speakerTrackRef.current = rawSpeakerTrack; // Store raw track ref
 
       console.log('Attempting to connect speaker with raw track...');
@@ -579,6 +618,9 @@ const TopControls: React.FC<TopControlsProps> = memo(({
         },
         speakerSessionConfig_Transcription // Pass the speaker config
       );
+      
+      // Verify track state after connection
+      console.log(`[Audio Debug] Speaker track state after connection - enabled: ${rawSpeakerTrack.enabled}, muted: ${rawSpeakerTrack.muted}, readyState: ${rawSpeakerTrack.readyState}`);
 
     } catch (error) {
       console.error("Failed to connect speaker:", error);
@@ -612,12 +654,80 @@ const TopControls: React.FC<TopControlsProps> = memo(({
     }
   }, [errorState.retryAction]);
 
+  // Add a useEffect to handle changes to isMicrophoneMuted prop
+  useEffect(() => {
+    // Only modify the track if it exists
+    if (micTrackRef.current) {
+      console.log(`[Mute Debug] Prop isMicrophoneMuted changed to ${isMicrophoneMuted}`);
+      console.log(`[Mute Debug] Setting mic track enabled = ${!isMicrophoneMuted}`);
+      
+      // Log the track state before changing
+      console.log(`[Mute Debug] Before change: micTrack.enabled = ${micTrackRef.current.enabled}, muted = ${micTrackRef.current.muted}`);
+      
+      // Update the track's enabled state
+      micTrackRef.current.enabled = !isMicrophoneMuted;
+      
+      // Log the track state after changing
+      setTimeout(() => {
+        if (micTrackRef.current) {
+          console.log(`[Mute Debug] After change: micTrack.enabled = ${micTrackRef.current.enabled}, muted = ${micTrackRef.current.muted}`);
+        }
+      }, 100);
+    } else {
+      console.log(`[Mute Debug] Mute state changed to ${isMicrophoneMuted}, but no mic track available`);
+    }
+  }, [isMicrophoneMuted]);
+
+  // Handle connection state reporting more robustly
+  useEffect(() => {
+    // Whenever mic status changes, ensure the UI reflects the actual state
+    console.log(`[Connection Debug] Mic connection status: ${micConnectionStatus}`);
+    
+    // If the connection fails, provide a way to retry
+    if (micConnectionStatus === 'failed' || micConnectionStatus === 'error') {
+      console.log('[Connection Debug] Mic connection in failed/error state - retry available');
+      
+      // Call the optional onReconnectMic callback if provided
+      if (onReconnectMic) {
+        console.log('[Connection Debug] Notifying parent component about mic error');
+        onReconnectMic();
+      }
+    }
+  }, [micConnectionStatus, onReconnectMic]);
+
+  // Similar monitoring for speaker connection
+  useEffect(() => {
+    console.log(`[Connection Debug] Speaker connection status: ${speakerConnectionStatus}`);
+    
+    // If the connection fails, provide a way to retry
+    if (speakerConnectionStatus === 'failed' || speakerConnectionStatus === 'error') {
+      console.log('[Connection Debug] Speaker connection in failed/error state - retry available');
+      
+      // Call the optional onReconnectSpeaker callback if provided
+      if (onReconnectSpeaker) {
+        console.log('[Connection Debug] Notifying parent component about speaker error');
+        onReconnectSpeaker();
+      }
+    }
+  }, [speakerConnectionStatus, onReconnectSpeaker]);
+
   // Add useEffects
   useEffect(() => {
     if (triggerConnect > 0) {
       console.log("Connect triggered from App");
-      connectMic();
-      connectSpeaker();
+      
+      // Add safety check - don't attempt reconnection if already connected
+      if (micConnectionStatus !== 'connected' && micConnectionStatus !== 'connecting') {
+        connectMic();
+      } else {
+        console.log('[Connection Debug] Skipping mic connection - already connected or connecting');
+      }
+      
+      if (speakerConnectionStatus !== 'connected' && speakerConnectionStatus !== 'connecting') {
+        connectSpeaker();
+      } else {
+        console.log('[Connection Debug] Skipping speaker connection - already connected or connecting');
+      }
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [triggerConnect]);
@@ -625,8 +735,19 @@ const TopControls: React.FC<TopControlsProps> = memo(({
   useEffect(() => {
     if (triggerDisconnect > 0) {
       console.log("Disconnect triggered from App");
-      disconnectMic();
-      disconnectSpeaker(); 
+      
+      // Safety check for disconnection
+      if (micConnectionStatus !== 'disconnected') {
+        disconnectMic();
+      } else {
+        console.log('[Connection Debug] Skipping mic disconnection - already disconnected');
+      }
+      
+      if (speakerConnectionStatus !== 'disconnected') {
+        disconnectSpeaker();
+      } else {
+        console.log('[Connection Debug] Skipping speaker disconnection - already disconnected');
+      }
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [triggerDisconnect]);
@@ -748,18 +869,34 @@ const TopControls: React.FC<TopControlsProps> = memo(({
 
   // Helper functions for button props
   const getStatusButtonStyle = (status: WebRTCConnectionStatus): string => {
-    switch (status) {
-      case 'connected':
-        return 'bg-green-100 text-green-700 hover:bg-green-200';
-      case 'connecting':
-        return 'bg-yellow-100 text-yellow-700 animate-pulse'; // Added pulse for connecting
-      case 'disconnected':
-        return 'bg-gray-100 text-gray-600 hover:bg-gray-200';
-      case 'failed':
-      case 'error':
-        return 'bg-red-100 text-red-700 hover:bg-red-200';
-      default:
-        return 'bg-gray-100 text-gray-400';
+    if (theme === 'dark') {
+      switch (status) {
+        case 'connected':
+          return 'bg-green-700 text-green-100 hover:bg-green-600 border-green-600';
+        case 'connecting':
+          return 'bg-yellow-700 text-yellow-100 animate-pulse border-yellow-600';
+        case 'disconnected':
+          return 'bg-gray-700 text-gray-300 hover:bg-gray-600 border-gray-600';
+        case 'failed':
+        case 'error':
+          return 'bg-red-700 text-red-100 hover:bg-red-600 border-red-600';
+        default:
+          return 'bg-gray-700 text-gray-400 border-gray-600';
+      }
+    } else {
+      switch (status) {
+        case 'connected':
+          return 'bg-green-100 text-green-700 hover:bg-green-200 border-green-300';
+        case 'connecting':
+          return 'bg-yellow-100 text-yellow-700 animate-pulse border-yellow-300';
+        case 'disconnected':
+          return 'bg-gray-100 text-gray-600 hover:bg-gray-200 border-gray-300';
+        case 'failed':
+        case 'error':
+          return 'bg-red-100 text-red-700 hover:bg-red-200 border-red-300';
+        default:
+          return 'bg-gray-100 text-gray-400 border-gray-300';
+      }
     }
   };
 
@@ -777,18 +914,26 @@ const TopControls: React.FC<TopControlsProps> = memo(({
   
   // Handle mic status click
   const handleMicStatusClick = () => {
+    console.log(`[Connection Debug] Mic status button clicked. Current status: ${micConnectionStatus}`);
+    
     if (micConnectionStatus === 'disconnected' || micConnectionStatus === 'failed' || micConnectionStatus === 'error') {
+      console.log('[Connection Debug] Attempting to connect mic...');
       connectMic();
     } else if (micConnectionStatus === 'connected' || micConnectionStatus === 'connecting') {
+      console.log('[Connection Debug] Attempting to disconnect mic...');
       disconnectMic();
     }
   };
   
   // Handle speaker status click
   const handleSpeakerStatusClick = () => {
+    console.log(`[Connection Debug] Speaker status button clicked. Current status: ${speakerConnectionStatus}`);
+    
     if (speakerConnectionStatus === 'disconnected' || speakerConnectionStatus === 'failed' || speakerConnectionStatus === 'error') {
+      console.log('[Connection Debug] Attempting to connect speaker...');
       connectSpeaker();
     } else if (speakerConnectionStatus === 'connected' || speakerConnectionStatus === 'connecting') {
+      console.log('[Connection Debug] Attempting to disconnect speaker...');
       disconnectSpeaker();
     }
   };
@@ -796,67 +941,124 @@ const TopControls: React.FC<TopControlsProps> = memo(({
   // Handle mic mute toggle
   const handleMuteToggle = () => {
     const newMutedState = !isMicrophoneMuted;
+    console.log(`[Mute Debug] Toggling mute state from ${isMicrophoneMuted} to ${newMutedState}`);
+    
+    // Log current state of both mic and speaker tracks for comparison
+    if (micTrackRef.current) {
+      console.log(`[Mute Debug] BEFORE TOGGLE - Mic track: enabled=${micTrackRef.current.enabled}, muted=${micTrackRef.current.muted}, readyState=${micTrackRef.current.readyState}`);
+    } else {
+      console.log(`[Mute Debug] No mic track available to mute!`);
+    }
+    
+    if (speakerTrackRef.current) {
+      console.log(`[Mute Debug] Speaker track state: enabled=${speakerTrackRef.current.enabled}, muted=${speakerTrackRef.current.muted}, readyState=${speakerTrackRef.current.readyState}`);
+    }
+    
     setIsMicrophoneMuted(newMutedState);
+    
     // Toggle the actual track state if it exists
     if (micTrackRef.current) {
-      console.log(`Setting mic track enabled state to: ${!newMutedState}`);
+      console.log(`[Mute Debug] Setting mic track enabled state to: ${!newMutedState}`);
       micTrackRef.current.enabled = !newMutedState;
+      
+      // Log the state after changing
+      setTimeout(() => {
+        if (micTrackRef.current) {
+          console.log(`[Mute Debug] AFTER TOGGLE - Mic track: enabled=${micTrackRef.current.enabled}, muted=${micTrackRef.current.muted}, readyState=${micTrackRef.current.readyState}`);
+        }
+        
+        if (speakerTrackRef.current) {
+          console.log(`[Mute Debug] Speaker track state unchanged: enabled=${speakerTrackRef.current.enabled}, muted=${speakerTrackRef.current.muted}, readyState=${speakerTrackRef.current.readyState}`);
+        }
+      }, 100);
     }
   };
   
   // Helper function for mic button props
   const getMicButtonProps = () => {
-    switch (micConnectionStatus) {
-      case 'connected':
-        return { className: 'border-green-300 bg-green-100 text-green-700 hover:bg-green-200', disabled: false };
-      case 'connecting':
-        return { className: 'border-yellow-300 bg-yellow-100 text-yellow-700 cursor-wait', disabled: true };
-      case 'disconnected':
-        return { className: 'border-gray-300 bg-gray-100 text-gray-600 hover:bg-gray-200', disabled: false };
-      case 'failed':
-      case 'error':
-        return { className: 'border-red-300 bg-red-100 text-red-700 hover:bg-red-200', disabled: false };
-      default:
-        return { className: 'border-gray-300 bg-gray-100 text-gray-600', disabled: true };
+    if (theme === 'dark') {
+      switch (micConnectionStatus) {
+        case 'connected':
+          return { className: 'border-green-600 bg-green-700 text-green-100 hover:bg-green-600', disabled: false };
+        case 'connecting':
+          return { className: 'border-yellow-600 bg-yellow-700 text-yellow-100 cursor-wait', disabled: true };
+        case 'disconnected':
+          return { className: 'border-gray-600 bg-gray-700 text-gray-300 hover:bg-gray-600', disabled: false };
+        case 'failed':
+        case 'error':
+          return { className: 'border-red-600 bg-red-700 text-red-100 hover:bg-red-600', disabled: false };
+        default:
+          return { className: 'border-gray-600 bg-gray-700 text-gray-300', disabled: true };
+      }
+    } else {
+      switch (micConnectionStatus) {
+        case 'connected':
+          return { className: 'border-green-300 bg-green-100 text-green-700 hover:bg-green-200', disabled: false };
+        case 'connecting':
+          return { className: 'border-yellow-300 bg-yellow-100 text-yellow-700 cursor-wait', disabled: true };
+        case 'disconnected':
+          return { className: 'border-gray-300 bg-gray-100 text-gray-600 hover:bg-gray-200', disabled: false };
+        case 'failed':
+        case 'error':
+          return { className: 'border-red-300 bg-red-100 text-red-700 hover:bg-red-200', disabled: false };
+        default:
+          return { className: 'border-gray-300 bg-gray-100 text-gray-600', disabled: true };
+      }
     }
   };
   
   // Helper function for speaker button props
   const getSpeakerButtonProps = () => {
-    switch (speakerConnectionStatus) {
-      case 'connected':
-        return { className: 'border-green-300 bg-green-100 text-green-700 hover:bg-green-200', disabled: false };
-      case 'connecting':
-        return { className: 'border-yellow-300 bg-yellow-100 text-yellow-700 cursor-wait', disabled: true };
-      case 'disconnected':
-        return { className: 'border-gray-300 bg-gray-100 text-gray-600 hover:bg-gray-200', disabled: false };
-      case 'failed':
-      case 'error':
-        return { className: 'border-red-300 bg-red-100 text-red-700 hover:bg-red-200', disabled: false };
-      default:
-        return { className: 'border-gray-300 bg-gray-100 text-gray-600', disabled: true };
+    if (theme === 'dark') {
+      switch (speakerConnectionStatus) {
+        case 'connected':
+          return { className: 'border-green-600 bg-green-700 text-green-100 hover:bg-green-600', disabled: false };
+        case 'connecting':
+          return { className: 'border-yellow-600 bg-yellow-700 text-yellow-100 cursor-wait', disabled: true };
+        case 'disconnected':
+          return { className: 'border-gray-600 bg-gray-700 text-gray-300 hover:bg-gray-600', disabled: false };
+        case 'failed':
+        case 'error':
+          return { className: 'border-red-600 bg-red-700 text-red-100 hover:bg-red-600', disabled: false };
+        default:
+          return { className: 'border-gray-600 bg-gray-700 text-gray-300', disabled: true };
+      }
+    } else {
+      switch (speakerConnectionStatus) {
+        case 'connected':
+          return { className: 'border-green-300 bg-green-100 text-green-700 hover:bg-green-200', disabled: false };
+        case 'connecting':
+          return { className: 'border-yellow-300 bg-yellow-100 text-yellow-700 cursor-wait', disabled: true };
+        case 'disconnected':
+          return { className: 'border-gray-300 bg-gray-100 text-gray-600 hover:bg-gray-200', disabled: false };
+        case 'failed':
+        case 'error':
+          return { className: 'border-red-300 bg-red-100 text-red-700 hover:bg-red-200', disabled: false };
+        default:
+          return { className: 'border-gray-300 bg-gray-100 text-gray-600', disabled: true };
+      }
     }
   };
 
   return (
     <>
-      {/* Restore original container styling */}
-      <div className="border-b border-gray-200 bg-white flex items-center justify-between overflow-hidden" style={{ height: 56 }}>
-        {/* Keep Logo/Title section */}
+      {/* Container with theme-aware styling */}
+      <div className={`border-b ${theme === 'dark' ? 'border-gray-800 bg-gray-900' : 'border-gray-200 bg-white'} flex items-center justify-between overflow-hidden`} style={{ height: 48 }}>
+        {/* Logo/Title section */}
         <div className="flex items-center h-full">
           <div 
             className="flex items-center h-full pl-2"
             onClick={() => {
               if (effectiveIsMobileView) {
-                setActiveMobilePanel(1); // Or adjust as needed
+                setActiveMobilePanel(1);
               } else {
-                window.location.reload(); // Keep reload for desktop? Review this later.
+                window.location.reload();
               }
             }}
             style={{ cursor: 'pointer' }}
           >
             <Image
-              src="/logo.png" // Keep original logo path
+              src="/logo.png"
               alt="Logo"
               width={56}
               height={56}
@@ -865,7 +1067,7 @@ const TopControls: React.FC<TopControlsProps> = memo(({
               priority
             />
             <Image
-              src="/logo.png" // Keep original logo path
+              src="/logo.png"
               alt="Logo"
               width={56}
               height={56}
@@ -873,23 +1075,23 @@ const TopControls: React.FC<TopControlsProps> = memo(({
               style={{ height: '100%', width: 'auto' }}
               priority
             />
-            <span className="ml-2 font-bold text-lg tracking-wide text-gray-700" style={{ letterSpacing: 2, fontSize: '1.05rem' }}>JARVIS</span>
+            <span className={`ml-2 font-bold text-lg tracking-wide ${theme === 'dark' ? 'text-gray-100' : 'text-gray-700'}`} style={{ letterSpacing: 2, fontSize: '1.05rem' }}>JARVIS</span>
           </div>
         </div>
 
-        {/* Keep button container, push right, ensure only power button remains */}
+        {/* Button container */}
         <div className={`flex items-center mr-4 ml-auto ${effectiveIsMobileView ? 'space-x-1.5' : 'space-x-4'}`}> 
-          {/* Only Power Button */}
+          {/* Power Button */}
           <button
             onClick={onToggleConnection}
             title={connectButtonTitle}
             className={`rounded-full flex items-center justify-center transition-colors ${ 
-              effectiveIsMobileView ? 'h-8 w-8' : 'h-9 w-9'} ${ // Keep original size for now
+              effectiveIsMobileView ? 'h-8 w-8' : 'h-9 w-9'} ${ 
               appConnectionState === "CONNECTED"
-                ? "bg-red-600 hover:bg-red-700 text-white"
+                ? theme === 'dark' ? "bg-red-700 hover:bg-red-600 text-white" : "bg-red-600 hover:bg-red-700 text-white"
                 : (appConnectionState === "CONNECTING" || appConnectionState === "FETCHING_KEY")
-                ? "bg-gray-400 cursor-not-allowed text-white"
-                : "bg-green-600 hover:bg-green-700 text-white"
+                ? theme === 'dark' ? "bg-gray-600 cursor-not-allowed text-gray-400" : "bg-gray-400 cursor-not-allowed text-white"
+                : theme === 'dark' ? "bg-green-700 hover:bg-green-600 text-white" : "bg-green-600 hover:bg-green-700 text-white"
             }`}
             disabled={connectButtonDisabled}
           >
@@ -899,26 +1101,25 @@ const TopControls: React.FC<TopControlsProps> = memo(({
               </div>
             ) : (
                <Image 
-                 src="/power.png" // Keep original icon
+                 src="/power.png"
                  alt="Connect/Disconnect"
-                 width={18} // Keep original size
-                 height={18} // Keep original size
+                 width={18}
+                 height={18}
                  priority
                />
             )}
           </button>
-
-          {/* 'I', 'O', Mute, Key buttons are removed from here */}
-
         </div>
       </div>
       
-      {/* Fix prop name: onClose -> onDismiss */}
+      {/* Error Dialog */}
       <ErrorDialog 
-        {...errorState} 
-        onDismiss={handleErrorDismiss} // Corrected prop name
-        // Pass other required props if any, based on definition 
-        // (isOpen, title, message, details, onRetry seem spread correctly)
+        isOpen={errorState.isOpen}
+        title={errorState.title}
+        message={errorState.message}
+        details={errorState.details}
+        retryAction={errorState.retryAction}
+        onDismiss={handleErrorDismiss}
       />
     </>
   );

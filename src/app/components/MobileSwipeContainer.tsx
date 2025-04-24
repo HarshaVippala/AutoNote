@@ -6,7 +6,7 @@ interface MobileSwipeContainerProps {
   activeMobilePanel: number;
   setActiveMobilePanel: (panel: number) => void;
   isEventsPaneExpanded: boolean;
-  children: [React.ReactNode, React.ReactNode, React.ReactNode]; // Expecting Transcript, AgentAnswers, Dashboard
+  children: [React.ReactNode, React.ReactNode]; // Expecting Transcript and Dashboard only
 }
 
 const MobileSwipeContainer: React.FC<MobileSwipeContainerProps> = ({
@@ -40,7 +40,7 @@ const MobileSwipeContainer: React.FC<MobileSwipeContainerProps> = ({
       const maxDiff = window.innerWidth * 0.25; // Limit visual drag effect slightly more
 
       // Determine max panel index based on dashboard state
-      const maxPanelIndex = isEventsPaneExpanded ? 2 : 1;
+      const maxPanelIndex = 1; // We now only have 2 panels (indexed 0 and 1)
 
       // Prevent over-swipe visualization beyond boundaries
       if (activeMobilePanel === 0 && difference < -maxDiff) return; // Swiping right on first panel
@@ -89,7 +89,7 @@ const MobileSwipeContainer: React.FC<MobileSwipeContainerProps> = ({
     setTouchEnd(null);
 
     // Determine maximum panel index based on dashboard state
-    const maxPanelIndex = isEventsPaneExpanded ? 2 : 1;
+    const maxPanelIndex = 1; // We now only have 2 panels (indexed 0 and 1)
 
     let nextPanel = activeMobilePanel;
     if (isLeftSwipe && activeMobilePanel < maxPanelIndex) {

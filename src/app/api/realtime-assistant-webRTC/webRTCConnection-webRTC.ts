@@ -253,8 +253,12 @@ export const connectionManager = {
 
       // 2. Handle incoming tracks (Log warning, as we don't expect playback)
       pc.ontrack = (event: RTCTrackEvent) => {
-        console.warn(`[${id}] Received unexpected remote track:`, event.track.kind);
-        // If we *did* need playback, logic would go here, passing event to a callback
+        if (event.track.kind === 'audio') {
+          console.log(`[${id}] Received remote audio track for playback.`);
+          // If playback handling is needed in the future, logic can be added here
+        } else {
+          console.warn(`[${id}] Received unexpected remote track:`, event.track.kind);
+        }
       };
 
       // 3. Add the provided local audio track

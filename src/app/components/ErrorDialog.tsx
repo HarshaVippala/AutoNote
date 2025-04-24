@@ -1,86 +1,101 @@
 "use client";
 
 import React from 'react';
+import { Dialog } from '@headlessui/react';
+import { ExclamationTriangleIcon, XMarkIcon } from '@heroicons/react/24/outline';
+import { useTheme } from "@/app/contexts/ThemeContext";
 
-interface ErrorDialogProps {
+export interface ErrorDialogProps {
   isOpen: boolean;
-  title?: string;
+  title: string;
   message: string;
   details?: string;
-  onRetry?: () => void;
+  retryAction?: (() => void) | null;
   onDismiss: () => void;
-  showDetails?: boolean;
 }
 
 /**
  * A modal dialog component for displaying errors with options to retry or dismiss
  */
-const ErrorDialog: React.FC<ErrorDialogProps> = ({
-  isOpen,
-  title = "Error",
-  message,
-  details,
-  onRetry,
-  onDismiss,
-  showDetails = process.env.NODE_ENV === 'development'
+const ErrorDialog: React.FC<ErrorDialogProps> = ({ 
+  isOpen, 
+  title, 
+  message, 
+  details, 
+  retryAction, 
+  onDismiss 
 }) => {
-  if (!isOpen) return null;
-
+  const { theme } = useTheme();
+  
+  const bgColor = theme === 'dark' ? 'bg-gray-800' : 'bg-white';
+  const textColor = theme === 'dark' ? 'text-gray-200' : 'text-gray-900';
+  const borderColor = theme === 'dark' ? 'border-gray-700' : 'border-gray-200';
+  const secondaryTextColor = theme === 'dark' ? 'text-gray-400' : 'text-gray-500';
+  
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50">
-      <div 
-        className="bg-white rounded-lg shadow-lg max-w-md w-full p-6 border border-red-200"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="flex items-center mb-4">
-          <div className="w-10 h-10 rounded-full bg-red-100 flex items-center justify-center mr-3">
-            <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-red-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-            </svg>
+    <Dialog
+      open={isOpen}
+      onClose={onDismiss}
+      className="relative z-50"
+    >
+      <div className="fixed inset-0 bg-black/30" aria-hidden="true" />
+      
+      <div className="fixed inset-0 flex items-center justify-center p-4">
+        <Dialog.Panel className={`mx-auto max-w-md rounded-lg ${bgColor} p-6 shadow-xl border ${borderColor}`}>
+          <div className="flex items-start">
+            <div className="flex-shrink-0">
+              <ExclamationTriangleIcon className="h-6 w-6 text-red-500" aria-hidden="true" />
+            </div>
+            <div className="ml-3 flex-1">
+              <div className="flex w-full justify-between">
+                <Dialog.Title as="h3" className={`text-lg font-medium leading-6 ${textColor}`}>
+                  {title}
+                </Dialog.Title>
+                <button
+                  type="button"
+                  className="ml-2 inline-flex rounded-md bg-transparent text-gray-400 hover:text-gray-500"
+                  onClick={onDismiss}
+                >
+                  <span className="sr-only">Close</span>
+                  <XMarkIcon className="h-5 w-5" aria-hidden="true" />
+                </button>
+              </div>
+              <div className="mt-2">
+                <p className={`text-sm ${textColor}`}>{message}</p>
+                {details && (
+                  <div className="mt-3">
+                    <details>
+                      <summary className={`text-xs cursor-pointer ${secondaryTextColor}`}>Technical details</summary>
+                      <p className={`mt-2 text-xs whitespace-pre-wrap font-mono overflow-auto max-h-40 ${secondaryTextColor}`}>
+                        {details}
+                      </p>
+                    </details>
+                  </div>
+                )}
+              </div>
+              <div className="mt-4 flex justify-end space-x-3">
+                {retryAction && (
+                  <button
+                    type="button"
+                    className={`inline-flex justify-center rounded-md border ${theme === 'dark' ? 'border-gray-700 bg-gray-700 text-gray-200 hover:bg-gray-600' : 'border-gray-300 bg-white text-gray-700 hover:bg-gray-50'} px-4 py-2 text-sm font-medium shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2`}
+                    onClick={retryAction}
+                  >
+                    Retry
+                  </button>
+                )}
+                <button
+                  type="button"
+                  className={`inline-flex justify-center rounded-md ${theme === 'dark' ? 'bg-red-700 hover:bg-red-600 text-white' : 'bg-red-600 hover:bg-red-700 text-white'} px-4 py-2 text-sm font-medium shadow-sm focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2`}
+                  onClick={onDismiss}
+                >
+                  Dismiss
+                </button>
+              </div>
+            </div>
           </div>
-          <h3 className="text-lg font-semibold text-gray-900">
-            {title}
-          </h3>
-        </div>
-
-        <div className="mt-2">
-          <p className="text-gray-700">
-            {message}
-          </p>
-          
-          {showDetails && details && (
-            <details className="mt-3 p-2 bg-gray-50 rounded border border-gray-200">
-              <summary className="cursor-pointer text-sm font-medium text-gray-600">
-                Error details
-              </summary>
-              <pre className="mt-2 whitespace-pre-wrap text-xs overflow-auto max-h-40 p-2 bg-gray-100 rounded">
-                {details}
-              </pre>
-            </details>
-          )}
-        </div>
-
-        <div className="mt-4 flex justify-end space-x-3">
-          {onRetry && (
-            <button
-              type="button"
-              className="px-4 py-2 text-sm font-medium text-white bg-red-600 hover:bg-red-700 rounded-md focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 transition-colors"
-              onClick={onRetry}
-            >
-              Retry
-            </button>
-          )}
-          
-          <button
-            type="button"
-            className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-md focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500 transition-colors"
-            onClick={onDismiss}
-          >
-            Dismiss
-          </button>
-        </div>
+        </Dialog.Panel>
       </div>
-    </div>
+    </Dialog>
   );
 };
 
