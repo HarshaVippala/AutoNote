@@ -151,7 +151,7 @@ const speakerSessionConfig_Transcription = {
   },
   turn_detection: {
     type: "server_vad",
-    silence_duration_ms: 500, // Increase to capture longer audio segments
+    silence_duration_ms: 2000, // increased to avoid splitting quick utterances
     create_response: false,
     interrupt_response: false
   }, // Enable VAD to detect audio for transcription
@@ -190,6 +190,9 @@ interface ErrorState {
     details: string;
     retryAction: (() => void) | null;
 }
+
+// add constant for debounce delay
+const DEBOUNCE_DELAY_MS = 2000;  // increased debounce to 4s to batch transcripts across longer pauses
 
 const TopControls: React.FC<TopControlsProps> = memo(({
   appConnectionState, // Use renamed prop
@@ -370,7 +373,7 @@ const TopControls: React.FC<TopControlsProps> = memo(({
         // Queue this transcript for the main Assistant API (Keep this logic)
         setTranscriptTurn((prev: TranscriptTurn) => ({
           ...prev,
-          speakerTranscript: finalTranscript,
+          speakerTranscript: (prev.speakerTranscript ? prev.speakerTranscript.trim() + ' ' : '') + finalTranscript,
           processed: false, // Mark for processing
           timestamp: Date.now()
         }));
@@ -752,11 +755,9 @@ const TopControls: React.FC<TopControlsProps> = memo(({
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [triggerDisconnect]);
 
-  // Add state for debouncing
-  const [debounceTimeout, setDebounceTimeout] = useState<NodeJS.Timeout | null>(null);
-  const [pendingTurn, setPendingTurn] = useState<TranscriptTurn | null>(null);
+  // add ref for debounce timer to batch rapid transcript updates
+  const debounceRef = useRef<NodeJS.Timeout | null>(null);
 
-  // <<< UPDATED: Process transcript turn with debouncing >>>
   useEffect(() => {
     // Trigger when a turn has new data (mic OR speaker) and hasn't been processed
     if (
@@ -769,54 +770,48 @@ const TopControls: React.FC<TopControlsProps> = memo(({
       // Mark the current turn as processed to prevent duplicate processing
       setTranscriptTurn(prev => ({...prev, processed: true}));
       
-      // Store the turn for potential debounce processing
-      setPendingTurn(transcriptTurn);
-      
-      // Clear any existing timeout
-      if (debounceTimeout) {
+      // clear any existing debounce
+      if (debounceRef.current) {
         console.log('[Turn Processing] Clearing existing debounce timeout');
-        clearTimeout(debounceTimeout);
+        clearTimeout(debounceRef.current);
       }
-      
-      // Set a new debounce timeout (500ms as suggested in strategy doc)
-      console.log('[Turn Processing] Setting debounce timeout (500ms)');
-      const timeout = setTimeout(() => {
-        // When the timeout completes, process the most recent pending turn
-        if (pendingTurn) {
-          console.log('[Turn Processing] Debounce complete, triggering onProcessTurn with:', pendingTurn);
-          try {
-            // Call the handler passed from the parent (App.tsx)
-            onProcessTurn(pendingTurn);
-            
-            // Clear the pending turn after processing
-            setPendingTurn(null);
-          } catch (error) {
-            // Catch sync errors in the handler call itself
-            const err = error instanceof Error ? error : new Error(String(error));
-            console.error('[Turn Processing] Error calling onProcessTurn handler:', err);
-            
-            // Show error dialog
-            setErrorState({
-              isOpen: true,
-              title: 'Processing Error',
-              message: 'Could not initiate processing for the latest conversation turn.',
-              details: err.message,
-              retryAction: null
-            });
-          }
+      console.log(`[Turn Processing] Setting debounce timeout (${DEBOUNCE_DELAY_MS}ms)`);
+      // schedule processing of the latest transcriptTurn
+      debounceRef.current = setTimeout(() => {
+        console.log('[Turn Processing] Debounce complete, triggering onProcessTurn with:', transcriptTurn);
+        try {
+          onProcessTurn(transcriptTurn);
+          
+          // Reset the transcript turn after processing to avoid combining with next prompt
+          setTranscriptTurn(prev => ({
+            ...prev,
+            speakerTranscript: '', // Clear the speaker transcript
+            micTranscript: '',     // Clear the mic transcript too
+            processed: true,       // Keep it marked as processed
+            timestamp: Date.now()  // Update timestamp
+          }));
+          
+        } catch (error) {
+          const err = error instanceof Error ? error : new Error(String(error));
+          console.error('[Turn Processing] Error calling onProcessTurn handler:', err);
+          setErrorState({
+            isOpen: true,
+            title: 'Processing Error',
+            message: 'Could not initiate processing for the latest conversation turn.',
+            details: err.message,
+            retryAction: null
+          });
         }
-      }, 500); // 500ms debounce
-      
-      setDebounceTimeout(timeout);
+      }, DEBOUNCE_DELAY_MS);
     }
-    
-    // Cleanup timeout on unmount
+  }, [transcriptTurn, onProcessTurn]);
+
+  // clear debounce timer on unmount
+  useEffect(() => {
     return () => {
-      if (debounceTimeout) {
-        clearTimeout(debounceTimeout);
-      }
+      if (debounceRef.current) clearTimeout(debounceRef.current);
     };
-  }, [transcriptTurn, onProcessTurn, debounceTimeout, pendingTurn]);
+  }, []);
 
   // Cleanup on unmount
   useEffect(() => {

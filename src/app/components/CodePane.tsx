@@ -19,7 +19,12 @@ interface CodePaneProps {
 }
 
 const CodePane: React.FC<CodePaneProps> = ({ theme, activeTabKey, onTabChange, tabs }) => {
+  console.log('[CodePane] Received props:', { activeTabKey, tabs }); // Add logging
   const codeStyle = theme === 'dark' ? vscDarkPlus : coy;
+
+  // Find the active tab data
+  const activeTab = tabs.find(tab => tab.key === activeTabKey);
+  console.log('[CodePane] Active tab:', activeTab); // Log the active tab
 
   return (
     <div className="h-full flex flex-col">
@@ -36,14 +41,25 @@ const CodePane: React.FC<CodePaneProps> = ({ theme, activeTabKey, onTabChange, t
         {/* Dynamically generate Tab Content */}
         {tabs.map((tab) => (
           <TabsContent key={tab.key} value={tab.key} className="flex-1 overflow-auto mt-1">
-            <SyntaxHighlighter
-              language={tab.language} // Use dynamic language
-              style={codeStyle}
-              customStyle={{ background: 'transparent', fontSize: '0.875rem', margin: 0, padding: '0.5rem' }}
-              wrapLongLines={true}
-            >
-              {tab.code} {/* Use dynamic code */}
-            </SyntaxHighlighter>
+            <div className="w-full h-full overflow-hidden">
+              <SyntaxHighlighter
+                language={tab.language} // Use dynamic language
+                style={codeStyle}
+                customStyle={{ 
+                  background: 'transparent', 
+                  fontSize: '0.875rem', 
+                  margin: 0, 
+                  padding: '0.5rem',
+                  whiteSpace: 'pre-wrap',
+                  wordBreak: 'break-word',
+                  overflowWrap: 'break-word'
+                }}
+                wrapLongLines={true}
+                wrapLines={true}
+              >
+                {tab.code} {/* Use dynamic code */}
+              </SyntaxHighlighter>
+            </div>
           </TabsContent>
         ))}
       </Tabs>

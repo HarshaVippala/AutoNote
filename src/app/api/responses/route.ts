@@ -17,7 +17,7 @@ export const runtime = 'edge'; // Optional: Use edge runtime for lower latency
 const ComprehensiveCodeSchema = z.object({
   planning_steps: z.array(z.string()).describe("Step-by-step plan or thought process for solving the problem."),
   language: z.string().describe("The programming language of the generated code (e.g., 'python', 'java'). Null if no code generated."),
-  code: z.string().describe("The generated code snippet. Empty string if no code generated."),
+  code: z.string().describe("The generated code snippet. Empty string if no code generated. use a mix of simple  variable names of variable lengths. Don't provide overly complex solutions to simple problems. try to use the most simple and efficient solution."),
   complexity: z.object({
     time: z.string().describe("Time complexity analysis (e.g., O(n log n))."),
     space: z.string().describe("Space complexity analysis (e.g., O(n)).")
@@ -32,11 +32,11 @@ const SimpleExplanationSchema = z.object({
 
 // Schema for STAR behavioral answers - LPs integrated implicitly
 const BehavioralStarSchema = z.object({
-  situation: z.string().describe("Describe the specific situation or context based on retrieved resume info."),
-  task: z.string().describe("Describe the task, challenge, or goal you were faced with, based on retrieved resume info."),
-  action: z.string().describe("Describe the specific actions *you* took. Weave in relevant leadership principles (e.g., showing bias for action, diving deep) naturally within the description. Base this on retrieved resume info."),
-  result: z.string().describe("Describe the outcome of your actions, quantifying with metrics/data from the resume where possible. Mention the impact and implicitly link to relevant leadership principles.")
-}).describe("Structured behavioral answer using STAR. Grounds response in user's resume (via file_search) and implicitly references leadership principles. Use ONLY for behavioral questions AFTER searching the resume.");
+  situation: z.string().describe("Describe the specific situation or context based on retrieved resume info. Include relevant company name, project scope, and technical environment."),
+  task: z.string().describe("Describe the technical challenge, goal, or problem you were faced with in detail. Include technical specifications, requirements, constraints, and stakeholder expectations."),
+  action: z.string().describe("Provide a detailed, technically-focused description of the specific actions *you* took. Include technical frameworks, languages, methodologies, and tools used. Describe your technical decision-making process, architecture choices, implementation details, code optimizations, and how you overcame technical obstacles. Clearly demonstrate deep technical expertise and ownership of the solution. Weave in relevant leadership principles (e.g., bias for action, diving deep, ownership) naturally within the description."),
+  result: z.string().describe("Describe the outcome of your actions, quantifying with specific technical metrics/data from the resume where possible (e.g., performance improvements, scalability gains, latency reduction, user adoption metrics). Include technical impact on systems, processes, or business outcomes. Explain how your technical implementation created lasting value.")
+}).describe("Structured behavioral answer using STAR. Grounds response in user's resume (via file_search) and implicitly references leadership principles. Focus on technical details and implementation specifics. Use ONLY for behavioral questions AFTER searching the resume.");
 
 
 // --- Convert Zod schemas to JSON Schemas for Tool Parameters ---
@@ -49,14 +49,14 @@ const comprehensiveTool: any = {
     type: 'function',
     name: 'format_comprehensive_code',
     description: ComprehensiveCodeSchema.description ?? "Comprehensive structured response generator.",
-    parameters: comprehensiveJsonSchema.definitions?.ComprehensiveCodeSchema ?? {type: "object", properties: {}}
+    parameters: comprehensiveJsonSchema
 };
 
 const simpleExplanationTool: any = {
     type: 'function',
     name: 'format_simple_explanation',
     description: SimpleExplanationSchema.description ?? "Simple explanation generator.",
-    parameters: simpleExplanationJsonSchema.definitions?.SimpleExplanationSchema ?? {type: "object", properties: {}}
+    parameters: simpleExplanationJsonSchema
 };
 
 // Define the behavioral tool
@@ -64,7 +64,7 @@ const behavioralStarTool: any = {
     type: 'function',
     name: 'format_behavioral_star_answer',
     description: BehavioralStarSchema.description ?? "Formats behavioral answers using STAR.",
-    parameters: behavioralStarJsonSchema.definitions?.BehavioralStarSchema ?? {type: "object", properties: {}}
+    parameters: behavioralStarJsonSchema
 };
 
 
@@ -98,8 +98,10 @@ export async function POST(req: NextRequest) {
 1.  **Behavioral Question?** If it looks like a behavioral interview question (e.g., starts with 'Tell me about a time...', 'Describe a situation...', asks about failures, leadership, teamwork): 
     a.  First, use the 'file_search' tool to find relevant experiences in the user's attached resume/vector store. 
     b.  Then, use the 'format_behavioral_star_answer' tool to structure the response based *only* on the information retrieved from the file search. 
-    c.  Implicitly weave relevant leadership principles (like Bias for Action, Ownership, Dive Deep) into the 'action' and 'result' fields. 
-    d.  Be factual and avoid exaggeration. Quantify results using data from the resume if possible.
+    c.  Emphasize technical details, especially in the Action section - include specific programming languages, frameworks, design patterns, architectures, and methodologies used.
+    d.  Demonstrate technical depth by explaining implementation details, technical decisions, and engineering challenges overcome.
+    e.  Implicitly weave relevant leadership principles (like Bias for Action, Ownership, Dive Deep) into the 'action' and 'result' fields.
+    f.  Be factual and avoid exaggeration. Quantify results using specific metrics and technical KPIs from the resume if possible.
 2.  **Complex Code/Analysis Request?** If it requires detailed planning, code generation, and complexity analysis, use the 'format_comprehensive_code' tool.
 3.  **Simple Question?** For simpler questions needing only a direct explanation or answer, use the 'format_simple_explanation' tool.
 
@@ -116,8 +118,6 @@ Structure your entire response using the chosen tool based on the analysis above
     ];
 
     // Conditionally add the file_search tool if vector_store_id is provided
-    // --- TEMPORARILY DISABLED FOR DEBUGGING 500 ERRORS ---
-    /*
     if (vector_store_id) {
         toolsForApiCall.push({
             type: "file_search",
@@ -127,9 +127,6 @@ Structure your entire response using the chosen tool based on the analysis above
     } else {
         console.log('[API Route] No vector_store_id provided, file_search tool omitted.');
     }
-    */
-    // --- END TEMPORARY DISABLE ---
-    console.log('[API Route] file_search tool TEMPORARILY DISABLED for debugging.');
 
     // 2. Call OpenAI Responses API with streaming and configured tools
     const response = await openaiSDK.responses.create({
@@ -138,73 +135,16 @@ Structure your entire response using the chosen tool based on the analysis above
         ...(previous_response_id && { previous_response_id: previous_response_id }),
         tools: toolsForApiCall,
         tool_choice: 'auto',
-        stream: true,
+        stream: false, // Set stream to false
     });
 
-    console.log(`[API Route] OpenAI Responses API stream initiated.`);
+    console.log(`[API Route] OpenAI Responses API call completed.`);
 
-    // 3. Process the stream and forward data to client
-    const stream = new ReadableStream({
-        async start(controller) {
-            let responseId: string | null = null;
-            let chosenToolName: string | null = null; // Track which tool (if any) is chosen
-
-            try {
-                for await (const chunk of response as any) {
-                    if (chunk.id) {
-                        responseId = chunk.id;
-                    }
-
-                    // Handle output array if present
-                    if (chunk.output && Array.isArray(chunk.output)) {
-                        for (const outputItem of chunk.output) {
-                            if (outputItem.type === 'function_call') {
-                                // Track function name if this is first time seeing it
-                                if (outputItem.name && !chosenToolName) {
-                                    chosenToolName = outputItem.name;
-                                    console.log("[API Route] Model chose tool:", chosenToolName);
-                                    // Send tool choice marker to client
-                                    const toolChoicePayload = JSON.stringify({ type: 'tool_choice', name: chosenToolName });
-                                    controller.enqueue(new TextEncoder().encode(`data: ${toolChoicePayload}\n\n`));
-                                }
-                                // If arguments are present, stream them
-                                if (outputItem.arguments) {
-                                    controller.enqueue(new TextEncoder().encode(`data: ${JSON.stringify({ type: 'tool_arguments', chunk: outputItem.arguments })}\n\n`));
-                                }
-                            } else if (outputItem.type === 'text' && outputItem.text) {
-                                controller.enqueue(new TextEncoder().encode(`data: ${JSON.stringify({ type: 'text', chunk: outputItem.text })}\n\n`));
-                            }
-                        }
-                    } else if (chunk.text && typeof chunk.text === 'string') {
-                        controller.enqueue(new TextEncoder().encode(`data: ${JSON.stringify({ type: 'text', chunk: chunk.text })}\n\n`));
-                    }
-                }
-
-                if (responseId) {
-                    console.log(`[API Route] Stream finished. Response ID: ${responseId}`);
-                    controller.enqueue(new TextEncoder().encode(`data: ${JSON.stringify({ type: 'response_id', id: responseId })}\n\n`));
-                }
-                controller.enqueue(new TextEncoder().encode(`data: [DONE]\n\n`));
-            } catch (error) {
-                console.error('[API Route] Error processing stream:', error);
-                controller.enqueue(new TextEncoder().encode(`data: ${JSON.stringify({ type: 'error', message: (error as Error).message })}\n\n`));
-            } finally {
-                controller.close();
-            }
-        }
-    });
-
-    // Return the stream directly to the client with proper SSE headers
-    return new Response(stream, {
-        headers: { 
-            'Content-Type': 'text/event-stream',
-            'Cache-Control': 'no-cache',
-            'Connection': 'keep-alive'
-        }
-    });
+    // Return the complete response as JSON
+    return NextResponse.json(response);
 
   } catch (error) {
-    console.error('[API Route] Error initiating responses stream:', error);
+    console.error('[API Route] Error processing responses request:', error);
     if (error instanceof OpenAI.APIError) {
       console.error('[API Route] OpenAI API Error:', error.status, error.message, error.code, error.type);
       return new Response(
@@ -217,10 +157,10 @@ Structure your entire response using the chosen tool based on the analysis above
     }
     return new Response(
       JSON.stringify({ error: 'Failed to process responses request', details: (error as Error).message }),
-      { 
+      {
         status: 500,
         headers: { 'Content-Type': 'application/json' }
       }
     );
   }
-} 
+}

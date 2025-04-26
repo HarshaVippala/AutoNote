@@ -1,0 +1,74 @@
+/* Styles for panel resizing */
+.panel-resize-handle {
+  width: 4px;
+  border-radius: 2px;
+  margin: 0 2px;
+  cursor: col-resize;
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background-color 0.2s ease;
+}
+
+.handle-bar {
+  height: 40px;
+  width: 2px;
+  border-radius: 1px;
+  transition: background-color 0.2s ease;
+}
+
+/* For tab styling within panes */
+.tab-container {
+  display: flex;
+  overflow-x: auto;
+  border-bottom: 1px solid rgba(128, 128, 128, 0.3);
+  padding-bottom: 2px;
+  margin-bottom: 4px;
+  white-space: nowrap;
+  scrollbar-width: thin;
+}
+
+.tab-item {
+  padding: 4px 8px;
+  font-size: 12px;
+  cursor: pointer;
+  border-radius: 4px 4px 0 0;
+  border: 1px solid transparent;
+  margin-right: 4px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 150px;
+  display: inline-block;
+  position: relative;
+}
+
+.tab-item.active {
+  border-color: rgba(128, 128, 128, 0.5);
+  border-bottom-color: transparent;
+}
+
+.tab-close {
+  margin-left: 6px;
+  opacity: 0.6;
+  transition: opacity 0.2s ease;
+}
+
+.tab-close:hover {
+  opacity: 1;
+}
+
+/* Custom scrollbar for tabs */
+.tab-container::-webkit-scrollbar {
+  height: 4px;
+}
+
+.tab-container::-webkit-scrollbar-thumb {
+  background-color: rgba(128, 128, 128, 0.4);
+  border-radius: 2px;
+}
+
+.tab-container::-webkit-scrollbar-track {
+  background-color: transparent;
+} 

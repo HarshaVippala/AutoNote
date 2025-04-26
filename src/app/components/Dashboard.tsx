@@ -15,7 +15,9 @@ type WebRTCConnectionStatus = 'disconnected' | 'connecting' | 'connected' | 'fai
 declare global {
   interface Window {
     electronAPI?: {
-      takeScreenshot: () => Promise<{ success: boolean; filePath?: string; error?: string }>;
+      takeScreenshot: () => Promise<{ success: boolean; path?: string; error?: string }>;
+      getScreenshots: () => Promise<string[]>;
+      getImagePreview: (filepath: string) => Promise<string>;
     };
   }
 }
@@ -31,10 +33,6 @@ export interface DashboardProps {
   speakerConnectionStatus?: WebRTCConnectionStatus;
   onReconnectMic?: () => void;
   onReconnectSpeaker?: () => void;
-  // Font size controls
-  fontSize: number;
-  increaseFontSize: () => void;
-  decreaseFontSize: () => void;
 }
 
 interface TokenUsage {
@@ -74,9 +72,6 @@ function Dashboard({
   speakerConnectionStatus = 'disconnected', // Default value if not provided
   onReconnectMic = () => console.log('Mic reconnect handler not provided'),
   onReconnectSpeaker = () => console.log('Speaker reconnect handler not provided'),
-  fontSize,
-  increaseFontSize,
-  decreaseFontSize
 }: DashboardProps) {
   const { loggedEvents, toggleExpand } = useEvent();
   const {
@@ -396,11 +391,11 @@ function Dashboard({
       setScreenshotStatus('taking');
       const result = await window.electronAPI.takeScreenshot();
       
-      if (result.success && result.filePath) {
+      if (result.success && result.path) {
         setScreenshotStatus('success');
-        setScreenshotPath(result.filePath);
+        setScreenshotPath(result.path);
         // Optional: Show a success notification or preview
-        console.log(`Screenshot saved to: ${result.filePath}`);
+        console.log(`Screenshot saved to: ${result.path}`);
         
         // Reset status after a delay
         setTimeout(() => {
@@ -531,49 +526,15 @@ function Dashboard({
                  </div>
                )}
            </button>
-           
-           {/* Font Size Controls - Moved here from Middle Group */}
-           <div className="flex flex-col items-center space-y-1 mt-2">
-            <button
-              aria-label="Increase font size"
-              title="Increase font size"
-              className={`rounded-full w-8 h-8 flex items-center justify-center ${theme === 'dark' ? 'bg-gray-700 hover:bg-gray-600 text-gray-200' : 'bg-gray-200 hover:bg-gray-300 text-gray-700'} transition-colors border ${theme === 'dark' ? 'border-gray-600' : 'border-gray-300'}`}
-              onClick={increaseFontSize}
-            >
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                <path d="M12 6v12M6 12h12" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-              </svg>
-            </button>
-            <div className="text-xs text-center font-medium" style={{ color: theme === 'dark' ? '#a0aec0' : '#4a5568' }}>
-              {fontSize}px
-            </div>
-            <button
-              aria-label="Decrease font size"
-              title="Decrease font size"
-              className={`rounded-full w-8 h-8 flex items-center justify-center ${theme === 'dark' ? 'bg-gray-700 hover:bg-gray-600 text-gray-200' : 'bg-gray-200 hover:bg-gray-300 text-gray-700'} transition-colors border ${theme === 'dark' ? 'border-gray-600' : 'border-gray-300'}`}
-              onClick={decreaseFontSize}
-            >
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                <path d="M6 12h12" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-              </svg>
-            </button>
-          </div>
         </div>
 
-        {/* --- Middle Group: Chat, Assistant, Screenshot, Voice Rec (All Round) --- */}
+        {/* --- Middle Group: Chat, Assistant, Screenshot --- */}
         <div className="flex flex-col items-center space-y-4"> 
           {/* chat completion */}
           <div className={`rounded-full flex items-center justify-center w-8 h-8 ${getStatusColor(chatStatus)} border ${theme === 'dark' ? 'border-gray-600' : 'border-gray-300'}`}>
             {/* Chat Icon SVG (Ensure consistent size) */}
             <svg width="16" height="16" fill="none" stroke={theme === 'dark' ? '#ffffff' : 'currentColor'} strokeWidth="1.5" viewBox="0 0 24 24">
               <path d="M12 4.5c-4.473 0-8 3.41-8 7.5 0 1.696.6 3.263 1.62 4.525a1 1 0 0 1 .206.814 14.712 14.712 0 0 1-.37 1.501 15.17 15.17 0 0 0 1.842-.4 1 1 0 0 1 .745.08A8.371 8.371 0 0 0 12 19.5c4.473 0 8-3.41 8-7.5s-3.527-7.5-8-7.5ZM2 12c0-5.3 4.532-9.5 10-9.5S22 6.7 22 12s-4.532 9.5-10 9.5c-1.63 0-3.174-.371-4.539-1.032a17.88 17.88 0 0 1-3.4.53 1 1 0 0 1-.995-1.357c.29-.755.534-1.496.704-2.242A9.137 9.137 0 0 1 2 12Z"></path>
-            </svg>
-          </div>
-          {/* assistant */}
-          <div className={`rounded-full flex items-center justify-center w-8 h-8 ${getStatusColor(assistantStatus)} border ${theme === 'dark' ? 'border-gray-600' : 'border-gray-300'}`}>
-            {/* Assistant Icon SVG (Ensure consistent size) */}
-            <svg width="16" height="16" fill="none" stroke={theme === 'dark' ? '#ffffff' : 'currentColor'} strokeWidth="1.5" viewBox="0 0 24 24">
-              <path d="M12 1a1 1 0 0 1 1 1v.5h2.87c.513 0 .955 0 1.32.029.384.03.767.098 1.137.28a3 3 0 0 1 1.364 1.364c.182.37.25.753.28 1.137.029.365.029.807.029 1.32v.078c0 1.054 0 1.903-.055 2.592-.056.709-.175 1.332-.46 1.911a5 5 0 0 1-2.274 2.273c-.579.286-1.202.405-1.911.461-.689.055-1.538.055-2.592.055h-1.416c-1.054 0-1.903 0-2.592-.055-.709-.056-1.332-.175-1.911-.46a5 5 0 0 1-2.273-2.274c-.286-.579-.405-1.202-.461-1.911C4 8.611 4 7.762 4 6.708V6.63c0-.512 0-.954.029-1.319.03-.384.098-.767.28-1.137A3 3 0 0 1 5.673 2.81c.37-.182.753-.25 1.137-.28.365-.029.807-.029 1.32-.029H11V2a1 1 0 0 1 1-1ZM6.969 4.523c-.265.02-.363.056-.411.08a1 1 0 0 0-.455.455c-.024.048-.06.146-.08.41A16.99 16.99 0 0 0 6 6.668c0 1.104 0 1.874.048 2.475.047.588.135.928.261 1.185a3 3 0 0 0 1.364 1.364c.257.127.597.214 1.185.26.6.048 1.37.049 2.475.049h1.334c1.104 0 1.874 0 2.475-.048.588-.047.928-.134 1.185-.261a3 3 0 0 0 1.364-1.364c.127-.257.214-.597.26-1.185.048-.6.049-1.37.049-2.475 0-.56 0-.922-.023-1.198-.02-.265-.056-.363-.08-.411a1 1 0 0 0-.455-.455c-.048-.024-.146-.06-.41-.08a16.993 16.993 0 0 0-1.199-.023H8.167c-.56 0-.922 0-1.198.023ZM6 21c0-.974.551-1.95 1.632-2.722C8.71 17.508 10.252 17 12 17c1.749 0 3.29.508 4.369 1.278C17.449 19.05 18 20.026 18 21a1 1 0 1 0 2 0c0-1.788-1.016-3.311-2.469-4.35-1.455-1.038-3.414-1.65-5.53-1.65-2.118 0-4.077.611-5.532 1.65C5.016 17.69 4 19.214 4 21a1 1 0 1 0 2 0Z"></path>
             </svg>
           </div>
           {/* Screenshot Button - Now with functionality */}
@@ -594,50 +555,11 @@ function Dashboard({
               </svg>
             )}
           </button>
-           {/* Voice Recognition Button (New) - Round Style */}
-           <button
-            title="Voice Recognition Toggle"
-            className={`rounded-full flex items-center justify-center font-bold text-xs ${theme === 'dark' ? 'bg-gray-700 text-gray-300 hover:bg-gray-600 border-gray-600' : 'bg-gray-100 text-gray-600 hover:bg-gray-200 border-gray-300'} cursor-pointer transition-colors border w-8 h-8`}
-          >
-            {/* Voice Rec SVG instead of PNG */}
-            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill={theme === 'dark' ? '#ffffff' : 'currentColor'} viewBox="0 0 16 16">
-              <path d="M8 8a3 3 0 1 0 0-6 3 3 0 0 0 0 6z"/>
-              <path d="M5 8a3 3 0 1 1 6 0v2.5c0 .818-.393 1.544-1 2v2a.5.5 0 0 1-.5.5h-3a.5.5 0 0 1-.5-.5V12.5a2.5 2.5 0 0 1-1-2V8zm4.5 0a.5.5 0 0 0-1 0v1.5a.5.5 0 0 1-1 0V8a1.5 1.5 0 1 1 3 0v1.5a.5.5 0 0 1-1 0V8z"/>
-            </svg>
-          </button>
         </div>
 
-        {/* --- Bottom Group: Theme Toggle and Settings/Key Button --- */}
-        <div className="flex flex-col items-center space-y-3"> 
-          {/* Theme Toggle Button - New */}
-          <button
-            onClick={toggleTheme}
-            title={`Switch to ${theme === 'light' ? 'Dark' : 'Light'} Mode`}
-            className={`rounded-full flex items-center justify-center font-bold text-xs ${theme === 'dark' ? 'bg-blue-700 text-blue-200 hover:bg-blue-600 border-blue-600' : 'bg-gray-100 text-gray-600 hover:bg-gray-200 border-gray-300'} cursor-pointer transition-colors border w-8 h-8`}
-            aria-label={`Switch to ${theme === 'light' ? 'Dark' : 'Light'} Mode`}
-          >
-            {theme === 'light' ? (
-              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16">
-                <path d="M6 .278a.768.768 0 0 1 .08.858 7.208 7.208 0 0 0-.878 3.46c0 4.021 3.278 7.277 7.318 7.277.527 0 1.04-.055 1.533-.16a.787.787 0 0 1 .81.316.733.733 0 0 1-.031.893A8.349 8.349 0 0 1 8.344 16C3.734 16 0 12.286 0 7.71 0 4.266 2.114 1.312 5.124.06A.752.752 0 0 1 6 .278z"/>
-              </svg>
-            ) : (
-              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="#ffffff" viewBox="0 0 16 16">
-                <path d="M8 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM8 0a.5.5 0 0 1 .5.5v2a.5.5 0 0 1-1 0v-2A.5.5 0 0 1 8 0zm0 13a.5.5 0 0 1 .5.5v2a.5.5 0 0 1-1 0v-2A.5.5 0 0 1 8 13zm8-5a.5.5 0 0 1-.5.5h-2a.5.5 0 0 1 0-1h2a.5.5 0 0 1 .5.5zM3 8a.5.5 0 0 1-.5.5h-2a.5.5 0 0 1 0-1h2A.5.5 0 0 1 3 8zm10.657-5.657a.5.5 0 0 1 0 .707l-1.414 1.415a.5.5 0 1 1-.707-.708l1.414-1.414a.5.5 0 0 1 .707 0zm-9.193 9.193a.5.5 0 0 1 0 .707L3.05 13.657a.5.5 0 0 1-.707-.707l1.414-1.414a.5.5 0 0 1 .707 0zm9.193 2.121a.5.5 0 0 1-.707 0l-1.414-1.414a.5.5 0 0 1 .707-.707l1.414 1.414a.5.5 0 0 1 0 .707zM4.464 4.465a.5.5 0 0 1-.707 0L2.343 3.05a.5.5 0 1 1 .707-.707l1.414 1.414a.5.5 0 0 1 0 .708z"/>
-              </svg>
-            )}
-          </button>
-          
-          {/* Key/Settings Button - Round Style (existing) */}
-          <button
-            title="Settings"
-            className={`rounded-full flex items-center justify-center font-bold text-xs ${theme === 'dark' ? 'bg-gray-700 text-gray-300 hover:bg-gray-600 border-gray-600' : 'bg-gray-100 text-gray-600 hover:bg-gray-200 border-gray-300'} cursor-pointer transition-colors border w-8 h-8`}
-          >
-            {/* Settings SVG instead of PNG */}
-            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill={theme === 'dark' ? '#ffffff' : 'currentColor'} viewBox="0 0 16 16">
-              <path d="M8 4.754a3.246 3.246 0 1 0 0 6.492 3.246 3.246 0 0 0 0-6.492zM5.754 8a2.246 2.246 0 1 1 4.492 0 2.246 2.246 0 0 1-4.492 0z"/>
-              <path d="M9.796 1.343c-.527-1.79-3.065-1.79-3.592 0l-.094.319a.873.873 0 0 1-1.255.52l-.292-.16c-1.64-.892-3.433.902-2.54 2.541l.159.292a.873.873 0 0 1-.52 1.255l-.319.094c-1.79.527-1.79 3.065 0 3.592l.319.094a.873.873 0 0 1 .52 1.255l-.16.292c-.892 1.64.901 3.434 2.541 2.54l.292-.159a.873.873 0 0 1 1.255.52l.094.319c.527 1.79 3.065 1.79 3.592 0l.094-.319a.873.873 0 0 1 1.255-.52l.292.16c1.64.893 3.434-.902 2.54-2.541l-.159-.292a.873.873 0 0 1 .52-1.255l.319-.094c1.79-.527 1.79-3.065 0-3.592l-.319-.094a.873.873 0 0 1-.52-1.255l.16-.292c.893-1.64-.902-3.433-2.541-2.54l-.292.159a.873.873 0 0 1-1.255-.52l-.094-.319zm-2.633.283c.246-.835 1.428-.835 1.674 0l.094.319a1.873 1.873 0 0 0 2.693 1.115l.291-.16c.764-.415 1.6.42 1.184 1.185l-.159.292a1.873 1.873 0 0 0 1.116 2.692l.318.094c.835.246.835 1.428 0 1.674l-.319.094a1.873 1.873 0 0 0-1.115 2.693l.16.291c.415.764-.42 1.6-1.185 1.184l-.291-.159a1.873 1.873 0 0 0-2.693 1.116l-.094.318c-.246.835-1.428.835-1.674 0l-.094-.319a1.873 1.873 0 0 0-2.692-1.115l-.292.16c-.764.415-1.6-.42-1.184-1.185l.159-.291A1.873 1.873 0 0 0 1.945 8.93l-.319-.094c-.835-.246-.835-1.428 0-1.674l.319-.094A1.873 1.873 0 0 0 3.06 4.377l-.16-.292c-.415-.764.42-1.6 1.185-1.184l.292.159a1.873 1.873 0 0 0 2.692-1.115l.094-.319z"/>
-            </svg>
-          </button>
+        {/* --- Bottom Group: Empty (removed theme toggle) --- */}
+        <div className="flex flex-col items-center space-y-3">
+          {/* No buttons here now */}
         </div>
 
       </div>

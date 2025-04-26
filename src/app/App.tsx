@@ -5,6 +5,10 @@ import { useSearchParams } from "next/navigation";
 import { v4 as uuidv4 } from "uuid";
 import Image from "next/image";
 import { createParser } from 'eventsource-parser';
+// Add OpenAI SDK and Zod imports
+import OpenAI from "openai";
+import { z } from "zod";
+import { zodTextFormat } from "openai/helpers/zod";
 
 // UI components
 import Transcript from "./components/Transcript";
@@ -13,6 +17,7 @@ import TopControls from "./components/TopControls";
 import MobileSwipeContainer from "./components/MobileSwipeContainer";
 import CodePane from './components/CodePane';
 import AnalysisPane from './components/AnalysisPane';
+import DraggablePanelLayout from './components/DraggablePanelLayout';
 
 // Types
 import { AgentConfig, ConnectionState, TranscriptItem, TranscriptTurn, TabData } from "@/app/types";
@@ -23,8 +28,35 @@ import { useEvent } from "@/app/contexts/EventContext";
 import { useStatus, StatusProvider } from "@/app/contexts/StatusContext";
 import { useTheme } from "./contexts/ThemeContext";
 
-// Agent configs
-import { allAgentSets, defaultAgentSetKey } from "@/app/agentConfigs";
+
+//Initialize OpenAI client
+const openai = new OpenAI({
+  apiKey: process.env.NEXT_PUBLIC_OPENAI_API_KEY, // Make sure this is set in your environment
+  dangerouslyAllowBrowser: true, // Only for client-side usage
+});
+
+// Define Zod schemas for structured outputs
+const ComprehensiveCodeSchema = z.object({
+  planning_steps: z.array(z.string()),
+  language: z.string(),
+  code: z.string(),
+  complexity: z.object({
+    time: z.string(),
+    space: z.string(),
+  }),
+  explanation: z.string(),
+});
+
+const SimpleExplanationSchema = z.object({
+  explanation: z.string(),
+});
+
+const BehavioralStarSchema = z.object({
+  situation: z.string(),
+  task: z.string(),
+  action: z.string(),
+  result: z.string(),
+});
 
 // This might require exporting it from TopControls.tsx first.
 type WebRTCConnectionStatus = 'disconnected' | 'connecting' | 'connected' | 'failed' | 'error';
@@ -50,9 +82,6 @@ interface AppContentProps {
   speakerConnectionStatus: WebRTCConnectionStatus;
   onReconnectMic: () => void;
   onReconnectSpeaker: () => void;
-  fontSize: number;
-  increaseFontSize: () => void;
-  decreaseFontSize: () => void;
 }
 
 // Define types for the structured responses matching the backend
@@ -75,6 +104,13 @@ interface CodeResponse {
 // Temporarily extend TabData with structuredAnalysis if not already present
 interface LocalTabData extends TabData {
   structuredAnalysis?: AnalysisResponse;
+  responseId?: string | null;
+  functionCall?: {
+    id: string;
+    call_id: string;
+    name: string;
+    arguments: string;
+  };
 }
 
 // Define the expected API response structure
@@ -104,9 +140,6 @@ function AppContent({
   speakerConnectionStatus,
   onReconnectMic,
   onReconnectSpeaker,
-  fontSize,
-  increaseFontSize,
-  decreaseFontSize,
 }: AppContentProps) {
   // Hooks that need context can be called here
   const { chatStatus, setChatStatus, setPreviousChatSuccess } = useStatus();
@@ -118,11 +151,19 @@ function AppContent({
   const [tabData, setTabData] = useState<LocalTabData[]>([]); // Start with empty tabs
   const [tabCounter, setTabCounter] = useState<number>(1); // Counter for unique tab keys/filenames
   const [lastResponseId, setLastResponseId] = useState<string | null>(null);
+  // Add state to track current function name
+  const [currentFunctionName, setCurrentFunctionName] = useState<string | null>(null);
 
   // Add theme hook
   const { theme } = useTheme();
 
-  // Move handleProcessTurn here as it uses context hooks
+  // Updated handleProcessTurn to use OpenAI SDK with structured outputs
+  // Add state for conversation history
+  const [conversationHistory, setConversationHistory] = useState<any[]>([]);
+
+  // Add this near the other state declarations at the beginning of the AppContent component:
+  const [processedInputs, setProcessedInputs] = useState<Set<string>>(new Set());
+
   const handleProcessTurn = useCallback(async (turn: TranscriptTurn) => {
     console.log('[AppContent] Received turn to process:', turn);
 
@@ -132,274 +173,334 @@ function AppContent({
       console.log('[AppContent] No Speaker transcript content to process, skipping API calls');
       return;
     }
-
+    
+    // Check if we've already processed this exact input within last few seconds
+    const trimmedInput = speakerSaid.trim();
+    if (processedInputs.has(trimmedInput)) {
+      console.log('[AppContent] Already processed this input, skipping duplicate:', trimmedInput);
+      return;
+    }
+    
+    // Add to processed inputs
+    setProcessedInputs(prev => {
+      const updated = new Set(prev);
+      updated.add(trimmedInput);
+      return updated;
+    });
+    
+    // Set a timeout to clear this input from processed set after a few seconds
+    setTimeout(() => {
+      setProcessedInputs(current => {
+        const newSet = new Set(current);
+        newSet.delete(trimmedInput);
+        return newSet;
+      });
+    }, 5000); // Clear after 5 seconds
+    
     console.log(`[AppContent] Requesting analysis for prompt: "${speakerSaid}"`);
 
     setChatStatus('processing');
     setPreviousChatSuccess(false);
     const currentTabId = tabCounter; // Capture current counter for this request
-    let accumulatedData: any = {}; // To store data across events (like tool args)
-    let currentToolName: string | null = null;
-    let currentResponseId: string | null = null;
-    let currentOutputItemId: string | null = null;
-    let currentContentPartText = "";
-    let currentFunctionArgs = "";
+
+    // Initialize a new tab for the incoming response
+    const newTabKey = `response-${currentTabId}`;
+    const initialTabData: LocalTabData = {
+      key: newTabKey,
+      filename: `Response-${currentTabId}.txt`, // Default filename
+      language: 'plaintext', // Default language
+      code: '',
+      analysis: '',
+      structuredAnalysis: undefined,
+      responseId: null,
+    };
+    setTabData(prev => [...prev, initialTabData]);
+    setActiveTabKey(newTabKey);
+    setTabCounter(prev => prev + 1);
+    setCurrentFunctionName(null); // Reset function name
+
+    // Add user message to conversation history
+    const userMessage = { role: 'user', content: speakerSaid };
+    let updatedHistory = [...conversationHistory, userMessage];
+
+    // Check the last assistant message in history for tool calls
+    const lastAssistantMessage = conversationHistory.findLast(msg => msg.role === 'assistant');
+    
+    // In our new approach with Responses API, we don't store tool_calls directly in the conversation history
+    // Instead, when we receive function calls, we'll extract them from responseData.output when saving lastResponseId
+    
+    // Check if we have a previous response ID that might have had function calls
+    if (lastResponseId) {
+        // Find the tab data for the previous response
+        const previousTab = tabData.find(tab => tab.responseId === lastResponseId);
+
+        if (previousTab && previousTab.structuredAnalysis) {
+             console.log('[AppContent] Found previous structured analysis for response ID:', lastResponseId);
+             
+             // For Responses API, we need to add function calls with their outputs directly to the request
+             if (previousTab.functionCall) {
+                 // Use the actual function call information that we stored
+                 updatedHistory.push({
+                     type: "function_call",
+                     call_id: previousTab.functionCall.call_id,
+                     name: previousTab.functionCall.name,
+                     arguments: previousTab.functionCall.arguments
+                 });
+                 
+                 // Add the function output immediately after
+                 updatedHistory.push({
+                     type: "function_call_output",
+                     call_id: previousTab.functionCall.call_id,
+                     output: JSON.stringify(previousTab.structuredAnalysis) // Send the structured data as output
+                 });
+             } else if (currentFunctionName) {
+                 // Fallback to using the current function name if we don't have the full function call data
+                 const functionCallId = `call_${Math.random().toString(36).substring(2, 15)}`;
+                 updatedHistory.push({
+                     type: "function_call",
+                     call_id: functionCallId,
+                     name: currentFunctionName,
+                     arguments: '{}' // This should ideally be the actual arguments from the previous call
+                 });
+                 
+                 // Add the function output immediately after
+                 updatedHistory.push({
+                     type: "function_call_output",
+                     call_id: functionCallId,
+                     output: JSON.stringify(previousTab.structuredAnalysis) // Send the structured data as output
+                 });
+             }
+        } else {
+             console.warn('[AppContent] Previous response ID exists but no structured analysis found');
+        }
+    }
 
     try {
-      const messages = [
-        { role: 'user', content: `Speaker: ${speakerSaid}` }
-      ];
+      // Before sending the request, validate and fix the message format
+      const sanitizedMessages = updatedHistory.map((msg: any) => {
+        // If this is an assistant message with invalid content format, fix it
+        if (msg.role === 'assistant') {
+          // If content is an object, extract text or use empty string
+          if (typeof msg.content === 'object') {
+            // Try to find text in the format object or various places it might be hiding
+            if (msg.content.format?.type === 'text') {
+              return { ...msg, content: '' }; // Empty string for format objects
+            } else if (msg.content.text) {
+              return { ...msg, content: msg.content.text };
+            } else {
+              return { ...msg, content: '' }; // Default to empty string
+            }
+          }
+        }
+        return msg;
+      });
 
       const response = await fetch('/api/responses', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
-          messages: messages, 
-          previous_response_id: lastResponseId
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          messages: sanitizedMessages,
+          previous_response_id: lastResponseId,
+          vector_store_id: 'vs_6806911f19a081918abcc7bbb8410f5f'
         }),
       });
 
-      if (!response.ok) {
-        console.error('[AppContent] API call failed:', response.status);
-        const errorText = await response.text();
-        throw new Error(`API Error (${response.status}): ${errorText}`);
+      if (!response.ok) { // Check response.ok for non-2xx status codes
+        const errorData = await response.json();
+        console.error('[AppContent] API Error Response:', response.status, errorData);
+        throw new Error(`HTTP error! status: ${response.status}, details: ${errorData.error || 'Unknown error'}`);
       }
 
-      if (!response.body) {
-        throw new Error("Response body is null");
-      }
+      const responseData = await response.json();
+      console.log('[AppContent] Received complete response data:', responseData);
 
-      // --- Use eventsource-parser with correct callback structure ---
-      const parser = createParser({ 
-          onEvent: (event: any) => { // Correct callback name
-            if (event.type === 'event') { 
-                if (event.event === 'error') {
-                    console.error("[AppContent] Received error event from stream:", event.data);
-                    try {
-                        const errorData = JSON.parse(event.data);
-                        throw new Error(`Stream Error: ${errorData.message || event.data}`);
-                    } catch (e) {
-                        throw new Error(`Stream Error: ${event.data}`);
-                    }
-                }
+      setChatStatus('done');
+      setPreviousChatSuccess(true);
 
-                if (!event.data) {
-                    console.warn("[AppContent] Received empty data event:", event);
-                    return; // Skip empty data payloads
-                }
+      // Process the complete response data
+      const responseId = responseData.id;
+      setLastResponseId(responseId);
 
-                try {
-                    const parsedData = JSON.parse(event.data);
-                    const eventType = event.event; // The event type from SSE
+      // IMPORTANT: For OpenAI Responses API, we need to handle conversation history differently than ChatCompletions
+      // 1. In conversation history stored in state, we only store simple text messages with role/content
+      // 2. When sending a request, we reconstruct function calls/outputs in the correct format for Responses API
+      // 3. This prevents the "Unknown parameter: 'input[].tool_calls'" error by ensuring proper formatting
+      
+      // Add assistant message (including tool calls if any) to conversation history
+      if (responseData.output && Array.isArray(responseData.output) && responseData.output.length > 0) {
+        // Find the function_call in the output array (not assuming it's always at index 0)
+        const functionCallItem = responseData.output.find((item: { type: string }) => item.type === 'function_call');
+        
+        console.log('[AppContent] Found function call item:', functionCallItem);
+        
+        if (functionCallItem) {
+          setCurrentFunctionName(functionCallItem.name);
+          
+          // Process function call arguments directly without special casing
+          try {
+            const structuredAnalysisData = JSON.parse(functionCallItem.arguments);
+            console.log('[AppContent] Set structured analysis from function call arguments:', structuredAnalysisData);
 
-                    // Update lastResponseId if present in the event
-                    if (parsedData.response?.id) {
-                        currentResponseId = parsedData.response.id;
-                    }
-                    if (parsedData.item_id) {
-                        currentOutputItemId = parsedData.item_id;
-                    }
-
-                    // Handle different event types based on Responses API spec
-                    switch (eventType) {
-                        case 'response.created':
-                            console.log("[AppContent] Stream Event: response.created", parsedData);
-                            setLastResponseId(parsedData.response.id);
-                            break;
-                        case 'response.in_progress':
-                            // Potentially update UI to show progress
-                            break;
-                        case 'response.output_item.added':
-                            console.log("[AppContent] Stream Event: response.output_item.added", parsedData);
-                            // You might initialize state for this item here
-                            break;
-                        case 'response.content_part.added':
-                            console.log("[AppContent] Stream Event: response.content_part.added", parsedData);
-                            // Reset text for new content part
-                            currentContentPartText = ""; 
-                            break;
-                        case 'response.output_text.delta':
-                            // console.log("[AppContent] Stream Event: response.output_text.delta", parsedData.delta);
-                            currentContentPartText += parsedData.delta;
-                            // TODO: Update UI with streaming text incrementally
-                            // Example: setTabData(prev => updateTabText(prev, currentTabId, currentContentPartText));
-                            break;
-                        case 'response.output_text.done':
-                            console.log("[AppContent] Stream Event: response.output_text.done", parsedData);
-                            currentContentPartText = parsedData.text; // Ensure final text is captured
-                            // Store the final text associated with the simple explanation tool
-                            accumulatedData = { explanation: currentContentPartText }; 
-                            currentToolName = 'format_simple_explanation'; // Assume text output means simple explanation for now
-                            break;
-                        case 'response.function_call_arguments.delta':
-                            // console.log("[AppContent] Stream Event: response.function_call_arguments.delta", parsedData.delta);
-                            currentFunctionArgs += parsedData.delta;
-                            break;
-                        case 'response.function_call_arguments.done':
-                            console.log("[AppContent] Stream Event: response.function_call_arguments.done", parsedData);
-                            currentFunctionArgs = parsedData.arguments; // Final arguments
-                            try {
-                                accumulatedData = JSON.parse(currentFunctionArgs);
-                                // Need to determine the tool name. This isn't explicitly in this event.
-                                // We might need to look at response.output_item.added or assume based on structure.
-                                // For now, let's try to infer based on expected schemas.
-                                if (accumulatedData.planning_steps && accumulatedData.code) {
-                                    currentToolName = 'format_comprehensive_code';
-                                } else if (accumulatedData.situation && accumulatedData.action) {
-                                    currentToolName = 'format_behavioral_star_answer';
-                                } else {
-                                    console.warn("[AppContent] Could not determine tool name from function args structure.");
-                                    // Fallback? Or rely on a prior event?
-                                }
-                                console.log(`[AppContent] Parsed function args for tool: ${currentToolName}`, accumulatedData);
-                            } catch (jsonError) {
-                                console.error('[AppContent] Failed to parse final function arguments JSON:', jsonError);
-                                console.error('[AppContent] Accumulated Function Args String was:', currentFunctionArgs);
-                                throw new Error("Failed to parse function arguments from stream.");
-                            }
-                            break;
-                        // Add cases for other events as needed (e.g., file_search, web_search, reasoning, etc.)
-                        case 'response.completed':
-                            console.log("[AppContent] Stream Event: response.completed", parsedData);
-                            setChatStatus('done');
-                            setPreviousChatSuccess(true);
-                            break;
-                        case 'response.failed':
-                        case 'response.incomplete':
-                            console.error(`[AppContent] Stream Event: ${eventType}`, parsedData);
-                            setChatStatus('error');
-                            setPreviousChatSuccess(false);
-                            const errorMsg = parsedData.response?.error?.message || parsedData.response?.incomplete_details?.reason || 'Unknown stream error';
-                            addTranscriptMessage(uuidv4(), 'assistant', `Error: ${errorMsg}`);
-                            break;
-                        default:
-                            console.log(`[AppContent] Unhandled Stream Event: ${eventType}`, parsedData);
-                    }
-
-                } catch (e) {
-                    console.error("[AppContent] Failed to parse event data JSON:", e);
-                    console.error("[AppContent] Raw event data was:", event.data);
-                    // Decide how to handle parse errors - maybe ignore or show an error
-                }
-            } else if (event.type === 'reconnect-interval') { // This logic was inside onEvent, moving it out is complex, keeping simple fix for now
-                console.log("[AppContent] Received reconnect-interval event, ignoring.", event.value);
+            // Special handling for displaying STAR answers in transcript
+            if (functionCallItem.name === 'format_behavioral_star_answer') {
+              // Add more detailed logging for STAR answers
+              console.log('[AppContent] Processing behavioral STAR answer:', functionCallItem.name);
+              console.log('[AppContent] STAR data:', structuredAnalysisData);
+              
+              // Add the STAR answer to the transcript with proper formatting
+              const starMessage = `**Situation:** ${structuredAnalysisData.situation}\n\n**Task:** ${structuredAnalysisData.task}\n\n**Action:** ${structuredAnalysisData.action}\n\n**Result:** ${structuredAnalysisData.result}`;
+              console.log('[AppContent] Adding STAR message to transcript:', starMessage.substring(0, 100) + '...');
+              addTranscriptMessage(uuidv4(), 'assistant', starMessage);
+              
+              // Add a specific breadcrumb for STAR answers
+              console.log('[AppContent] Adding STAR breadcrumb');
+              addTranscriptBreadcrumb(`STAR Answer`, {
+                analysisSummary: `${structuredAnalysisData.situation.substring(0, 50)}... (STAR format)`,
+                codePreview: `Situation: ${structuredAnalysisData.situation.substring(0, 50)}...`
+              });
             }
+            
+            // Log before updating tab data
+            console.log('[AppContent] Active tab key before update:', activeTabKey);
+            console.log('[AppContent] Tab data before update:', tabData);
+
+            // Determine language for code pane if it's a comprehensive code response
+            const codeLanguage = functionCallItem.name === 'format_comprehensive_code' ? structuredAnalysisData.language : 'plaintext';
+
+            // Update tab data with the function call results
+            setTabData(prev => {
+              const newTabData = prev.map(tab =>
+                tab.key === newTabKey ? {
+                  ...tab,
+                  filename: `${functionCallItem.name}-${currentTabId}.${codeLanguage === 'plaintext' ? 'txt' : codeLanguage}`,
+                  language: codeLanguage,
+                  // For STAR answers, use formatted text in code pane
+                  code: functionCallItem.name === 'format_behavioral_star_answer' 
+                    ? `Situation: ${structuredAnalysisData.situation}\n\nTask: ${structuredAnalysisData.task}\n\nAction: ${structuredAnalysisData.action}\n\nResult: ${structuredAnalysisData.result}`
+                    : (structuredAnalysisData.code || JSON.stringify(structuredAnalysisData, null, 2)),
+                  analysis: JSON.stringify(structuredAnalysisData, null, 2),
+                  structuredAnalysis: structuredAnalysisData,
+                  responseId: responseId,
+                  functionCall: {
+                    id: functionCallItem.id,
+                    call_id: functionCallItem.call_id,
+                    name: functionCallItem.name,
+                    arguments: functionCallItem.arguments
+                  }
+                } : tab
+              );
+              console.log('[AppContent] Tab data after update:', newTabData);
+              return newTabData;
+            });
+            
+            // Ensure active tab is set correctly
+            console.log('[AppContent] Setting active tab to:', newTabKey);
+            setActiveTabKey(newTabKey);
+
+            // If it's a simple explanation, add it directly to transcript
+            if (functionCallItem.name === 'format_simple_explanation' && structuredAnalysisData.explanation) {
+              addTranscriptMessage(uuidv4(), 'assistant', structuredAnalysisData.explanation);
+            }
+            
+          } catch (parseError) {
+            console.error('[AppContent] Error parsing function call arguments:', parseError, functionCallItem.arguments);
+            addTranscriptMessage(uuidv4(), 'assistant', `Error parsing tool arguments: ${(parseError as Error).message}`);
+            setTabData(prev => prev.map(tab =>
+              tab.key === newTabKey ? { ...tab, analysis: `Error parsing tool arguments: ${(parseError as Error).message}\n\nRaw arguments:\n${functionCallItem.arguments}` } : tab
+            ));
+          }
+        } else if (responseData.output[0].type === 'text' && responseData.output[0].text) {
+           // Handle direct text response
+           setTabData(prev => prev.map(tab =>
+             tab.key === newTabKey ? { ...tab, code: responseData.output[0].text, analysis: responseData.output[0].text, language: 'plaintext', filename: `Response-${currentTabId}.txt` } : tab
+           ));
+           console.log('[AppContent] Set text response:', responseData.output[0].text);
         }
-      });
-
-      const reader = response.body.getReader();
-      const decoder = new TextDecoder();
-      let done = false;
-      while (!done) {
-        const { value, done: readerDone } = await reader.read();
-        done = readerDone;
-        const chunk = decoder.decode(value, { stream: !done });
-        parser.feed(chunk);
-      }
-
-      // --- Post-Stream Processing ---
-      console.log('[AppContent] Stream finished. Final Accumulated Data:', accumulatedData);
-      console.log('[AppContent] Final Tool Name:', currentToolName);
-      if (currentResponseId) {
-          console.log("[AppContent] Final Response ID:", currentResponseId);
-      }
-
-      // Check if we actually got data and a tool determination
-      // if (Object.keys(accumulatedData).length === 0 || !currentToolName) {
-      //     // Only treat this as an error if the stream *didn't* complete successfully or already errored
-      //     if (chatStatus === 'error') {
-      //        // Error already happened during stream (e.g., response.failed)
-      //        console.error("[AppContent] Stream finished after encountering an error, and no valid tool data was accumulated.");
-      //        // Message should have already been added by the error handler in the stream loop
-      //     } else if (chatStatus !== 'done') {
-      //        // Stream didn't complete successfully but wasn't explicitly 'error' either? Unexpected state.
-      //        console.error("[AppContent] Stream finished unexpectedly without completing ('done' status) and no valid tool data.");
-      //        addTranscriptMessage(uuidv4(), 'assistant', `Error: Unexpected incomplete response from stream.`);
-      //        setChatStatus('error'); // Set error for this unexpected state
-      //        setPreviousChatSuccess(false);
-      //     } else {
-      //        // Stream completed ('done') but no specific tool output was generated.
-      //        // This might be okay. Log a warning instead of error.
-      //        console.warn("[AppContent] Stream finished successfully, but no specific tool output or text explanation was generated.");
-      //        // Ensure status remains 'done' and success state reflects completion
-      //        setPreviousChatSuccess(true); 
-      //        // Optional: Add a neutral breadcrumb or message if needed
-      //        // addTranscriptBreadcrumb("Assistant turn completed.");
-      //     }
-      //     return; // Stop processing since there's no structured data to render
-      // }
-
-      // --- Update State with Final Data ---
-      // (Rest of the function proceeds only if accumulatedData and currentToolName are valid)
-      const newTabKey = `solution-${currentTabId}`;
-      let newTabData: LocalTabData;
-
-      // Adapt TabData creation based on the determined tool
-      if (currentToolName === 'format_comprehensive_code') {
-        // Validate structure (basic check)
-        if (!accumulatedData.planning_steps || !accumulatedData.language || !accumulatedData.code || !accumulatedData.complexity || !accumulatedData.explanation) {
-             throw new Error("Final data does not match ComprehensiveCodeSchema structure.");
-        }
-        newTabData = {
-          key: newTabKey,
-          filename: `Solution-${currentTabId}.${accumulatedData.language === 'plaintext' ? 'txt' : accumulatedData.language}`,
-          language: accumulatedData.language,
-          code: accumulatedData.code,
-          analysis: accumulatedData.explanation, 
-          structuredAnalysis: accumulatedData, 
-        };
-      } else if (currentToolName === 'format_simple_explanation') {
-        if (!accumulatedData.explanation) {
-             throw new Error("Final data does not match SimpleExplanationSchema structure.");
-        }
-        newTabData = {
-            key: newTabKey,
-            filename: `Explanation-${currentTabId}.txt`,
-            language: 'plaintext',
-            code: accumulatedData.explanation, 
-            analysis: accumulatedData.explanation,
-        };
-      } else if (currentToolName === 'format_behavioral_star_answer') {
-           if (!accumulatedData.situation || !accumulatedData.task || !accumulatedData.action || !accumulatedData.result) {
-             throw new Error("Final data does not match BehavioralStarSchema structure.");
-           }
-           // Decide how to display STAR - maybe analysis pane?
-           const formattedAnalysis = `Situation: ${accumulatedData.situation}\nTask: ${accumulatedData.task}\nAction: ${accumulatedData.action}\nResult: ${accumulatedData.result}`;
-           newTabData = {
-               key: newTabKey,
-               filename: `Behavioral-${currentTabId}.md`,
-               language: 'markdown',
-               code: formattedAnalysis, // Display in code pane as markdown
-               analysis: formattedAnalysis,
-           };
+      } else if (responseData.text && typeof responseData.text === 'string') {
+         // Handle cases where text might be directly on the response object (less likely with tools)
+          setTabData(prev => prev.map(tab =>
+             tab.key === newTabKey ? { ...tab, code: responseData.text, analysis: responseData.text, language: 'plaintext', filename: `Response-${currentTabId}.txt` } : tab
+           ));
+           console.log('[AppContent] Set direct text response from response object:', responseData.text);
       } else {
-        console.warn("[AppContent] Creating fallback tab data due to unknown final tool name.");
-        newTabData = {
-          key: newTabKey,
-          filename: `Response-${currentTabId}.txt`,
-          language: 'plaintext',
-          code: JSON.stringify(accumulatedData, null, 2), // Show stringified data as fallback
-          analysis: "Unknown response data format.",
-        };
+         console.warn('[AppContent] Received response with no recognizable output:', responseData);
+         addTranscriptMessage(uuidv4(), 'assistant', `Received response with no recognizable output.`);
+          setTabData(prev => prev.map(tab =>
+             tab.key === newTabKey ? { ...tab, analysis: 'Received response with no recognizable output.' } : tab
+           ));
       }
 
-      setTabData(prev => [...prev, newTabData]);
-      setActiveTabKey(newTabKey);
-      setTabCounter(prev => prev + 1);
+      // Add breadcrumb after processing the full response
+      // Determine the content for the breadcrumb based on the response type
+      let breadcrumbContent = {
+        filename: `Response-${currentTabId}.txt`,
+        summary: 'No content',
+        preview: 'No preview available',
+      };
 
-      // Add breadcrumb
-      addTranscriptBreadcrumb(`Generated ${newTabData.filename}`, { 
-          analysisSummary: newTabData.analysis?.substring(0, 150) + '...', 
-          codePreview: newTabData.code?.substring(0, 100) + '...' 
+      if (responseData.output && Array.isArray(responseData.output) && responseData.output.length > 0) {
+        const outputItem = responseData.output[0];
+        if (outputItem.type === 'function_call') {
+          breadcrumbContent.filename = `${outputItem.name}-${currentTabId}.json`; // Default filename for tool calls
+           // If it's a comprehensive code tool, use the language for the extension
+           if (outputItem.name === 'format_comprehensive_code' && responseData.output[0].arguments) {
+               try {
+                   const args = JSON.parse(outputItem.arguments);
+                   if (args.language) {
+                       breadcrumbContent.filename = `${outputItem.name}-${currentTabId}.${args.language}`;
+                   }
+               } catch (e) {
+                   console.error('[AppContent] Error parsing args for breadcrumb filename:', e);
+               }
+           }
+
+
+          try {
+            const args = JSON.parse(outputItem.arguments);
+            breadcrumbContent.summary = JSON.stringify(args, null, 2).substring(0, 150) + '...';
+            // For code responses, use code preview
+            if (outputItem.name === 'format_comprehensive_code' && args.code) {
+                 breadcrumbContent.preview = args.code.substring(0, 100) + '...';
+            } else {
+                 breadcrumbContent.preview = 'Function call arguments'; // Or a snippet of the args
+            }
+
+          } catch (e) {
+            breadcrumbContent.summary = 'Error parsing arguments...';
+            breadcrumbContent.preview = 'Error parsing arguments';
+          }
+        } else if (outputItem.type === 'text' && outputItem.text) {
+          breadcrumbContent.filename = `Response-${currentTabId}.txt`;
+          breadcrumbContent.summary = outputItem.text.substring(0, 150) + '...';
+          breadcrumbContent.preview = outputItem.text.substring(0, 100) + '...';
+        }
+        // Add other output types to breadcrumb if needed
+      } else if (responseData.text) {
+         breadcrumbContent.filename = `Response-${currentTabId}.txt`;
+         breadcrumbContent.summary = responseData.text.substring(0, 150) + '...';
+         breadcrumbContent.preview = responseData.text.substring(0, 100) + '...';
+      }
+
+
+      addTranscriptBreadcrumb(`Generated ${breadcrumbContent.filename}`, {
+        analysisSummary: breadcrumbContent.summary,
+        codePreview: breadcrumbContent.preview
       });
+
 
     } catch (error) {
-      console.error('[AppContent] Error during stream processing:', error);
-      addTranscriptMessage(uuidv4(), 'assistant', `Error processing stream: ${(error as Error).message}`);
+      console.error('[AppContent] Error fetching or processing response:', error);
+      addTranscriptMessage(uuidv4(), 'assistant', `Error fetching response: ${(error as Error).message}`);
       setChatStatus('error');
       setPreviousChatSuccess(false);
+       // Update the tab with an error message
+       setTabData(prev => prev.map(tab =>
+          tab.key === newTabKey ? { ...tab, analysis: `Error fetching response: ${(error as Error).message}` } : tab
+        ));
     }
-  }, [addTranscriptMessage, addTranscriptBreadcrumb, setChatStatus, setPreviousChatSuccess, lastResponseId, tabCounter, chatStatus]);
+  }, [addTranscriptMessage, addTranscriptBreadcrumb, setChatStatus, setPreviousChatSuccess, tabCounter, lastResponseId, conversationHistory, tabData, processedInputs]); // Add processedInputs to dependency array
 
   // Return the main layout structure
   return (
@@ -439,73 +540,26 @@ function AppContent({
 
             {isMobileView !== null && (
                 !isMobileView ? (
-                  // --- Desktop Layout ---
-                  <div className="flex flex-1 gap-1 px-2 pb-2 overflow-hidden rounded-xl">
-                    {/* Main 3-Pane Area using fixed divs and flexbox */}
-                    <div className="flex-1 flex flex-row h-full gap-1">
-                        {/* Pane 1: Conversation (Left) - 35% */}
-                        <div className="basis-[35%] flex-shrink-0">
-                          <div className={`flex flex-col h-full rounded-xl ${theme === 'dark' ? 'border-gray-600' : 'border-gray-300'} border p-2 overflow-hidden`}>
-                            <div className="flex-1 overflow-y-auto"> {/* Added wrapper for scroll */}
-                              <Transcript
-                                userText={userText}
-                                setUserText={setUserText}
-                                onSendMessage={() => { console.warn("Send message not implemented yet."); }}
-                                canSend={false}
-                                fontSize={fontSize}
-                              />
-                            </div>
-                          </div>
-                        </div>
-
-                        {/* Pane 2: Code Implementation (Middle) - 35% */}
-                        <div className="basis-[35%] flex-shrink-0">
-                          <div className={`flex flex-col h-full rounded-xl ${theme === 'dark' ? 'border-gray-600' : 'border-gray-300'} border p-2 overflow-hidden`}>
-                            <div className="flex-1 overflow-y-auto"> {/* Added wrapper for scroll */}
-                              <CodePane 
-                                theme={theme} 
-                                activeTabKey={activeTabKey ?? ''}
-                                onTabChange={setActiveTabKey} 
-                                tabs={tabData as TabData[]}
-                              />
-                            </div>
-                          </div>
-                        </div>
-
-                        {/* Pane 3: Algorithm Analysis (Right) - 30% */}
-                        <div className="basis-[30%] flex-shrink-0">
-                          <div className={`flex flex-col h-full rounded-xl ${theme === 'dark' ? 'border-gray-600' : 'border-gray-300'} border p-2 overflow-hidden`}>
-                            <div className="flex-1 overflow-y-auto"> {/* Added wrapper for scroll */}
-                              <AnalysisPane 
-                                theme={theme} 
-                                activeTabKey={activeTabKey ?? ''}
-                                tabs={tabData as TabData[]}
-                              />
-                            </div>
-                          </div>
-                        </div>
-                    </div>
-
-                    {/* Separate Dashboard Sidebar (Far Right - Unchanged) */}
-                    <div style={{ width: "48px", minWidth: "48px", maxWidth: "48px", alignSelf: "stretch", flexShrink: 0 }} className={`rounded-xl ${theme === 'dark' ? 'border-gray-600' : 'border-gray-300'} border`}>
-                      <Dashboard
-                        isExpanded={true}
-                        isDashboardEnabled={true}
-                        transcriptItems={transcriptItems}
-                        isMicrophoneMuted={isMicrophoneMuted}
-                        micConnectionStatus={micConnectionStatus}
-                        speakerConnectionStatus={speakerConnectionStatus}
-                        onMuteToggle={() => setIsMicrophoneMuted(!isMicrophoneMuted)}
-                        onReconnectMic={onReconnectMic}
-                        onReconnectSpeaker={onReconnectSpeaker}
-                        fontSize={fontSize}
-                        increaseFontSize={increaseFontSize}
-                        decreaseFontSize={decreaseFontSize}
-                      />
-                    </div>
-                  </div>
+                  // --- Desktop Layout - UPDATED TO USE NEW COMPONENT ---
+                  <DraggablePanelLayout
+                    theme={theme} 
+                    activeTabKey={activeTabKey ?? ''}
+                    onTabChange={setActiveTabKey}
+                    tabs={tabData as TabData[]}
+                    userText={userText}
+                    setUserText={setUserText}
+                    onSendMessage={() => { console.warn("Send message not implemented yet."); }}
+                    canSend={false}
+                    transcriptItems={transcriptItems}
+                    isMicrophoneMuted={isMicrophoneMuted}
+                    micConnectionStatus={micConnectionStatus}
+                    speakerConnectionStatus={speakerConnectionStatus}
+                    onMuteToggle={() => setIsMicrophoneMuted(!isMicrophoneMuted)}
+                    onReconnectMic={onReconnectMic}
+                    onReconnectSpeaker={onReconnectSpeaker}
+                  />
                 ) : (
-                   // --- Mobile Layout --- 
+                   // --- Mobile Layout - Keep the existing implementation --- 
                   <MobileSwipeContainer
                     activeMobilePanel={activeMobilePanel}
                     setActiveMobilePanel={setActiveMobilePanel}
@@ -517,7 +571,6 @@ function AppContent({
                       setUserText={setUserText}
                       onSendMessage={() => { console.warn("Send message not implemented yet."); }}
                       canSend={false}
-                      fontSize={fontSize}
                     />
                      {/* Panel 2: Dashboard */}
                     <div style={{ width: "48px", minWidth: "48px", maxWidth: "48px" }} className={`h-full rounded-xl border ${theme === 'dark' ? 'border-gray-600' : 'border-gray-300'}`}>
@@ -531,9 +584,6 @@ function AppContent({
                         onMuteToggle={() => setIsMicrophoneMuted(!isMicrophoneMuted)}
                         onReconnectMic={onReconnectMic}
                         onReconnectSpeaker={onReconnectSpeaker}
-                        fontSize={fontSize}
-                        increaseFontSize={increaseFontSize}
-                        decreaseFontSize={decreaseFontSize}
                       />
                     </div>
                   </MobileSwipeContainer>
@@ -566,7 +616,7 @@ function App() {
     useState<AgentConfig[] | null>(null);
   const [connectionState, setConnectionState] =
     useState<ConnectionState>("INITIAL");
-  const [isMicrophoneMuted, setIsMicrophoneMuted] = useState<boolean>(false);
+  const [isMicrophoneMuted, setIsMicrophoneMuted] = useState<boolean>(true);
   const [userText, setUserText] = useState<string>("");
   const [activeMobilePanel, setActiveMobilePanel] = useState<number>(0);
   const [isMobileView, setIsMobileView] = useState<boolean | null>(null);
@@ -575,17 +625,6 @@ function App() {
   // Add state for speaker connection status
   const [micConnectionStatus, setMicConnectionStatus] = useState<WebRTCConnectionStatus>('disconnected');
   const [speakerConnectionStatus, setSpeakerConnectionStatus] = useState<WebRTCConnectionStatus>('disconnected');
-  // Add font size state
-  const [fontSize, setFontSize] = useState<number>(14);
-
-  // Font size adjustment functions
-  const increaseFontSize = useCallback(() => {
-    setFontSize(prev => Math.min(24, prev + 1));
-  }, []);
-
-  const decreaseFontSize = useCallback(() => {
-    setFontSize(prev => Math.max(8, prev - 1));
-  }, []);
 
   // --- Callbacks modifying App state --- 
   const handleMicStatusUpdate = useCallback((status: WebRTCConnectionStatus) => {
@@ -629,6 +668,13 @@ function App() {
     }
   }, [connectionState]);
 
+  // Automatically connect on component mount
+  useEffect(() => {
+    // Trigger connection when the component mounts
+    console.log("App: Auto-connecting on component mount...");
+    setConnectTrigger(c => c + 1);
+  }, []); // Empty dependency array means this runs once on mount
+
   // Move handleSelectedAgentChange here if it doesn't need StatusContext
   const handleSelectedAgentChange = (
     e: React.ChangeEvent<HTMLSelectElement>
@@ -641,22 +687,6 @@ function App() {
         addTranscriptBreadcrumb(`Agent Selected: ${newAgentName}`, currentAgent);
      }
   };
-
-  // --- Effects managing App state --- 
-   useEffect(() => {
-    let finalAgentConfig = searchParams.get("agentConfig");
-    if (!finalAgentConfig || !allAgentSets[finalAgentConfig]) {
-      finalAgentConfig = defaultAgentSetKey;
-      const url = new URL(window.location.toString());
-      url.searchParams.set("agentConfig", finalAgentConfig);
-      window.location.replace(url.toString());
-      return;
-    }
-    const agents = allAgentSets[finalAgentConfig];
-    const agentKeyToUse = agents[0]?.name || "";
-    setSelectedAgentName(agentKeyToUse);
-    setSelectedAgentConfigSet(agents);
-  }, [searchParams]);
 
   useEffect(() => {
     // Agent selection breadcrumb logic might move or be adjusted
@@ -705,9 +735,6 @@ function App() {
         speakerConnectionStatus={speakerConnectionStatus}
         onReconnectMic={handleReconnectMic}
         onReconnectSpeaker={handleReconnectSpeaker}
-        fontSize={fontSize}
-        increaseFontSize={increaseFontSize}
-        decreaseFontSize={decreaseFontSize}
       />
     </StatusProvider>
   );
