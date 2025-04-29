@@ -1,3 +1,4 @@
+/*
 import { NextRequest, NextResponse } from 'next/server';
 import { checkRunStatus, getThreadMessages } from '../threadManager';
 
@@ -65,3 +66,7 @@ export async function GET(req: NextRequest) {
     );
   }
 } 
+*/
+
+// Add empty export to satisfy module requirement
+export {};

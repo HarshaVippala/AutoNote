@@ -40,22 +40,26 @@ const CodePane: React.FC<CodePaneProps> = ({ theme, activeTabKey, onTabChange, t
         
         {/* Dynamically generate Tab Content */}
         {tabs.map((tab) => (
-          <TabsContent key={tab.key} value={tab.key} className="flex-1 overflow-auto mt-1">
-            <div className="w-full h-full overflow-hidden">
+          <TabsContent key={tab.key} value={tab.key} className="flex-1 overflow-y-auto overflow-x-auto mt-1">
+            <div className="w-full h-full overflow-visible">
               <SyntaxHighlighter
                 language={tab.language} // Use dynamic language
                 style={codeStyle}
                 customStyle={{ 
                   background: 'transparent', 
-                  fontSize: '0.875rem', 
+                  fontSize: '0.75rem', 
                   margin: 0, 
-                  padding: '0.5rem',
+                  padding: '0.35rem',
+                  lineHeight: '1.2',
+                  maxHeight: '100%',
+                  width: '100%',
                   whiteSpace: 'pre-wrap',
                   wordBreak: 'break-word',
                   overflowWrap: 'break-word'
                 }}
                 wrapLongLines={true}
                 wrapLines={true}
+                showLineNumbers={false}
               >
                 {tab.code} {/* Use dynamic code */}
               </SyntaxHighlighter>

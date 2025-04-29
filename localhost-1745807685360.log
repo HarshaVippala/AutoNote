@@ -1,0 +1,139 @@
+main-app.js?v=1745807629177:2237 Download the React DevTools for a better development experience: https://react.dev/link/react-devtools
+TopControls.tsx:770 [Mute Debug] Mute state changed to true, but no mic track available
+TopControls.tsx:777 [Connection Debug] Mic connection status: disconnected
+TopControls.tsx:793 [Connection Debug] Speaker connection status: disconnected
+App.tsx:632 App: Auto-connecting on component mount...
+TopControls.tsx:810 Connect triggered from App
+App.tsx:594 App received mic status update: connecting
+TopControls.tsx:538 Requesting microphone access for connection...
+TopControls.tsx:541 [Device Selection] Enumerating devices...
+App.tsx:606 App received speaker status update: connecting
+TopControls.tsx:636 [Device Selection] Enumerating devices for SPEAKER connection...
+TopControls.tsx:550 [Device Selection] Found specific mic: Default - MacBook Pro Microphone (Built-in) (ID: default)
+TopControls.tsx:559 [Device Selection] Using constraints: {audio: {…}}
+TopControls.tsx:560 [Audio Routing Check] Mic source selected: Default - MacBook Pro Microphone (Built-in) (ID: default)
+TopControls.tsx:638 [Device Selection] Devices: (10) [InputDeviceInfo, InputDeviceInfo, InputDeviceInfo, InputDeviceInfo, InputDeviceInfo, MediaDeviceInfo, MediaDeviceInfo, MediaDeviceInfo, MediaDeviceInfo, MediaDeviceInfo]
+TopControls.tsx:641 [Device Selection] Available audio devices:
+TopControls.tsx:643 Device 0: kind=audioinput, label="Default - MacBook Pro Microphone (Built-in)", id=default
+TopControls.tsx:643 Device 1: kind=audioinput, label="BlackHole 2ch (Virtual)", id=a314018ba5b48ae216117086d0efc40c677185edde3ac05278b0f332b31da411
+TopControls.tsx:643 Device 2: kind=audioinput, label="MacBook Pro Microphone (Built-in)", id=cf511ace621e96a500633b6aa50a6b3f4d2d3ba6d5cc10c452b16b40a607d7c2
+TopControls.tsx:643 Device 3: kind=audioinput, label="Dipper (Virtual)", id=ebb80356fefde8d6c10f8511264797b971ebf111ff419648775993dffbf41004
+TopControls.tsx:643 Device 4: kind=videoinput, label="", id=
+TopControls.tsx:643 Device 5: kind=audiooutput, label="Default - Default (Aggregate)", id=default
+TopControls.tsx:643 Device 6: kind=audiooutput, label="DELL U2721DE (DisplayPort)", id=1914661c18c3199f6bd9ba31eee01289676c494c225c4a177f53861515f30bc3
+TopControls.tsx:643 Device 7: kind=audiooutput, label="BlackHole 2ch (Virtual)", id=a314018ba5b48ae216117086d0efc40c677185edde3ac05278b0f332b31da411
+TopControls.tsx:643 Device 8: kind=audiooutput, label="MacBook Pro Speakers (Built-in)", id=17bdef45205fe7545eb198b137dc0ddb833637cc234c9184c35361d8902d78d6
+TopControls.tsx:643 Device 9: kind=audiooutput, label="Default (Aggregate)", id=8748380346594a2e643b4489435738cdd9e3d2207a23fea9a5cb779b581d8e0b
+TopControls.tsx:654 [Device Selection] Found BlackHole virtual device: BlackHole 2ch (Virtual)
+TopControls.tsx:655 [Device Selection] Device ID: a314018ba5b48ae216117086d0efc40c677185edde3ac05278b0f332b31da411
+TopControls.tsx:656 [Device Selection] Group ID: 16457a6e09ef36b494f724c37d1bbd77ee6c02866a4c9a15a64af7ad59801cf5
+TopControls.tsx:675 [Device Selection] Using constraints for speaker: {audio: {…}}
+TopControls.tsx:678 speakerConstraints {audio: {…}}
+TopControls.tsx:909 TopControls unmounting, skipping disconnection to preserve connections...
+TopControls.tsx:777 [Connection Debug] Mic connection status: connecting
+TopControls.tsx:793 [Connection Debug] Speaker connection status: connecting
+TopControls.tsx:574 [Mute Debug] Mic track initial state - enabled: true, muted: false, readyState: live
+TopControls.tsx:576 Attempting to connect mic with raw track...
+webRTCConnection-webRTC.ts:80 Connection [mic] state changing from new to connecting
+TopControls.tsx:370 Mic connection state changed: connecting
+App.tsx:594 App received mic status update: connecting
+webRTCConnection-webRTC.ts:205 Connecting [mic]...
+webRTCConnection-webRTC.ts:32 Fetching ephemeral token for session type 'mic' from /api/realtime-token...
+webRTCConnection-webRTC.ts:34 With session config: {model: 'gpt-4o-mini-realtime-preview-2024-12-17', modalities: Array(1), instructions: 'You are an auxiliary assistant providing immediate…n the preceding topic.\nKeep responses very short.', temperature: 0.7, input_audio_transcription: {…}, …}
+webRTCConnection-webRTC.ts:55 Successfully fetched ephemeral token.
+webRTCConnection-webRTC.ts:56 Token value: ek_680ee90e50308190ab0be97f9c52698d
+webRTCConnection-webRTC.ts:210 [mic] Creating RTCPeerConnection...
+webRTCConnection-webRTC.ts:265 [mic] Adding local audio track.
+webRTCConnection-webRTC.ts:270 [mic] Creating data channel "oai-events"...
+webRTCConnection-webRTC.ts:305 [mic] Creating SDP offer...
+webRTCConnection-webRTC.ts:308 [mic] Local description set.
+webRTCConnection-webRTC.ts:311 [mic] Sending offer to https://api.openai.com/v1/realtime...
+webRTCConnection-webRTC.ts:323 [mic] Using model from sessionConfig: gpt-4o-mini-realtime-preview-2024-12-17
+webRTCConnection-webRTC.ts:332 [mic] Sending offer with Content-Type: application/sdp to https://api.openai.com/v1/realtime?model=gpt-4o-mini-realtime-preview-2024-12-17
+webRTCConnection-webRTC.ts:333 [mic] SDP offer (first 100 chars): v=0
+o=- 3589686131853971510 2 IN IP4 127.0.0.1
+s=-
+t=0 0
+a=group:BUNDLE 0 1
+a=extmap-allow-mixe...
+TopControls.tsx:682 [Device Selection] Raw speaker stream: MediaStream {id: 'f6a8d486-5c12-4811-b793-c8455ff4b20f', active: true, onaddtrack: null, onremovetrack: null, onactive: null, …}
+TopControls.tsx:685 [Device Selection] Raw speaker track: MediaStreamTrack {kind: 'audio', id: '60ac9f9f-5590-41e5-a6d0-05776077d193', label: 'BlackHole 2ch (Virtual)', enabled: true, muted: false, …}
+TopControls.tsx:691 [Audio Debug] Speaker track initial state - enabled: true, muted: false, readyState: live
+TopControls.tsx:695 Attempting to connect speaker with raw track...
+webRTCConnection-webRTC.ts:80 Connection [speaker] state changing from new to connecting
+TopControls.tsx:473 Speaker connection state changed: connecting
+App.tsx:606 App received speaker status update: connecting
+webRTCConnection-webRTC.ts:205 Connecting [speaker]...
+webRTCConnection-webRTC.ts:32 Fetching ephemeral token for session type 'speaker' from /api/realtime-token...
+webRTCConnection-webRTC.ts:34 With session config: {model: 'gpt-4o-mini-realtime-preview-2024-12-17', modalities: Array(1), instructions: 'Transcribe system audio with high accuracy and completeness. Capture all spoken content fully.', temperature: 0.7, input_audio_transcription: {…}, …}
+webRTCConnection-webRTC.ts:55 Successfully fetched ephemeral token.
+webRTCConnection-webRTC.ts:56 Token value: ek_680ee90e70408190b771557334f0dec9
+webRTCConnection-webRTC.ts:210 [speaker] Creating RTCPeerConnection...
+webRTCConnection-webRTC.ts:265 [speaker] Adding local audio track.
+webRTCConnection-webRTC.ts:270 [speaker] Creating data channel "oai-events"...
+webRTCConnection-webRTC.ts:305 [speaker] Creating SDP offer...
+webRTCConnection-webRTC.ts:308 [speaker] Local description set.
+webRTCConnection-webRTC.ts:311 [speaker] Sending offer to https://api.openai.com/v1/realtime...
+webRTCConnection-webRTC.ts:323 [speaker] Using model from sessionConfig: gpt-4o-mini-realtime-preview-2024-12-17
+webRTCConnection-webRTC.ts:332 [speaker] Sending offer with Content-Type: application/sdp to https://api.openai.com/v1/realtime?model=gpt-4o-mini-realtime-preview-2024-12-17
+webRTCConnection-webRTC.ts:333 [speaker] SDP offer (first 100 chars): v=0
+o=- 5179147390234057294 2 IN IP4 127.0.0.1
+s=-
+t=0 0
+a=group:BUNDLE 0 1
+a=extmap-allow-mixe...
+webRTCConnection-webRTC.ts:353 [speaker] SDP answer received (first 100 chars): v=0
+o=- 6332405165117999893 1745807630 IN IP4 0.0.0.0
+s=-
+t=0 0
+a=msid-semantic:WMS*
+a=fingerpr...
+webRTCConnection-webRTC.ts:362 [speaker] Setting remote description...
+webRTCConnection-webRTC.ts:243 [speaker] ICE Connection state change: checking
+webRTCConnection-webRTC.ts:257 [speaker] Received remote audio track for playback.
+webRTCConnection-webRTC.ts:364 [speaker] Remote description set. WebRTC connection established (pending ICE completion).
+TopControls.tsx:711 [Audio Debug] Speaker track state after connection - enabled: true, muted: false, readyState: live
+webRTCConnection-webRTC.ts:217 [speaker] Connection state change: connecting
+webRTCConnection-webRTC.ts:243 [speaker] ICE Connection state change: connected
+webRTCConnection-webRTC.ts:353 [mic] SDP answer received (first 100 chars): v=0
+o=- 8024374443533203797 1745807630 IN IP4 0.0.0.0
+s=-
+t=0 0
+a=msid-semantic:WMS*
+a=fingerpr...
+webRTCConnection-webRTC.ts:362 [mic] Setting remote description...
+webRTCConnection-webRTC.ts:243 [mic] ICE Connection state change: checking
+webRTCConnection-webRTC.ts:257 [mic] Received remote audio track for playback.
+webRTCConnection-webRTC.ts:364 [mic] Remote description set. WebRTC connection established (pending ICE completion).
+TopControls.tsx:596 [Mute Debug] Setting initial mic track enabled=false because isMicrophoneMuted is true
+TopControls.tsx:601 [Mute Debug] Mic track state after connection - enabled: false, muted: false, readyState: live
+webRTCConnection-webRTC.ts:217 [mic] Connection state change: connecting
+webRTCConnection-webRTC.ts:243 [mic] ICE Connection state change: connected
+webRTCConnection-webRTC.ts:217 [speaker] Connection state change: connected
+webRTCConnection-webRTC.ts:80 Connection [speaker] state changing from connecting to connected
+TopControls.tsx:473 Speaker connection state changed: connected
+App.tsx:606 App received speaker status update: connected
+TopControls.tsx:909 TopControls unmounting, skipping disconnection to preserve connections...
+TopControls.tsx:793 [Connection Debug] Speaker connection status: connected
+webRTCConnection-webRTC.ts:217 [mic] Connection state change: connected
+webRTCConnection-webRTC.ts:80 Connection [mic] state changing from connecting to connected
+TopControls.tsx:370 Mic connection state changed: connected
+App.tsx:594 App received mic status update: connected
+TopControls.tsx:909 TopControls unmounting, skipping disconnection to preserve connections...
+TopControls.tsx:777 [Connection Debug] Mic connection status: connected
+webRTCConnection-webRTC.ts:277 [speaker] Data channel opened.
+webRTCConnection-webRTC.ts:277 [mic] Data channel opened.
+TopControls.tsx:429 Speaker Transcript: Write code 4 to print all the right nodes in a binary 3 in java
+
+TopControls.tsx:858 [Turn Processing] Received unprocessed turn: {timestamp: 1745807638173, processed: false, speakerTranscript: 'Write code 4 to print all the right nodes in a binary 3 in java\n'}
+TopControls.tsx:868 [Turn Processing] Setting debounce timeout (700ms)
+TopControls.tsx:871 [Turn Processing] Debounce complete, triggering onProcessTurn with: {timestamp: 1745807638173, processed: false, speakerTranscript: 'Write code 4 to print all the right nodes in a binary 3 in java\n'}
+App.tsx:97 [AppContent] Received turn to process: {timestamp: 1745807638173, processed: false, speakerTranscript: 'Write code 4 to print all the right nodes in a binary 3 in java\n'}
+App.tsx:120 [AppContent] Requesting analysis for prompt: "Write code 4 to print all the right nodes in a binary 3 in java
+"
+App.tsx:168 [AppContent] Processing streamed JSONL response...
+App.tsx:187 [Stream] Function call started (Index undefined): format_comprehensive_code
+App.tsx:285 [Stream] Completed event received.
+App.tsx:350 [AppContent] Final processed data from stream: {id: 'resp_680ee9170e1481928a2983fb48b4a5e00f1560873a0127dd', object: 'response', created_at: 1745807639, status: 'completed', error: null, …}
+App.tsx:468 [AppContent] Finalizing streamed tab state: response-1
+App.tsx:468 [AppContent] Finalizing streamed tab state: response-1

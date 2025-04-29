@@ -1,205 +1,216 @@
 "use client";
 
-import React, { useState } from 'react';
-import { TabData, AnalysisResponse } from '@/app/types/index';
+import React, { FC, memo } from 'react';
+// Import all needed types from the central file
+import { TabData, AnalysisResponse, BehavioralStarResponse } from '@/app/types/index'; // Assuming these types exist in types/index.ts
+import TabsPanel from './TabsPanel'; // Import TabsPanel
 
+// Define a type for the structured STAR data within the tab
+interface StarData extends BehavioralStarResponse {
+ // Potentially add timestamp or original question later if needed
+}
+// Define the props for this component
 interface EnhancedAnalysisPaneProps {
   theme: 'light' | 'dark';
-  activeTabKey: string;
-  tabs: TabData[];
+  // Accept a single active tab object, which might have followUps
+  activeTabData: (TabData & { followUps?: StarData[] }) | undefined | null;
+  // Add props needed for TabsPanel when rendering behavioral view
+  tabs?: TabData[]; // Make optional, only needed for behavioral
+  activeTabKey?: string; // Make optional, only needed for behavioral
+  onTabChange?: (key: string) => void; // Make optional, only needed for behavioral
+  onTabClose?: (tabKey: string) => void; // Make optional, only needed for behavioral
 }
 
-// Define the STAR interface for behavioral answers
-interface BehavioralStarResponse {
-  situation: string;
-  task: string;
-  action: string;
-  result: string;
-}
+const EnhancedAnalysisPane: FC<EnhancedAnalysisPaneProps> = ({
+  theme,
+  activeTabData,
+  // Destructure optional props for TabsPanel
+  tabs = [], // Default to empty array if not provided
+  activeTabKey = '',
+  onTabChange = () => {},
+  onTabClose,
+}) => {
 
-// Fix existing structuredAnalysis type issues by extending TabData
-interface ExtendedTabData extends TabData {
-  structuredAnalysis?: AnalysisResponse | BehavioralStarResponse;
-}
+  // Use the passed activeTabData directly
+  const activeTab = activeTabData;
 
-const EnhancedAnalysisPane = ({ theme, activeTabKey, tabs }: EnhancedAnalysisPaneProps) => {
-  const [isCleared, setIsCleared] = useState(false);
+  // --- Helper Functions ---
 
-  const clearPanel = () => {
-    setIsCleared(true);
+  // Helper to render a single STAR section content with alternating background (NO TITLE)
+  const renderStarSectionContent = (content: string | undefined, index: number) => { // Removed : JSX.Element | null
+    if (!content) return null;
+    const bgColor = index % 2 === 0
+      ? (theme === 'dark' ? 'bg-gray-800' : 'bg-gray-50')
+      : (theme === 'dark' ? 'bg-gray-850' : 'bg-white');
+
+    return (
+      <div key={index} className={`p-3 ${bgColor}`}>
+        <p className="text-xs whitespace-pre-wrap break-words text-justify">{content}</p>
+      </div>
+    );
   };
 
-  // Find the active tab data
-  const activeTab = tabs.find(tab => tab.key === activeTabKey) as ExtendedTabData | undefined;
-
-  // Type guard to check if it's a behavioral STAR response
-  const isBehavioralResponse = (data: any): data is BehavioralStarResponse => {
-    return data && 
-      typeof data.situation === 'string' && 
-      typeof data.task === 'string' && 
-      typeof data.action === 'string' && 
-      typeof data.result === 'string';
+  // Helper to render a full STAR response object
+  const renderStarResponse = (starData: StarData, isFollowUp: boolean = false) => { // Removed : JSX.Element
+    const sections: (keyof StarData)[] = ['situation', 'task', 'action', 'result'];
+    return (
+      <div className={`border rounded ${theme === 'dark' ? 'border-gray-700' : 'border-gray-300'} overflow-hidden`}>
+        {isFollowUp && <h4 className={`text-xs font-bold p-2 border-b ${theme === 'dark' ? 'bg-gray-700 text-gray-300 border-gray-600' : 'bg-gray-200 text-gray-700 border-gray-300'}`}>Follow-up:</h4>}
+        {sections.map((key, index) => renderStarSectionContent(starData[key], index))}
+      </div>
+    );
   };
 
-  // Type guard to check if it's a comprehensive code analysis
-  const isComprehensiveAnalysis = (data: any): data is AnalysisResponse => {
-    return data && 
-      Array.isArray(data.planning_steps) && 
-      data.complexity && 
-      typeof data.explanation === 'string';
-  };
+  // Helper to render standard analysis key-value pairs
+  // Helper to render standard analysis key-value pairs
+  const renderStandardAnalysisField = (key: string, value: any) => { // Removed : JSX.Element | null
+    if (value === null || value === undefined || value === '') return null;
 
-  // Render different content based on the type of response
-  const renderContent = () => {
+    const title = key.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+    let contentElement; // Use a different variable name to avoid conflict if 'content' is a key
+
+    // Determine how to render the content based on the key and value type
+    if (key === 'code' && typeof value === 'string') {
+      // Render code using <pre>
+      contentElement = <pre className={`text-xs font-mono p-2 rounded whitespace-pre-wrap break-words ${theme === 'dark' ? 'bg-gray-700 text-gray-300' : 'bg-gray-200 text-gray-800'}`}>{value}</pre>;
+    } else if (key === 'complexity' && typeof value === 'object' && value.t && value.s) {
+      // Render complexity object nicely
+      contentElement = <p>Time: {value.t}, Space: {value.s}</p>;
+    } else if (Array.isArray(value)) {
+      // Render arrays as lists
+      contentElement = <ul className="list-disc list-inside space-y-1">{value.map((item: any, index: number) => <li key={index} className="break-words">{typeof item === 'object' ? <pre className={`text-xs font-mono p-1 rounded whitespace-pre-wrap break-words ${theme === 'dark' ? 'bg-gray-700' : 'bg-gray-200'}`}>{JSON.stringify(item, null, 2)}</pre> : item}</li>)}</ul>;
+    } else if (typeof value === 'object') {
+       // Render other objects by mapping key-value pairs (excluding complexity handled above)
+       contentElement = Object.entries(value).map(([subKey, subValue]) => <p key={subKey} className="whitespace-pre-wrap break-words ml-2"><strong className="capitalize">{subKey}:</strong> {String(subValue)}</p>);
+    } else if (typeof value === 'string') {
+       // Render plain strings
+       contentElement = <p className="whitespace-pre-wrap break-words">{value}</p>;
+    } else {
+      // Fallback for other types
+      contentElement = <p>{String(value)}</p>;
+    }
+
+    // Return the rendered field
+    return (
+      <div key={key} className="mb-3">
+        <h3 className={`text-xs font-semibold mb-1 ${theme === 'dark' ? 'text-blue-400' : 'text-blue-600'}`}>{title}:</h3>
+        <div className="text-xs ml-1">{contentElement}</div>
+        <hr className="border-gray-600 my-2 opacity-50 last:hidden" />
+      </div>
+    );
+  };
+  // --- Render Logic ---
+  const renderMainContent = () => { // Removed : JSX.Element
     if (!activeTab) {
+      // Keep the placeholder centered if no tab data
       return (
-        <p className={`text-sm italic mt-4 ${theme === 'dark' ? 'text-gray-400' : 'text-gray-600'}`}>
-          Select a code tab to see analysis.
-        </p>
+         <div className="flex-1 flex items-center justify-center text-gray-500 h-full">
+             <p className={`text-xs italic ${theme === 'dark' ? 'text-gray-400' : 'text-gray-600'}`}>Select a tab to see analysis.</p>
+         </div>
       );
     }
 
-    if (activeTab.structuredAnalysis) {
-      // Check if it's a behavioral response (STAR format)
-      if (activeTab.filename?.startsWith('format_behavioral_star_answer-') && 
-          isBehavioralResponse(activeTab.structuredAnalysis)) {
-        return renderBehavioralAnalysis(activeTab.structuredAnalysis);
-      }
-      // Otherwise it's comprehensive code analysis
-      else if (isComprehensiveAnalysis(activeTab.structuredAnalysis)) {
-        return renderComprehensiveAnalysis(activeTab.structuredAnalysis);
+    // Determine if it's behavioral based on the active tab data
+    const isBehavioral = activeTab.filename?.startsWith('Behavioral-') || activeTab.filename?.startsWith('STAR:') || (activeTab.structuredAnalysis && typeof activeTab.structuredAnalysis === 'object' && 'situation' in activeTab.structuredAnalysis);
+
+    // --- Behavioral View ---
+    if (isBehavioral && activeTab.structuredAnalysis && typeof activeTab.structuredAnalysis === 'object' && 'situation' in activeTab.structuredAnalysis) {
+      const originalStarData = activeTab.structuredAnalysis as StarData;
+      const followUpData = activeTab.followUps || [];
+
+      return (
+         // Use flex-col to stack original and follow-ups
+         <div className="w-full h-full flex flex-col p-3"> {/* Add padding here */}
+           {/* Top Row: Original Response */}
+           <div className="flex-shrink-0 mb-4">
+             {renderStarResponse(originalStarData)}
+           </div>
+
+           {/* Separator */}
+           <hr className={`my-2 border-t-2 ${theme === 'dark' ? 'border-gray-600' : 'border-gray-300'}`} />
+
+           {/* Bottom Row: Follow-ups (or placeholder) */}
+           <div className="flex-1 overflow-y-auto pt-4 pr-2">
+             {followUpData.length > 0 ? (
+               <>
+                 <h3 className={`text-sm font-semibold mb-3 ${theme === 'dark' ? 'text-gray-200' : 'text-gray-800'}`}>Follow-up Responses</h3>
+                 <div className="space-y-4">
+                   {followUpData.map((followUp, index) => (
+                     <div key={`followup-${index}`}>
+                        {renderStarResponse(followUp, true)}
+                     </div>
+                   ))}
+                 </div>
+               </>
+             ) : (
+               <p className={`text-xs italic ${theme === 'dark' ? 'text-gray-500' : 'text-gray-400'}`}>
+                 No follow-up responses yet.
+               </p>
+             )}
+           </div>
+         </div>
+       );
+    }
+
+    // --- Standard Analysis View (Non-Behavioral) ---
+    let analysisData: any = null;
+
+    // Prioritize structuredAnalysis if it's a valid object
+    if (activeTab.structuredAnalysis && typeof activeTab.structuredAnalysis === 'object' && !('status' in activeTab.structuredAnalysis)) {
+       analysisData = activeTab.structuredAnalysis;
+       console.log('[AnalysisPane] Using structuredAnalysis:', analysisData);
+    }
+    // Fallback to parsing analysis string if structuredAnalysis isn't suitable
+    else if (activeTab.analysis) {
+      try {
+        analysisData = JSON.parse(activeTab.analysis);
+        console.log('[AnalysisPane] Parsed analysis string:', analysisData);
+      } catch (e) {
+        console.error('[AnalysisPane] Failed to parse analysis string, rendering raw:', activeTab.analysis, e);
+        // Render the raw string if parsing fails (might be incomplete stream data)
+        return <pre className={`text-xs whitespace-pre-wrap font-mono p-3 ${theme === 'dark' ? 'text-gray-300' : 'text-gray-700'}`}>{activeTab.analysis}</pre>;
       }
     }
 
-    // Fallback to raw analysis string if no structured analysis
-    return activeTab.analysis ? (
-      <pre className={`text-base whitespace-pre-wrap font-sans ${theme === 'dark' ? 'text-gray-300' : 'text-gray-700'}`}>
-        {activeTab.analysis}
-      </pre>
-    ) : (
-      <p className={`text-sm italic mt-4 ${theme === 'dark' ? 'text-gray-400' : 'text-gray-600'}`}>
-        No analysis available for this tab.
-      </p>
-    );
-  };
+    // Render based on the determined analysisData
+    if (analysisData && typeof analysisData === 'object') {
+       console.log('[AnalysisPane] Rendering analysisData object:', analysisData);
+      // Ensure 'language' and 'cd' (code) are included for code responses
+      const fieldOrder: (keyof AnalysisResponse)[] = [
+          'language', // Add language
+          'cd',       // Changed from 'code' to 'cd'
+          'clarifying_questions', 'think_out_loud', 'edge_cases',
+          'test_cases', 'complexity', 'potential_optimizations'
+      ];
+      // Add padding for standard analysis view as well
+      return <div className="w-full p-3">{fieldOrder.map(key => renderStandardAnalysisField(key, analysisData?.[key]))}</div>;
+    } else {
+      return <p className={`text-xs italic p-3 ${theme === 'dark' ? 'text-gray-400' : 'text-gray-600'}`}>No analysis available for this tab.</p>;
+    }
+  }; // End of renderMainContent
 
-  // Render STAR format analysis
-  const renderBehavioralAnalysis = (data: BehavioralStarResponse) => {
-    return (
-      <div className={`text-base font-sans ${theme === 'dark' ? 'text-gray-300' : 'text-gray-700'}`}>
-        {data.situation && (
-          <div className="mb-4">
-            <h3 className={`text-md font-semibold mb-1 ${theme === 'dark' ? 'text-blue-400' : 'text-blue-600'}`}>
-              Situation:
-            </h3>
-            <p>{data.situation}</p>
-          </div>
-        )}
-        
-        {data.task && (
-          <div className="mb-4">
-            <h3 className={`text-md font-semibold mb-1 ${theme === 'dark' ? 'text-blue-400' : 'text-blue-600'}`}>
-              Task:
-            </h3>
-            <p>{data.task}</p>
-          </div>
-        )}
-        
-        {data.action && (
-          <div className="mb-4">
-            <h3 className={`text-md font-semibold mb-1 ${theme === 'dark' ? 'text-blue-400' : 'text-blue-600'}`}>
-              Action:
-            </h3>
-            <p>{data.action}</p>
-          </div>
-        )}
-        
-        {data.result && (
-          <div>
-            <h3 className={`text-md font-semibold mb-1 ${theme === 'dark' ? 'text-blue-400' : 'text-blue-600'}`}>
-              Result:
-            </h3>
-            <p>{data.result}</p>
-          </div>
-        )}
-      </div>
-    );
-  };
-
-  // Render comprehensive code analysis
-  const renderComprehensiveAnalysis = (data: AnalysisResponse) => {
-    return (
-      <div className={`text-base font-sans ${theme === 'dark' ? 'text-gray-300' : 'text-gray-700'}`}>
-        {data.planning_steps && data.planning_steps.length > 0 && (
-          <div className="mb-4">
-            <h3 className={`text-md font-semibold mb-1 ${theme === 'dark' ? 'text-blue-400' : 'text-blue-600'}`}>
-              Planning Steps:
-            </h3>
-            <ul className={`list-disc list-inside mb-2 ${theme === 'dark' ? 'text-gray-300' : 'text-gray-700'}`}>
-              {data.planning_steps.map((step: string, index: number) => (
-                <li key={index} className="mb-1">{step}</li>
-              ))}
-            </ul>
-          </div>
-        )}
-        
-        {data.complexity && (
-          <div className="mb-4">
-            <h3 className={`text-md font-semibold mb-1 ${theme === 'dark' ? 'text-blue-400' : 'text-blue-600'}`}>
-              Complexity:
-            </h3>
-            <p className="mb-1">
-              <span className="font-medium">Time:</span> {data.complexity.time}
-            </p>
-            <p>
-              <span className="font-medium">Space:</span> {data.complexity.space}
-            </p>
-          </div>
-        )}
-        
-        {data.explanation && (
-          <div>
-            <h3 className={`text-md font-semibold mb-1 ${theme === 'dark' ? 'text-blue-400' : 'text-blue-600'}`}>
-              Explanation:
-            </h3>
-            <p className="whitespace-pre-line">{data.explanation}</p>
-          </div>
-        )}
-      </div>
-    );
-  };
+  // --- Component Return ---
+  // Determine if we need to render TabsPanel (only for behavioral view now)
+   const isBehavioralView = activeTab?.filename?.startsWith('Behavioral-') || activeTab?.filename?.startsWith('STAR:') || (activeTab?.structuredAnalysis && typeof activeTab.structuredAnalysis === 'object' && 'situation' in activeTab.structuredAnalysis);
 
   return (
-    <div className="h-full flex flex-col">
-      <div className="flex items-center justify-between mb-2">
-        <h2 className={`text-lg font-semibold ${theme === 'dark' ? 'text-white' : 'text-gray-800'}`}>
-          Analysis
-        </h2>
-        <button 
-          onClick={clearPanel}
-          className={`px-2 py-1 text-xs rounded ${theme === 'dark' ? 'bg-gray-700 hover:bg-gray-600 text-white' : 'bg-gray-200 hover:bg-gray-300 text-gray-800'}`}
-        >
-          Clear
-        </button>
-      </div>
-      
-      {isCleared ? (
-        <div className="flex-1 flex items-center justify-center text-gray-500">
-          <p>Panel cleared</p>
-        </div>
-      ) : activeTab?.analysis ? (
-        <div className={`w-full h-full p-2 ${theme === 'dark' ? 'text-gray-200' : 'text-gray-800'}`}>
-          <div className="overflow-auto">
-            {renderContent()}
-          </div>
-        </div>
-      ) : (
-        <div className="flex-1 flex items-center justify-center text-gray-500">
-          <p>No analysis available for this tab.</p>
-        </div>
-      )}
+    <div className="h-full w-full flex flex-col text-xs" style={{ minHeight: 0 }}>
+       {/* Render TabsPanel only if it's the behavioral view and necessary props are passed */}
+       {isBehavioralView && tabs && tabs.length > 0 && onTabChange && (
+         <TabsPanel
+           tabs={tabs} // Pass the full list for tab selection
+           activeTabKey={activeTabKey} // Pass the active key
+           onTabChange={onTabChange}
+           onTabClose={onTabClose}
+           theme={theme}
+         />
+       )}
+       {/* Render the main content area */}
+       <div className="flex-1 overflow-y-auto overflow-x-auto w-full">
+         {renderMainContent()}
+       </div>
     </div>
   );
-};
+}; // End of EnhancedAnalysisPane component
 
-export default EnhancedAnalysisPane; 
+export default memo(EnhancedAnalysisPane);

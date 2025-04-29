@@ -5,22 +5,18 @@ import { useSearchParams } from "next/navigation";
 import { v4 as uuidv4 } from "uuid";
 import Image from "next/image";
 import { createParser } from 'eventsource-parser';
-// Add OpenAI SDK and Zod imports
-import OpenAI from "openai";
-import { z } from "zod";
-import { zodTextFormat } from "openai/helpers/zod";
 
 // UI components
 import Transcript from "./components/Transcript";
-import Dashboard from "./components/Dashboard";
 import TopControls from "./components/TopControls";
-import MobileSwipeContainer from "./components/MobileSwipeContainer";
-import CodePane from './components/CodePane';
-import AnalysisPane from './components/AnalysisPane';
 import DraggablePanelLayout from './components/DraggablePanelLayout';
 
 // Types
-import { AgentConfig, ConnectionState, TranscriptItem, TranscriptTurn, TabData } from "@/app/types";
+// Import types directly, use StarData alias internally if needed
+import { AgentConfig, ConnectionState, TranscriptItem, TranscriptTurn, TabData } from "@/app/types"; // Removed BehavioralStarResponse, AnalysisResponse
+
+// Define StarData alias locally for clarity - Placeholder as BehavioralStarResponse is not exported
+type StarData = Record<string, any>; // Use a generic object type for now
 
 // Context providers & hooks
 import { useTranscript } from "@/app/contexts/TranscriptContext";
@@ -28,82 +24,14 @@ import { useEvent } from "@/app/contexts/EventContext";
 import { useStatus, StatusProvider } from "@/app/contexts/StatusContext";
 import { useTheme } from "./contexts/ThemeContext";
 
-
-//Initialize OpenAI client
-const openai = new OpenAI({
-  apiKey: process.env.NEXT_PUBLIC_OPENAI_API_KEY, // Make sure this is set in your environment
-  dangerouslyAllowBrowser: true, // Only for client-side usage
-});
-
-// Define Zod schemas for structured outputs
-const ComprehensiveCodeSchema = z.object({
-  planning_steps: z.array(z.string()),
-  language: z.string(),
-  code: z.string(),
-  complexity: z.object({
-    time: z.string(),
-    space: z.string(),
-  }),
-  explanation: z.string(),
-});
-
-const SimpleExplanationSchema = z.object({
-  explanation: z.string(),
-});
-
-const BehavioralStarSchema = z.object({
-  situation: z.string(),
-  task: z.string(),
-  action: z.string(),
-  result: z.string(),
-});
-
-// This might require exporting it from TopControls.tsx first.
+// Define WebRTC status type locally if not exported from TopControls
 type WebRTCConnectionStatus = 'disconnected' | 'connecting' | 'connected' | 'failed' | 'error';
 
-// Define Props interface for the new inner component
-interface AppContentProps {
-  connectionState: ConnectionState;
-  isMicrophoneMuted: boolean;
-  setIsMicrophoneMuted: (muted: boolean) => void;
-  onToggleConnection: () => void;
-  handleMicStatusUpdate: (status: WebRTCConnectionStatus) => void;
-  handleSpeakerStatusUpdate: (status: WebRTCConnectionStatus) => void;
-  connectTrigger: number;
-  disconnectTrigger: number;
-  // Add any other props passed down from App
-  transcriptItems: TranscriptItem[]; // Still needed for Dashboard
-  userText: string;
-  setUserText: (text: string) => void;
-  isMobileView: boolean | null;
-  setActiveMobilePanel: (panel: number) => void;
-  activeMobilePanel: number;
-  micConnectionStatus: WebRTCConnectionStatus;
-  speakerConnectionStatus: WebRTCConnectionStatus;
-  onReconnectMic: () => void;
-  onReconnectSpeaker: () => void;
-}
-
-// Define types for the structured responses matching the backend
-// (These could be moved to @/app/types/index.ts later)
-interface AnalysisResponse { 
-  planning_steps: string[];
-  complexity: {
-    time: string;
-    space: string;
-  };
-  explanation: string;
-}
-
-interface CodeResponse { 
-  language: string;
-  code: string;
-  explanation: string;
-}
-
-// Temporarily extend TabData with structuredAnalysis if not already present
+// Extend TabData locally for state management including followUps
 interface LocalTabData extends TabData {
-  structuredAnalysis?: AnalysisResponse;
+  followUps?: StarData[]; // Array to hold follow-up STAR responses
+  // Keep structuredAnalysis flexible for different response types or streaming status
+  structuredAnalysis?: StarData | { status: string }; // Removed AnalysisResponse as it's not defined
   responseId?: string | null;
   functionCall?: {
     id: string;
@@ -113,523 +41,567 @@ interface LocalTabData extends TabData {
   };
 }
 
-// Define the expected API response structure
-interface ApiResponse {
-  response_id: string;
-  analysis?: AnalysisResponse;
-  code_data?: CodeResponse; // Matches backend key
+// Define Props interface for the inner component
+interface AppContentProps {
+  connectionState: ConnectionState;
+  isMicrophoneMuted: boolean;
+  setIsMicrophoneMuted: (muted: boolean) => void;
+  onToggleConnection: () => void;
+  handleMicStatusUpdate: (status: WebRTCConnectionStatus) => void;
+  handleSpeakerStatusUpdate: (status: WebRTCConnectionStatus) => void;
+  connectTrigger: number;
+  disconnectTrigger: number;
+  transcriptItems: TranscriptItem[];
+  userText: string;
+  setUserText: (text: string) => void;
+  micConnectionStatus: WebRTCConnectionStatus;
+  speakerConnectionStatus: WebRTCConnectionStatus;
+  onReconnectMic: () => void;
+  onReconnectSpeaker: () => void;
+  onCycleViewRequest: () => void; // Add prop for cycle request
+  cycleViewTrigger: number; // Add prop for cycle trigger
 }
 
-// --- New Inner Component --- 
-function AppContent({ 
-  connectionState, 
-  isMicrophoneMuted, 
-  setIsMicrophoneMuted, 
-  onToggleConnection, 
+// --- Inner Component: AppContent ---
+function AppContent({
+  connectionState,
+  isMicrophoneMuted,
+  setIsMicrophoneMuted,
+  onToggleConnection,
   handleMicStatusUpdate,
   handleSpeakerStatusUpdate,
   connectTrigger,
   disconnectTrigger,
-  transcriptItems, // Destructure props
+  transcriptItems,
   userText,
   setUserText,
-  isMobileView,
-  setActiveMobilePanel,
-  activeMobilePanel,
   micConnectionStatus,
   speakerConnectionStatus,
   onReconnectMic,
   onReconnectSpeaker,
+  onCycleViewRequest, // Destructure cycle request handler
+  cycleViewTrigger, // Destructure cycle trigger
 }: AppContentProps) {
-  // Hooks that need context can be called here
   const { chatStatus, setChatStatus, setPreviousChatSuccess } = useStatus();
   const { addTranscriptMessage, addTranscriptBreadcrumb } = useTranscript();
-  const MAX_HISTORY_LENGTH = 10; // Define max history length here - might become redundant but keep for now if other history needs it
-  
-  // State for the active tab in CodePane/AnalysisPane
-  const [activeTabKey, setActiveTabKey] = useState<string | null>(null);
-  const [tabData, setTabData] = useState<LocalTabData[]>([]); // Start with empty tabs
-  const [tabCounter, setTabCounter] = useState<number>(1); // Counter for unique tab keys/filenames
-  const [lastResponseId, setLastResponseId] = useState<string | null>(null);
-  // Add state to track current function name
-  const [currentFunctionName, setCurrentFunctionName] = useState<string | null>(null);
-
-  // Add theme hook
   const { theme } = useTheme();
 
-  // Updated handleProcessTurn to use OpenAI SDK with structured outputs
-  // Add state for conversation history
+  const [activeTabKey, setActiveTabKey] = useState<string | null>(null);
+  const [tabData, setTabData] = useState<LocalTabData[]>([]);
+  const [tabCounter, setTabCounter] = useState<number>(1);
+  const [lastResponseId, setLastResponseId] = useState<string | null>(null);
+  const [currentFunctionName, setCurrentFunctionName] = useState<string | null>(null);
+  const [lastBehavioralTabData, setLastBehavioralTabData] = useState<LocalTabData | null>(null);
+  const [lastCodeTabData, setLastCodeTabData] = useState<LocalTabData | null>(null);
   const [conversationHistory, setConversationHistory] = useState<any[]>([]);
-
-  // Add this near the other state declarations at the beginning of the AppContent component:
   const [processedInputs, setProcessedInputs] = useState<Set<string>>(new Set());
 
+  // --- Main Processing Logic ---
   const handleProcessTurn = useCallback(async (turn: TranscriptTurn) => {
     console.log('[AppContent] Received turn to process:', turn);
-
     const speakerSaid = turn.speakerTranscript;
 
     if (!speakerSaid) {
       console.log('[AppContent] No Speaker transcript content to process, skipping API calls');
       return;
     }
-    
-    // Check if we've already processed this exact input within last few seconds
+
     const trimmedInput = speakerSaid.trim();
     if (processedInputs.has(trimmedInput)) {
       console.log('[AppContent] Already processed this input, skipping duplicate:', trimmedInput);
       return;
     }
-    
-    // Add to processed inputs
-    setProcessedInputs(prev => {
-      const updated = new Set(prev);
-      updated.add(trimmedInput);
-      return updated;
-    });
-    
-    // Set a timeout to clear this input from processed set after a few seconds
+
+    setProcessedInputs(prev => new Set(prev).add(trimmedInput));
     setTimeout(() => {
       setProcessedInputs(current => {
         const newSet = new Set(current);
         newSet.delete(trimmedInput);
         return newSet;
       });
-    }, 5000); // Clear after 5 seconds
-    
-    console.log(`[AppContent] Requesting analysis for prompt: "${speakerSaid}"`);
+    }, 5000);
 
+    console.log(`[AppContent] Requesting analysis for prompt: "${speakerSaid}"`);
     setChatStatus('processing');
     setPreviousChatSuccess(false);
-    const currentTabId = tabCounter; // Capture current counter for this request
+    const currentResponseId = uuidv4(); // Used as fallback if API doesn't provide one
 
-    // Initialize a new tab for the incoming response
-    const newTabKey = `response-${currentTabId}`;
-    const initialTabData: LocalTabData = {
-      key: newTabKey,
-      filename: `Response-${currentTabId}.txt`, // Default filename
-      language: 'plaintext', // Default language
-      code: '',
-      analysis: '',
-      structuredAnalysis: undefined,
-      responseId: null,
-    };
-    setTabData(prev => [...prev, initialTabData]);
-    setActiveTabKey(newTabKey);
-    setTabCounter(prev => prev + 1);
-    setCurrentFunctionName(null); // Reset function name
-
-    // Add user message to conversation history
     const userMessage = { role: 'user', content: speakerSaid };
     let updatedHistory = [...conversationHistory, userMessage];
 
-    // Check the last assistant message in history for tool calls
-    const lastAssistantMessage = conversationHistory.findLast(msg => msg.role === 'assistant');
-    
-    // In our new approach with Responses API, we don't store tool_calls directly in the conversation history
-    // Instead, when we receive function calls, we'll extract them from responseData.output when saving lastResponseId
-    
-    // Check if we have a previous response ID that might have had function calls
+    // Add previous function call/output context if applicable
     if (lastResponseId) {
-        // Find the tab data for the previous response
-        const previousTab = tabData.find(tab => tab.responseId === lastResponseId);
-
-        if (previousTab && previousTab.structuredAnalysis) {
-             console.log('[AppContent] Found previous structured analysis for response ID:', lastResponseId);
-             
-             // For Responses API, we need to add function calls with their outputs directly to the request
-             if (previousTab.functionCall) {
-                 // Use the actual function call information that we stored
-                 updatedHistory.push({
-                     type: "function_call",
-                     call_id: previousTab.functionCall.call_id,
-                     name: previousTab.functionCall.name,
-                     arguments: previousTab.functionCall.arguments
-                 });
-                 
-                 // Add the function output immediately after
-                 updatedHistory.push({
-                     type: "function_call_output",
-                     call_id: previousTab.functionCall.call_id,
-                     output: JSON.stringify(previousTab.structuredAnalysis) // Send the structured data as output
-                 });
-             } else if (currentFunctionName) {
-                 // Fallback to using the current function name if we don't have the full function call data
-                 const functionCallId = `call_${Math.random().toString(36).substring(2, 15)}`;
-                 updatedHistory.push({
-                     type: "function_call",
-                     call_id: functionCallId,
-                     name: currentFunctionName,
-                     arguments: '{}' // This should ideally be the actual arguments from the previous call
-                 });
-                 
-                 // Add the function output immediately after
-                 updatedHistory.push({
-                     type: "function_call_output",
-                     call_id: functionCallId,
-                     output: JSON.stringify(previousTab.structuredAnalysis) // Send the structured data as output
-                 });
-             }
-        } else {
-             console.warn('[AppContent] Previous response ID exists but no structured analysis found');
-        }
+      const previousTab = tabData.find(tab => tab.responseId === lastResponseId);
+      if (previousTab?.structuredAnalysis && previousTab.functionCall) {
+         console.log('[AppContent] Adding previous function call context:', previousTab.functionCall.name);
+         updatedHistory.push({ type: "function_call", call_id: previousTab.functionCall.call_id, name: previousTab.functionCall.name, arguments: previousTab.functionCall.arguments });
+         updatedHistory.push({ type: "function_call_output", call_id: previousTab.functionCall.call_id, output: JSON.stringify(previousTab.structuredAnalysis) });
+      }
     }
 
+    let responseData: any = null; // Define outside try block
+
     try {
-      // Before sending the request, validate and fix the message format
       const sanitizedMessages = updatedHistory.map((msg: any) => {
-        // If this is an assistant message with invalid content format, fix it
-        if (msg.role === 'assistant') {
-          // If content is an object, extract text or use empty string
-          if (typeof msg.content === 'object') {
-            // Try to find text in the format object or various places it might be hiding
-            if (msg.content.format?.type === 'text') {
-              return { ...msg, content: '' }; // Empty string for format objects
-            } else if (msg.content.text) {
-              return { ...msg, content: msg.content.text };
-            } else {
-              return { ...msg, content: '' }; // Default to empty string
-            }
-          }
-        }
-        return msg;
-      });
+         if (msg.role === 'assistant' && typeof msg.content === 'object' && msg.content !== null) {
+           return { ...msg, content: msg.content.text || '' };
+         }
+         return msg;
+       });
 
       const response = await fetch('/api/responses', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          messages: sanitizedMessages,
-          previous_response_id: lastResponseId,
-          vector_store_id: 'vs_6806911f19a081918abcc7bbb8410f5f'
-        }),
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ messages: sanitizedMessages, vector_store_id: 'vs_6806911f19a081918abcc7bbb8410f5f' }), // Replace with dynamic ID if needed
       });
 
-      if (!response.ok) { // Check response.ok for non-2xx status codes
-        const errorData = await response.json();
-        console.error('[AppContent] API Error Response:', response.status, errorData);
-        throw new Error(`HTTP error! status: ${response.status}, details: ${errorData.error || 'Unknown error'}`);
+      if (!response.ok) {
+        let errorDetails = 'Unknown error';
+        try { const errorData = await response.json(); errorDetails = errorData.error || JSON.stringify(errorData); }
+        catch (e) { errorDetails = await response.text(); }
+        throw new Error(`HTTP error! status: ${response.status}, details: ${errorDetails}`);
       }
 
-      const responseData = await response.json();
-      console.log('[AppContent] Received complete response data:', responseData);
+      const contentType = response.headers.get('Content-Type');
+      let accumulatedFunctionArgs: { [key: number]: string } = {};
+      let currentFunctionCalls: { [key: number]: any } = {};
+      let streamCreatedTabKey: string | null = null;
+
+      // --- Stream Processing ---
+      if (contentType && contentType.includes('application/jsonl') && response.body) {
+        console.log('[AppContent] Processing streamed JSONL response...');
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = '';
+
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          buffer += decoder.decode(value, { stream: true });
+          const lines = buffer.split('\n');
+          buffer = lines.pop() || '';
+
+          for (const line of lines) {
+            if (line.trim() === '') continue;
+            try {
+              const event = JSON.parse(line);
+              switch (event.type) {
+                case 'function_call_start': {
+                  const funcIndexStart = event.output_index;
+                  console.log(`[Stream] Function call started (Index ${funcIndexStart}): ${event.name}`);
+                  currentFunctionCalls[funcIndexStart] = { name: event.name, id: event.id, call_id: event.call_id, arguments: '', tabKey: null, isFollowUp: false, targetTabKey: null };
+                  accumulatedFunctionArgs[funcIndexStart] = '';
+
+                  if (event.name === 'format_comprehensive_code' || event.name === 'format_behavioral_star_answer') {
+                    const newTabKey = `response-${tabCounter}`;
+                    const isBehavioral = event.name === 'format_behavioral_star_answer';
+                    const isFollowUp = isBehavioral && lastBehavioralTabData !== null;
+
+                    if (isFollowUp) {
+                      console.log('[Stream] Identified potential behavioral follow-up during stream.');
+                      currentFunctionCalls[funcIndexStart].isFollowUp = true;
+                      currentFunctionCalls[funcIndexStart].targetTabKey = lastBehavioralTabData.key;
+                      streamCreatedTabKey = null; // Don't create a new tab yet
+                    } else {
+                      streamCreatedTabKey = newTabKey;
+                      currentFunctionCalls[funcIndexStart].tabKey = newTabKey;
+                      const initialLang = isBehavioral ? 'markdown' : 'plaintext';
+                      const initialFilename = isBehavioral ? `Behavioral-${tabCounter}` : `Code-${tabCounter}`; // Placeholder name
+
+                      const newTab: LocalTabData = {
+                        key: newTabKey, filename: initialFilename, language: initialLang, code: "Streaming...", analysis: JSON.stringify({ status: "streaming" }, null, 2),
+                        structuredAnalysis: { status: "streaming" }, responseId: currentResponseId, // Use fallback ID initially
+                        functionCall: { id: event.id, call_id: event.call_id, name: event.name, arguments: '' },
+                        followUps: [] // Initialize followUps
+                      };
+                      setTabData(prev => [...prev, newTab]);
+                      setActiveTabKey(newTabKey);
+                      setTabCounter(prev => prev + 1);
+                      if (isBehavioral) { setLastBehavioralTabData(newTab); setLastCodeTabData(null); }
+                      else { setLastCodeTabData(newTab); setLastBehavioralTabData(null); }
+                    }
+                  }
+                  break;
+                }
+                case 'function_call_delta': {
+                  const funcIndexDelta = event.output_index;
+                  if (currentFunctionCalls[funcIndexDelta] && event.delta) {
+                    accumulatedFunctionArgs[funcIndexDelta] += event.delta;
+                    currentFunctionCalls[funcIndexDelta].arguments = accumulatedFunctionArgs[funcIndexDelta];
+                    const updateKey = currentFunctionCalls[funcIndexDelta].isFollowUp
+                      ? currentFunctionCalls[funcIndexDelta].targetTabKey
+                      : currentFunctionCalls[funcIndexDelta].tabKey;
+
+                    if (updateKey) {
+                      try {
+                        const partialArgs = JSON.parse(accumulatedFunctionArgs[funcIndexDelta]);
+                        setTabData(prevTabData => prevTabData.map(tab => {
+                          if (tab.key === updateKey) {
+                            let updatedCode = tab.code; let updatedAnalysis = tab.analysis; let updatedFilename = tab.filename; let updatedLang = tab.language; let updatedFollowUps = tab.followUps || [];
+
+                            if (currentFunctionCalls[funcIndexDelta].name === 'format_comprehensive_code') {
+                              updatedCode = partialArgs.code || tab.code; updatedLang = partialArgs.language || tab.language;
+                              if (updatedLang !== tab.language && tab.filename.startsWith('Code-')) { updatedFilename = `Code: ${updatedLang}`; }
+                              updatedAnalysis = JSON.stringify(partialArgs, null, 2);
+                              return { ...tab, code: updatedCode === "Streaming..." && partialArgs.code ? partialArgs.code : updatedCode, analysis: updatedAnalysis, structuredAnalysis: partialArgs, filename: updatedFilename, language: updatedLang, functionCall: { ...tab.functionCall!, arguments: accumulatedFunctionArgs[funcIndexDelta] } };
+                            } else if (currentFunctionCalls[funcIndexDelta].name === 'format_behavioral_star_answer') {
+                              if (currentFunctionCalls[funcIndexDelta].isFollowUp) {
+                                const currentFollowUpIndex = updatedFollowUps.length - 1;
+                                if (currentFollowUpIndex >= 0) {
+                                  updatedFollowUps[currentFollowUpIndex] = { ...updatedFollowUps[currentFollowUpIndex], ...partialArgs };
+                                } else {
+                                  updatedFollowUps = [partialArgs]; // Add as first follow-up
+                                }
+                                updatedAnalysis = JSON.stringify(partialArgs, null, 2); // Store partial args for finalization
+                                return { ...tab, analysis: updatedAnalysis, structuredAnalysis: partialArgs, followUps: updatedFollowUps }; // Update follow-ups
+                              } else {
+                                // Update main behavioral response
+                                updatedCode = `Situation: ${partialArgs.situation?.substring(0, 50) || ''}...`; // Use situation for code preview
+                                updatedAnalysis = JSON.stringify(partialArgs, null, 2);
+                                if (partialArgs.situation && tab.filename.startsWith('Behavioral-')) { updatedFilename = `STAR: ${partialArgs.situation.substring(0, 15)}...`; }
+                                return { ...tab, code: updatedCode, analysis: updatedAnalysis, structuredAnalysis: partialArgs, filename: updatedFilename, language: 'markdown', functionCall: { ...tab.functionCall!, arguments: accumulatedFunctionArgs[funcIndexDelta] }, followUps: updatedFollowUps };
+                              }
+                            }
+                          }
+                          return tab;
+                        }));
+                        // Update last tab context only for NEW tabs during stream
+                        if (!currentFunctionCalls[funcIndexDelta].isFollowUp) {
+                           setTabData(currentTabs => {
+                              const updatedTab = currentTabs.find(t => t.key === updateKey);
+                              if (updatedTab) {
+                                 if (currentFunctionCalls[funcIndexDelta].name === 'format_behavioral_star_answer') { setLastBehavioralTabData(updatedTab); }
+                                 else if (currentFunctionCalls[funcIndexDelta].name === 'format_comprehensive_code') { setLastCodeTabData(updatedTab); }
+                              }
+                              return currentTabs;
+                           });
+                        }
+                      } catch (e) { /* Incomplete JSON, ignore */ }
+                    }
+                  }
+                  break;
+                }
+                case 'text_delta': {
+                  if (event.delta) { addTranscriptMessage(uuidv4(), 'assistant', event.delta, true); }
+                  break;
+                }
+                case 'completed': {
+                  console.log('[Stream] Completed event received.');
+                  responseData = event.response; // Assign final data from stream
+                  // Finalize follow-up data based on accumulated args
+                  Object.entries(currentFunctionCalls).forEach(([indexStr, call]) => {
+                     const funcIndex = parseInt(indexStr, 10);
+                     if (call.isFollowUp && call.targetTabKey) {
+                        try {
+                           const finalArgs = JSON.parse(accumulatedFunctionArgs[funcIndex]);
+                           setTabData(prevTabData => prevTabData.map(tab => {
+                              if (tab.key === call.targetTabKey) {
+                                 let updatedFollowUps = tab.followUps || [];
+                                 const currentFollowUpIndex = updatedFollowUps.length - 1;
+                                 if (currentFollowUpIndex >= 0) {
+                                    updatedFollowUps[currentFollowUpIndex] = finalArgs; // Replace partial with final
+                                 } else {
+                                    updatedFollowUps = [finalArgs]; // Add final if it wasn't added before
+                                 }
+                                 console.log(`[Stream Completed] Finalizing follow-up for tab ${call.targetTabKey}`, finalArgs);
+                                 return { ...tab, followUps: updatedFollowUps };
+                              }
+                              return tab;
+                           }));
+                        } catch (e) { console.error("Error parsing final follow-up args:", e); }
+                     }
+                  });
+                  break;
+                }
+                case 'error': {
+                  console.error('[Stream] Error event:', event.error);
+                  throw new Error(event.error?.message || 'Unknown stream error');
+                }
+                default: break;
+              }
+            } catch (parseError) { console.error('[Stream] Error parsing JSON line:', line, parseError); }
+          }
+        }
+
+        // Fallback finalization if stream ends without 'completed'
+        if (!responseData) {
+          console.warn("[Stream] ended without 'completed' event. Constructing partial response.");
+          Object.entries(currentFunctionCalls).forEach(([indexStr, call]) => {
+             const funcIndex = parseInt(indexStr, 10);
+             if (call.isFollowUp && call.targetTabKey) {
+                try {
+                   const finalArgs = JSON.parse(accumulatedFunctionArgs[funcIndex]);
+                   setTabData(prevTabData => prevTabData.map(tab => {
+                      if (tab.key === call.targetTabKey) {
+                         let updatedFollowUps = tab.followUps || [];
+                         const currentFollowUpIndex = updatedFollowUps.length - 1;
+                         if (currentFollowUpIndex >= 0 && JSON.stringify(updatedFollowUps[currentFollowUpIndex]) !== JSON.stringify(finalArgs)) {
+                            updatedFollowUps[currentFollowUpIndex] = finalArgs;
+                         } else if (currentFollowUpIndex < 0) {
+                            updatedFollowUps = [finalArgs];
+                         }
+                         console.log(`[Stream Fallback] Finalizing follow-up for tab ${call.targetTabKey}`, finalArgs);
+                         return { ...tab, followUps: updatedFollowUps };
+                      }
+                      return tab;
+                   }));
+                } catch (e) { console.error("Error parsing final follow-up args on fallback:", e); }
+             }
+          });
+          // Construct a minimal responseData if none was received from 'completed'
+          responseData = { id: currentResponseId, output: Object.values(currentFunctionCalls) };
+        }
+        console.log('[AppContent] Final processed data from stream:', responseData);
+
+      } else {
+        // --- Handle Non-Streamed Response ---
+        console.log('[AppContent] Processing non-streamed response...');
+        responseData = await response.json();
+        console.log('[AppContent] Received complete response data (non-streamed):', responseData);
+      }
+
+      // --- Common Logic after getting responseData ---
+      if (!responseData) { throw new Error("Failed to get response data."); }
 
       setChatStatus('done');
       setPreviousChatSuccess(true);
+      // Assign finalResponseId *after* responseData is confirmed
+      const finalResponseId = responseData.id || currentResponseId;
+      setLastResponseId(finalResponseId);
 
-      // Process the complete response data
-      const responseId = responseData.id;
-      setLastResponseId(responseId);
+      // --- Final Tab Processing & Breadcrumb Logic ---
+      let isCodeResponse = false; let isBehavioralResponse = false; let isGeneralResponse = true;
+      let isFollowUpResponse = false; // Flag for follow-up identification
+      let tabLabel = ''; let tabLanguage = 'plaintext'; let tabCode = ''; let tabAnalysis = '';
+      let tabStructuredAnalysis: any = undefined; let tabFilename = ''; let functionCallData = null;
+      let breadcrumbSummary = 'Response processed.'; let breadcrumbPreview = '';
+      let tentativeFilename = `Response-${tabCounter}`; // Default tentative name
 
-      // IMPORTANT: For OpenAI Responses API, we need to handle conversation history differently than ChatCompletions
-      // 1. In conversation history stored in state, we only store simple text messages with role/content
-      // 2. When sending a request, we reconstruct function calls/outputs in the correct format for Responses API
-      // 3. This prevents the "Unknown parameter: 'input[].tool_calls'" error by ensuring proper formatting
-      
-      // Add assistant message (including tool calls if any) to conversation history
       if (responseData.output && Array.isArray(responseData.output) && responseData.output.length > 0) {
-        // Find the function_call in the output array (not assuming it's always at index 0)
-        const functionCallItem = responseData.output.find((item: { type: string }) => item.type === 'function_call');
-        
-        console.log('[AppContent] Found function call item:', functionCallItem);
-        
+        const functionCallItem = responseData.output.find((item: any) => item.type === 'function_call');
+        const messageItem = responseData.output.find((item: any) => item.type === 'message' && item.role === 'assistant');
+        let responseText = messageItem?.content?.[0]?.type === 'text' ? (messageItem.content[0].text.value || '') : '';
+
         if (functionCallItem) {
           setCurrentFunctionName(functionCallItem.name);
-          
-          // Process function call arguments directly without special casing
           try {
-            const structuredAnalysisData = JSON.parse(functionCallItem.arguments);
-            console.log('[AppContent] Set structured analysis from function call arguments:', structuredAnalysisData);
+            const finalArgs = JSON.parse(functionCallItem.arguments);
+            tabStructuredAnalysis = finalArgs;
+            functionCallData = { id: functionCallItem.id, call_id: functionCallItem.call_id, name: functionCallItem.name, arguments: functionCallItem.arguments };
 
-            // Special handling for displaying STAR answers in transcript
-            if (functionCallItem.name === 'format_behavioral_star_answer') {
-              // Add more detailed logging for STAR answers
-              console.log('[AppContent] Processing behavioral STAR answer:', functionCallItem.name);
-              console.log('[AppContent] STAR data:', structuredAnalysisData);
-              
-              // Add the STAR answer to the transcript with proper formatting
-              const starMessage = `**Situation:** ${structuredAnalysisData.situation}\n\n**Task:** ${structuredAnalysisData.task}\n\n**Action:** ${structuredAnalysisData.action}\n\n**Result:** ${structuredAnalysisData.result}`;
-              console.log('[AppContent] Adding STAR message to transcript:', starMessage.substring(0, 100) + '...');
-              addTranscriptMessage(uuidv4(), 'assistant', starMessage);
-              
-              // Add a specific breadcrumb for STAR answers
-              console.log('[AppContent] Adding STAR breadcrumb');
-              addTranscriptBreadcrumb(`STAR Answer`, {
-                analysisSummary: `${structuredAnalysisData.situation.substring(0, 50)}... (STAR format)`,
-                codePreview: `Situation: ${structuredAnalysisData.situation.substring(0, 50)}...`
-              });
+            if (functionCallItem.name === 'format_comprehensive_code') {
+              isCodeResponse = true; isGeneralResponse = false; setLastBehavioralTabData(null);
+              tabLanguage = finalArgs.language || 'plaintext'; tabCode = finalArgs.code || ''; tabAnalysis = JSON.stringify(finalArgs, null, 2);
+              tabLabel = `${tabLanguage} Snippet`; tentativeFilename = `Code: ${tabLanguage}`;
+              breadcrumbSummary = `Code: ${tabLanguage}`; breadcrumbPreview = tabCode.substring(0, 100) + '...';
+            } else if (functionCallItem.name === 'format_behavioral_star_answer') {
+              isBehavioralResponse = true; isGeneralResponse = false; setLastCodeTabData(null);
+              if (lastBehavioralTabData !== null) {
+                 isFollowUpResponse = true;
+                 console.log(`[AppContent] Identified behavioral follow-up for tab: ${lastBehavioralTabData.key}`);
+              }
+              tabLanguage = 'markdown'; tabAnalysis = JSON.stringify(finalArgs, null, 2);
+              tabLabel = `STAR: ${finalArgs.situation?.substring(0, 15) || 'Response'}...`; tentativeFilename = tabLabel;
+              breadcrumbSummary = `Behavioral: ${finalArgs.situation?.substring(0, 50)}...`; breadcrumbPreview = `Situation: ${finalArgs.situation?.substring(0, 50)}...`;
+              tabCode = `Situation: ${finalArgs.situation || ''}\nTask: ...`; // Code preview
+            } else if (functionCallItem.name === 'format_simple_explanation' && finalArgs.explanation) {
+               isGeneralResponse = true; setLastBehavioralTabData(null); setLastCodeTabData(null);
+               const explanationText = finalArgs.explanation;
+               // Always add the final explanation to the transcript, even if streamed via text_delta, as a fallback.
+               addTranscriptMessage(uuidv4(), 'assistant', explanationText);
+               tentativeFilename = `Explanation: ${explanationText.substring(0, 20)}...`;
+               breadcrumbSummary = explanationText.substring(0, 150) + '...'; breadcrumbPreview = explanationText.substring(0, 100) + '...';
+            } else { // Unknown function
+              isGeneralResponse = true; setLastBehavioralTabData(null); setLastCodeTabData(null);
+              const errorMessage = `Processed unknown function call: ${functionCallItem.name}`;
+              addTranscriptMessage(uuidv4(), 'assistant', errorMessage); tentativeFilename = `Error-UnknownFunction`;
+              breadcrumbSummary = errorMessage; breadcrumbPreview = errorMessage.substring(0, 100) + '...';
             }
-            
-            // Log before updating tab data
-            console.log('[AppContent] Active tab key before update:', activeTabKey);
-            console.log('[AppContent] Tab data before update:', tabData);
-
-            // Determine language for code pane if it's a comprehensive code response
-            const codeLanguage = functionCallItem.name === 'format_comprehensive_code' ? structuredAnalysisData.language : 'plaintext';
-
-            // Update tab data with the function call results
-            setTabData(prev => {
-              const newTabData = prev.map(tab =>
-                tab.key === newTabKey ? {
-                  ...tab,
-                  filename: `${functionCallItem.name}-${currentTabId}.${codeLanguage === 'plaintext' ? 'txt' : codeLanguage}`,
-                  language: codeLanguage,
-                  // For STAR answers, use formatted text in code pane
-                  code: functionCallItem.name === 'format_behavioral_star_answer' 
-                    ? `Situation: ${structuredAnalysisData.situation}\n\nTask: ${structuredAnalysisData.task}\n\nAction: ${structuredAnalysisData.action}\n\nResult: ${structuredAnalysisData.result}`
-                    : (structuredAnalysisData.code || JSON.stringify(structuredAnalysisData, null, 2)),
-                  analysis: JSON.stringify(structuredAnalysisData, null, 2),
-                  structuredAnalysis: structuredAnalysisData,
-                  responseId: responseId,
-                  functionCall: {
-                    id: functionCallItem.id,
-                    call_id: functionCallItem.call_id,
-                    name: functionCallItem.name,
-                    arguments: functionCallItem.arguments
-                  }
-                } : tab
-              );
-              console.log('[AppContent] Tab data after update:', newTabData);
-              return newTabData;
-            });
-            
-            // Ensure active tab is set correctly
-            console.log('[AppContent] Setting active tab to:', newTabKey);
-            setActiveTabKey(newTabKey);
-
-            // If it's a simple explanation, add it directly to transcript
-            if (functionCallItem.name === 'format_simple_explanation' && structuredAnalysisData.explanation) {
-              addTranscriptMessage(uuidv4(), 'assistant', structuredAnalysisData.explanation);
-            }
-            
-          } catch (parseError) {
-            console.error('[AppContent] Error parsing function call arguments:', parseError, functionCallItem.arguments);
-            addTranscriptMessage(uuidv4(), 'assistant', `Error parsing tool arguments: ${(parseError as Error).message}`);
-            setTabData(prev => prev.map(tab =>
-              tab.key === newTabKey ? { ...tab, analysis: `Error parsing tool arguments: ${(parseError as Error).message}\n\nRaw arguments:\n${functionCallItem.arguments}` } : tab
-            ));
+          } catch (parseError) { // Error parsing final arguments
+            isGeneralResponse = true; setLastBehavioralTabData(null); setLastCodeTabData(null);
+            const errorMessage = `Error parsing final tool arguments for ${functionCallItem?.name || 'unknown function'}: ${(parseError as Error).message}`;
+            addTranscriptMessage(uuidv4(), 'assistant', errorMessage); tentativeFilename = `Error-Parsing`;
+            breadcrumbSummary = errorMessage; breadcrumbPreview = errorMessage.substring(0, 100) + '...';
+            isCodeResponse = false; isBehavioralResponse = false; functionCallData = null; tabStructuredAnalysis = undefined;
           }
-        } else if (responseData.output[0].type === 'text' && responseData.output[0].text) {
-           // Handle direct text response
-           setTabData(prev => prev.map(tab =>
-             tab.key === newTabKey ? { ...tab, code: responseData.output[0].text, analysis: responseData.output[0].text, language: 'plaintext', filename: `Response-${currentTabId}.txt` } : tab
-           ));
-           console.log('[AppContent] Set text response:', responseData.output[0].text);
+        } else if (responseText) { // General text response
+           isGeneralResponse = true; setLastBehavioralTabData(null); setLastCodeTabData(null);
+           // Always add the final text response to the transcript, even if streamed via text_delta, as a fallback.
+           addTranscriptMessage(uuidv4(), 'assistant', responseText);
+           tentativeFilename = `Response: ${responseText.substring(0, 20)}...`;
+           breadcrumbSummary = responseText.substring(0, 150) + '...'; breadcrumbPreview = responseText.substring(0, 100) + '...';
+        } else { // Neither function call nor text
+          isGeneralResponse = true; setLastBehavioralTabData(null); setLastCodeTabData(null);
+          const errorMessage = `Received response with no actionable output.`;
+          addTranscriptMessage(uuidv4(), 'assistant', errorMessage); tentativeFilename = `Error-NoOutput`;
+          breadcrumbSummary = errorMessage; breadcrumbPreview = errorMessage.substring(0, 100) + '...';
         }
-      } else if (responseData.text && typeof responseData.text === 'string') {
-         // Handle cases where text might be directly on the response object (less likely with tools)
-          setTabData(prev => prev.map(tab =>
-             tab.key === newTabKey ? { ...tab, code: responseData.text, analysis: responseData.text, language: 'plaintext', filename: `Response-${currentTabId}.txt` } : tab
-           ));
-           console.log('[AppContent] Set direct text response from response object:', responseData.text);
-      } else {
-         console.warn('[AppContent] Received response with no recognizable output:', responseData);
-         addTranscriptMessage(uuidv4(), 'assistant', `Received response with no recognizable output.`);
-          setTabData(prev => prev.map(tab =>
-             tab.key === newTabKey ? { ...tab, analysis: 'Received response with no recognizable output.' } : tab
-           ));
+      } else if (responseData.text && typeof responseData.text === 'string') { // Fallback simple text
+        isGeneralResponse = true; setLastBehavioralTabData(null); setLastCodeTabData(null);
+        const responseText = responseData.text; addTranscriptMessage(uuidv4(), 'assistant', responseText);
+        tentativeFilename = `Response: ${responseText.substring(0, 20)}...`;
+        breadcrumbSummary = responseText.substring(0, 150) + '...'; breadcrumbPreview = responseText.substring(0, 100) + '...';
+      } else { // No recognizable output
+        isGeneralResponse = true; setLastBehavioralTabData(null); setLastCodeTabData(null);
+        const errorMessage = `Received response with no recognizable output.`;
+        addTranscriptMessage(uuidv4(), 'assistant', errorMessage); tentativeFilename = `Error-NoRecognizableOutput`;
+        breadcrumbSummary = errorMessage; breadcrumbPreview = errorMessage.substring(0, 100) + '...';
       }
 
-      // Add breadcrumb after processing the full response
-      // Determine the content for the breadcrumb based on the response type
-      let breadcrumbContent = {
-        filename: `Response-${currentTabId}.txt`,
-        summary: 'No content',
-        preview: 'No preview available',
-      };
+      tabFilename = tentativeFilename; // Finalize filename
 
-      if (responseData.output && Array.isArray(responseData.output) && responseData.output.length > 0) {
-        const outputItem = responseData.output[0];
-        if (outputItem.type === 'function_call') {
-          breadcrumbContent.filename = `${outputItem.name}-${currentTabId}.json`; // Default filename for tool calls
-           // If it's a comprehensive code tool, use the language for the extension
-           if (outputItem.name === 'format_comprehensive_code' && responseData.output[0].arguments) {
-               try {
-                   const args = JSON.parse(outputItem.arguments);
-                   if (args.language) {
-                       breadcrumbContent.filename = `${outputItem.name}-${currentTabId}.${args.language}`;
-                   }
-               } catch (e) {
-                   console.error('[AppContent] Error parsing args for breadcrumb filename:', e);
-               }
-           }
-
-
-          try {
-            const args = JSON.parse(outputItem.arguments);
-            breadcrumbContent.summary = JSON.stringify(args, null, 2).substring(0, 150) + '...';
-            // For code responses, use code preview
-            if (outputItem.name === 'format_comprehensive_code' && args.code) {
-                 breadcrumbContent.preview = args.code.substring(0, 100) + '...';
-            } else {
-                 breadcrumbContent.preview = 'Function call arguments'; // Or a snippet of the args
+      // --- Final Tab State Update & Creation ---
+      let breadcrumbAdded = false;
+      if (isFollowUpResponse && lastBehavioralTabData && tabStructuredAnalysis) {
+         // Append to existing behavioral tab's followUps array
+         setTabData(prevTabData => prevTabData.map(tab => {
+            if (tab.key === lastBehavioralTabData.key) {
+               console.log(`[AppContent] Appending follow-up to tab ${tab.key}`);
+               const newFollowUps = [...(tab.followUps || []), tabStructuredAnalysis as StarData];
+               // Use the correctly assigned finalResponseId
+               return { ...tab, followUps: newFollowUps, responseId: finalResponseId };
             }
+            return tab;
+         }));
+         setActiveTabKey(lastBehavioralTabData.key); // Ensure the updated tab is active
+         addTranscriptBreadcrumb(`Appended follow-up to ${lastBehavioralTabData.filename}`, { analysisSummary: breadcrumbSummary, codePreview: breadcrumbPreview });
+         breadcrumbAdded = true;
 
-          } catch (e) {
-            breadcrumbContent.summary = 'Error parsing arguments...';
-            breadcrumbContent.preview = 'Error parsing arguments';
-          }
-        } else if (outputItem.type === 'text' && outputItem.text) {
-          breadcrumbContent.filename = `Response-${currentTabId}.txt`;
-          breadcrumbContent.summary = outputItem.text.substring(0, 150) + '...';
-          breadcrumbContent.preview = outputItem.text.substring(0, 100) + '...';
-        }
-        // Add other output types to breadcrumb if needed
-      } else if (responseData.text) {
-         breadcrumbContent.filename = `Response-${currentTabId}.txt`;
-         breadcrumbContent.summary = responseData.text.substring(0, 150) + '...';
-         breadcrumbContent.preview = responseData.text.substring(0, 100) + '...';
+      } else if (streamCreatedTabKey) {
+         // Finalize the state of the tab created during the stream
+         setTabData(prevTabData => prevTabData.map(tab => {
+            if (tab.key === streamCreatedTabKey) {
+               console.log("[AppContent] Finalizing streamed tab state:", streamCreatedTabKey);
+               const finalFollowUps = tab.followUps || []; // Ensure followUps array exists
+               // Use the correctly assigned finalResponseId
+               return { ...tab, filename: tabFilename, language: tabLanguage, code: tabCode, analysis: tabAnalysis, structuredAnalysis: tabStructuredAnalysis, responseId: finalResponseId, functionCall: functionCallData ?? tab.functionCall, followUps: finalFollowUps };
+             }
+             return tab;
+          }));
+          // Update last tab context one last time based on the finalized tab
+          setTabData(currentTabs => {
+             const finalTab = currentTabs.find(t => t.key === streamCreatedTabKey);
+             if (finalTab) {
+                if (isBehavioralResponse) { setLastBehavioralTabData(finalTab); }
+                else if (isCodeResponse) { setLastCodeTabData(finalTab); }
+             }
+             return currentTabs;
+          });
+         addTranscriptBreadcrumb(`Generated ${tabFilename}`, { analysisSummary: breadcrumbSummary, codePreview: breadcrumbPreview });
+         breadcrumbAdded = true;
+
+      } else if ((isCodeResponse || isBehavioralResponse) && !isFollowUpResponse) {
+         // Create a new tab if it wasn't streamed and isn't a follow-up
+         const newTabKey = `response-${tabCounter}`;
+         // Use the correctly assigned finalResponseId
+         const newTab: LocalTabData = { key: newTabKey, filename: tabFilename, language: tabLanguage, code: tabCode, analysis: tabAnalysis, structuredAnalysis: tabStructuredAnalysis, responseId: finalResponseId, functionCall: functionCallData ?? undefined, followUps: [] }; // Initialize followUps
+         console.log(`[AppContent] Creating new tab:`, newTab);
+         setTabData(prev => [...prev, newTab]);
+         setActiveTabKey(newTabKey);
+         setTabCounter(prev => prev + 1);
+         if (isBehavioralResponse) { setLastBehavioralTabData(newTab); setLastCodeTabData(null); }
+         else if (isCodeResponse) { setLastCodeTabData(newTab); setLastBehavioralTabData(null); }
+         addTranscriptBreadcrumb(`Generated ${tabFilename}`, { analysisSummary: breadcrumbSummary, codePreview: breadcrumbPreview });
+         breadcrumbAdded = true;
+
+      } else if (isGeneralResponse) {
+         // Clear contexts for general responses
+         setLastBehavioralTabData(null);
+         setLastCodeTabData(null);
+         // Only add breadcrumb if not already added (e.g., simple explanation handled above)
+         if (!breadcrumbAdded) {
+            addTranscriptBreadcrumb(`Generated ${tabFilename}`, { analysisSummary: breadcrumbSummary, codePreview: breadcrumbPreview });
+         }
       }
 
-
-      addTranscriptBreadcrumb(`Generated ${breadcrumbContent.filename}`, {
-        analysisSummary: breadcrumbContent.summary,
-        codePreview: breadcrumbContent.preview
-      });
-
-
-    } catch (error) {
+    } catch (error) { // Main catch block
       console.error('[AppContent] Error fetching or processing response:', error);
-      addTranscriptMessage(uuidv4(), 'assistant', `Error fetching response: ${(error as Error).message}`);
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      addTranscriptMessage(uuidv4(), 'assistant', `Error fetching response: ${errorMessage}`);
       setChatStatus('error');
       setPreviousChatSuccess(false);
-       // Update the tab with an error message
-       setTabData(prev => prev.map(tab =>
-          tab.key === newTabKey ? { ...tab, analysis: `Error fetching response: ${(error as Error).message}` } : tab
-        ));
-    }
-  }, [addTranscriptMessage, addTranscriptBreadcrumb, setChatStatus, setPreviousChatSuccess, tabCounter, lastResponseId, conversationHistory, tabData, processedInputs]); // Add processedInputs to dependency array
+      setLastBehavioralTabData(null); setLastCodeTabData(null); // Clear contexts on error
+    } finally {
+       // Update conversation history regardless of success/error for context in next turn
+       // Add the assistant's response (or error) to history
+       const assistantResponseContent = responseData?.output?.find((item: any) => item.type === 'message')?.content?.[0]?.text?.value
+                                     || responseData?.text
+                                     || (responseData ? JSON.stringify(responseData) : null) // Store structured data if no text
+                                     || { error: 'Failed to get response content' };
 
-  // Return the main layout structure
+       updatedHistory.push({ role: 'assistant', content: assistantResponseContent });
+       // Limit history length if needed
+       // setConversationHistory(updatedHistory.slice(-MAX_HISTORY_LENGTH));
+       setConversationHistory(updatedHistory);
+    }
+  }, [
+      addTranscriptMessage, addTranscriptBreadcrumb, setChatStatus, setPreviousChatSuccess,
+      tabCounter, lastResponseId, conversationHistory, tabData, processedInputs,
+      lastBehavioralTabData, lastCodeTabData, // Include context states
+      setActiveTabKey, setTabData, setTabCounter, setLastResponseId, setCurrentFunctionName,
+      setLastBehavioralTabData, setLastCodeTabData, setConversationHistory // Include setters
+  ]);
+
+  // --- Render AppContent ---
   return (
-      <div className={`text-base flex flex-col h-screen ${theme === 'dark' ? 'bg-gray-800 text-gray-200' : 'bg-gray-100 text-gray-800'} relative rounded-xl`}>
+      <div className={`text-base flex flex-col h-screen w-screen ${theme === 'dark' ? 'bg-gray-800 text-gray-200' : 'bg-gray-100 text-gray-800'} relative`}>
         <TopControls
           appConnectionState={connectionState}
           isMicrophoneMuted={isMicrophoneMuted}
           setIsMicrophoneMuted={setIsMicrophoneMuted}
           onToggleConnection={onToggleConnection}
-          isMobileView={isMobileView}
-          setActiveMobilePanel={setActiveMobilePanel}
-          activeMobilePanel={activeMobilePanel}
           triggerConnect={connectTrigger}
           triggerDisconnect={disconnectTrigger}
           onMicStatusChange={handleMicStatusUpdate}
-          onProcessTurn={handleProcessTurn} // Use the locally defined handler
+          onProcessTurn={handleProcessTurn}
           onSpeakerStatusChange={handleSpeakerStatusUpdate}
           onReconnectMic={onReconnectMic}
           onReconnectSpeaker={onReconnectSpeaker}
+          micConnectionStatus={micConnectionStatus}
+          onCycleViewRequest={onCycleViewRequest} // Pass handler down
         />
-
-        {/* --- Render content based on isMobileView --- */}
-        {isMobileView !== null ? (
-          <>
-            { /* ... mobile indicator ... */ }
-             {isMobileView && (
-              <div className={`relative w-full h-1 ${theme === 'dark' ? 'bg-gray-700' : 'bg-gray-200'} rounded-full`}>
-                <div
-                  className="absolute top-0 left-0 h-full bg-blue-500 rounded-full transition-all duration-300 ease-in-out"
-                  style={{
-                    width: `${100 / 3}%`,
-                    transform: `translateX(${activeMobilePanel * 100}%)`
-                  }}
-                />
-              </div>
-            )}
-
-            {isMobileView !== null && (
-                !isMobileView ? (
-                  // --- Desktop Layout - UPDATED TO USE NEW COMPONENT ---
-                  <DraggablePanelLayout
-                    theme={theme} 
-                    activeTabKey={activeTabKey ?? ''}
-                    onTabChange={setActiveTabKey}
-                    tabs={tabData as TabData[]}
-                    userText={userText}
-                    setUserText={setUserText}
-                    onSendMessage={() => { console.warn("Send message not implemented yet."); }}
-                    canSend={false}
-                    transcriptItems={transcriptItems}
-                    isMicrophoneMuted={isMicrophoneMuted}
-                    micConnectionStatus={micConnectionStatus}
-                    speakerConnectionStatus={speakerConnectionStatus}
-                    onMuteToggle={() => setIsMicrophoneMuted(!isMicrophoneMuted)}
-                    onReconnectMic={onReconnectMic}
-                    onReconnectSpeaker={onReconnectSpeaker}
-                  />
-                ) : (
-                   // --- Mobile Layout - Keep the existing implementation --- 
-                  <MobileSwipeContainer
-                    activeMobilePanel={activeMobilePanel}
-                    setActiveMobilePanel={setActiveMobilePanel}
-                    isEventsPaneExpanded={true} // Adjust as needed
-                  >
-                     {/* Panel 1: Transcript Input */}
-                    <Transcript
-                      userText={userText}
-                      setUserText={setUserText}
-                      onSendMessage={() => { console.warn("Send message not implemented yet."); }}
-                      canSend={false}
-                    />
-                     {/* Panel 2: Dashboard */}
-                    <div style={{ width: "48px", minWidth: "48px", maxWidth: "48px" }} className={`h-full rounded-xl border ${theme === 'dark' ? 'border-gray-600' : 'border-gray-300'}`}>
-                      <Dashboard
-                        isExpanded={true}
-                        isDashboardEnabled={true}
-                        transcriptItems={transcriptItems}
-                        isMicrophoneMuted={isMicrophoneMuted}
-                        micConnectionStatus={micConnectionStatus}
-                        speakerConnectionStatus={speakerConnectionStatus}
-                        onMuteToggle={() => setIsMicrophoneMuted(!isMicrophoneMuted)}
-                        onReconnectMic={onReconnectMic}
-                        onReconnectSpeaker={onReconnectSpeaker}
-                      />
-                    </div>
-                  </MobileSwipeContainer>
-                )
-            )}
-          </>
-        ) : (
-          <div className="flex-1 flex items-center justify-center"> 
-             {/* Optional: Loading indicator */}
+        <div className="flex flex-col flex-1 gap-1 overflow-hidden">
+          <div className={`flex-1 ${theme === 'dark' ? 'bg-gray-900' : 'bg-white'} overflow-hidden flex flex-col`}>
+            <DraggablePanelLayout
+              theme={theme}
+              activeTabKey={activeTabKey ?? ''}
+              onTabChange={setActiveTabKey}
+              tabs={tabData as TabData[]} // Pass down potentially extended data, cast back to base type for prop
+              userText={userText}
+              setUserText={setUserText}
+              onSendMessage={() => { console.warn("Send message not implemented yet."); }}
+              canSend={false}
+              transcriptItems={transcriptItems}
+              isMicrophoneMuted={isMicrophoneMuted}
+              micConnectionStatus={micConnectionStatus}
+              speakerConnectionStatus={speakerConnectionStatus}
+              onMuteToggle={() => setIsMicrophoneMuted(!isMicrophoneMuted)}
+              onReconnectMic={onReconnectMic}
+              onReconnectSpeaker={onReconnectSpeaker}
+              cycleViewTrigger={cycleViewTrigger} // Pass trigger down
+            />
           </div>
-        )}
+        </div>
       </div>
   );
 }
 
-
-// --- Main App Component --- 
+// --- Main App Component (Wrapper) ---
 function App() {
-  const searchParams = useSearchParams();
-  const { transcriptItems, addTranscriptMessage, addTranscriptBreadcrumb } =
-    useTranscript();
-  const {
-    loggedEvents,
-    logClientEvent,
-    logServerEvent,
-  } = useEvent();
-  // App manages state NOT provided by StatusContext
-  const [selectedAgentName, setSelectedAgentName] = useState<string>("");
-  const [selectedAgentConfigSet, setSelectedAgentConfigSet] =
-    useState<AgentConfig[] | null>(null);
-  const [connectionState, setConnectionState] =
-    useState<ConnectionState>("INITIAL");
+  const { transcriptItems } = useTranscript(); // Removed unused addTranscriptMessage, addTranscriptBreadcrumb
+  const [connectionState, setConnectionState] = useState<ConnectionState>("INITIAL");
   const [isMicrophoneMuted, setIsMicrophoneMuted] = useState<boolean>(true);
   const [userText, setUserText] = useState<string>("");
-  const [activeMobilePanel, setActiveMobilePanel] = useState<number>(0);
-  const [isMobileView, setIsMobileView] = useState<boolean | null>(null);
   const [connectTrigger, setConnectTrigger] = useState(0);
   const [disconnectTrigger, setDisconnectTrigger] = useState(0);
-  // Add state for speaker connection status
   const [micConnectionStatus, setMicConnectionStatus] = useState<WebRTCConnectionStatus>('disconnected');
   const [speakerConnectionStatus, setSpeakerConnectionStatus] = useState<WebRTCConnectionStatus>('disconnected');
+  const [cycleViewTrigger, setCycleViewTrigger] = useState(0); // State to trigger view cycle
 
-  // --- Callbacks modifying App state --- 
+  // --- Callbacks modifying App state ---
   const handleMicStatusUpdate = useCallback((status: WebRTCConnectionStatus) => {
     console.log(`App received mic status update: ${status}`);
-    setMicConnectionStatus(status); // Track mic connection status
+    setMicConnectionStatus(status);
     switch (status) {
       case 'connecting': setConnectionState('CONNECTING'); break;
       case 'connected': setConnectionState('CONNECTED'); break;
@@ -639,13 +611,11 @@ function App() {
     }
   }, []);
 
-  // Add handler for speaker status updates
   const handleSpeakerStatusUpdate = useCallback((status: WebRTCConnectionStatus) => {
     console.log(`App received speaker status update: ${status}`);
-    setSpeakerConnectionStatus(status); // Track speaker connection status
+    setSpeakerConnectionStatus(status);
   }, []);
 
-  // Add reconnection functions
   const handleReconnectMic = useCallback(() => {
     console.log("App: Requesting mic reconnection...");
     setConnectTrigger(c => c + 1);
@@ -653,9 +623,7 @@ function App() {
 
   const handleReconnectSpeaker = useCallback(() => {
     console.log("App: Requesting speaker reconnection...");
-    // For specific speaker reconnection, we'll need to create a new trigger
-    // or modify the TopControls to accept a stream type parameter
-    setConnectTrigger(c => c + 1);
+    setConnectTrigger(c => c + 1); // Use same trigger for now
   }, []);
 
   const onToggleConnection = useCallback(() => {
@@ -668,34 +636,19 @@ function App() {
     }
   }, [connectionState]);
 
-  // Automatically connect on component mount
+  // Handler to trigger view cycle
+  const handleCycleViewRequest = useCallback(() => {
+    console.log("App: Requesting view cycle via trigger...");
+    setCycleViewTrigger(c => c + 1);
+  }, []);
+
+  // Auto-connect on mount
   useEffect(() => {
-    // Trigger connection when the component mounts
     console.log("App: Auto-connecting on component mount...");
     setConnectTrigger(c => c + 1);
-  }, []); // Empty dependency array means this runs once on mount
+  }, []);
 
-  // Move handleSelectedAgentChange here if it doesn't need StatusContext
-  const handleSelectedAgentChange = (
-    e: React.ChangeEvent<HTMLSelectElement>
-  ) => {
-    const newAgentName = e.target.value;
-    setSelectedAgentName(newAgentName);
-    // Maybe add breadcrumb here or pass setSelectedAgentName down if needed elsewhere
-     const currentAgent = selectedAgentConfigSet?.find(a => a.name === newAgentName);
-     if (currentAgent) {
-        addTranscriptBreadcrumb(`Agent Selected: ${newAgentName}`, currentAgent);
-     }
-  };
-
-  useEffect(() => {
-    // Agent selection breadcrumb logic might move or be adjusted
-    if (connectionState === "CONNECTED" && selectedAgentConfigSet && selectedAgentName) {
-       const currentAgent = selectedAgentConfigSet.find(a => a.name === selectedAgentName);
-       addTranscriptBreadcrumb(`Agent Initialized: ${selectedAgentName}`, currentAgent);
-    }
-  }, [selectedAgentConfigSet, selectedAgentName, connectionState, addTranscriptBreadcrumb]);
-
+  // Load/Save mute state
   useEffect(() => {
     const storedMicMuted = localStorage.getItem("microphoneMuted");
     if (storedMicMuted) setIsMicrophoneMuted(storedMicMuted === "true");
@@ -705,18 +658,10 @@ function App() {
     localStorage.setItem("microphoneMuted", isMicrophoneMuted.toString());
   }, [isMicrophoneMuted]);
 
-  useEffect(() => {
-    const checkMobileView = () => setIsMobileView(window.innerWidth <= 640);
-    checkMobileView();
-    window.addEventListener('resize', checkMobileView);
-    return () => window.removeEventListener('resize', checkMobileView);
-  }, []);
-
   // Render StatusProvider wrapping AppContent
   return (
     <StatusProvider>
-      <AppContent 
-        // Pass all necessary state and callbacks down
+      <AppContent
         connectionState={connectionState}
         isMicrophoneMuted={isMicrophoneMuted}
         setIsMicrophoneMuted={setIsMicrophoneMuted}
@@ -728,13 +673,12 @@ function App() {
         transcriptItems={transcriptItems}
         userText={userText}
         setUserText={setUserText}
-        isMobileView={isMobileView}
-        setActiveMobilePanel={setActiveMobilePanel}
-        activeMobilePanel={activeMobilePanel}
         micConnectionStatus={micConnectionStatus}
         speakerConnectionStatus={speakerConnectionStatus}
         onReconnectMic={handleReconnectMic}
         onReconnectSpeaker={handleReconnectSpeaker}
+        onCycleViewRequest={handleCycleViewRequest} // Pass the handler
+        cycleViewTrigger={cycleViewTrigger} // Pass the trigger state
       />
     </StatusProvider>
   );

@@ -288,6 +288,11 @@ function registerShortcuts() {
     }
   });
   
+  // Quit Application
+  globalShortcut.register('CommandOrControl+Q', () => {
+    app.quit();
+  });
+
   console.log('Shortcuts registered');
 }
 

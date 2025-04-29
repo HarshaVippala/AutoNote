@@ -65,6 +65,14 @@ html * {
 }
 
 body {
+  color: rgb(var(--foreground-rgb));
+  background: linear-gradient(
+      to bottom,
+      transparent,
+      rgb(var(--background-end-rgb))
+    )
+    rgb(var(--background-start-rgb));
+  font-size: 0.9rem; /* Slightly reduce base font size */
   font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
     "Helvetica Neue", Arial, "Noto Sans", sans-serif;
   overflow-x: hidden;
@@ -230,4 +238,17 @@ body {
   body {
     @apply bg-background text-foreground;
   }
+}
+/* Add animation for rotating logo */
+@keyframes spin-slow {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.animate-spin-slow {
+  animation: spin-slow 5s linear infinite;
 }

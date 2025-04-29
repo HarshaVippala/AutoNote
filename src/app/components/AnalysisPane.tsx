@@ -24,67 +24,82 @@ const AnalysisPane: React.FC<AnalysisPaneProps> = ({ theme, activeTabKey, tabs }
       <div className="overflow-y-auto overflow-x-hidden h-[calc(100%-2rem)]">
         {/* Render the analysis content dynamically */}
         {activeTab ? (
-          activeTab.structuredAnalysis ? (
-            // Render structured analysis if available
-            <div className="text-base font-sans">
-              {/* Check if it's a behavioral response based on filename */}
-              {activeTab.filename?.startsWith('format_behavioral_star_answer-') ? (
+          (activeTab as any).structuredAnalysis ? ( // Use 'any' assertion
+            // Render structured analysis based on type
+            <div className="text-sm p-4 overflow-auto h-full text-gray-300 flex flex-col">
+              {/* Log the type and content being rendered */}
+              {console.log('[AnalysisPane] Rendering analysis type:', (activeTab as any).structuredAnalysis?.situation ? 'behavioral' : 'comprehensive', '| Data:', (activeTab as any).structuredAnalysis)}
+
+              {/* Behavioral STAR Analysis */}
+              {(activeTab as any).structuredAnalysis?.situation && ( // Use 'any' assertion and optional chaining
                 <>
-                  {console.log('[AnalysisPane] Rendering behavioral analysis:', activeTab.structuredAnalysis)} {/* Add logging */}
-                  {activeTab.structuredAnalysis.situation && (
-                    <>
-                      <h3 className="text-md font-semibold mt-2 mb-1">Situation:</h3>
-                      <p className="break-words whitespace-normal overflow-wrap-anywhere mb-2">{activeTab.structuredAnalysis.situation}</p>
-                    </>
-                  )}
-                  {activeTab.structuredAnalysis.task && (
-                    <>
-                      <h3 className="text-md font-semibold mt-2 mb-1">Task:</h3>
-                      <p className="break-words whitespace-normal overflow-wrap-anywhere mb-2">{activeTab.structuredAnalysis.task}</p>
-                    </>
-                  )}
-                  {activeTab.structuredAnalysis.action && (
-                    <>
-                      <h3 className="text-md font-semibold mt-2 mb-1">Action:</h3>
-                      <p className="break-words whitespace-normal overflow-wrap-anywhere mb-2">{activeTab.structuredAnalysis.action}</p>
-                    </>
-                  )}
-                  {activeTab.structuredAnalysis.result && (
-                    <>
-                      <h3 className="text-md font-semibold mt-2 mb-1">Result:</h3>
-                      <p className="break-words whitespace-normal overflow-wrap-anywhere mb-2">{activeTab.structuredAnalysis.result}</p>
-                    </>
-                  )}
+                  {/* Removed explicit headings, rely on implicit structure */}
+                  <p className="break-words whitespace-pre-wrap overflow-wrap-anywhere mb-3 font-medium text-gray-200">{(activeTab as any).structuredAnalysis.situation}</p>
+                  <hr className="border-gray-600 my-2" />
+                  {(activeTab as any).structuredAnalysis.task && <p className="break-words whitespace-pre-wrap overflow-wrap-anywhere mb-3">{(activeTab as any).structuredAnalysis.task}</p>}
+                  <hr className="border-gray-600 my-2" />
+                  {(activeTab as any).structuredAnalysis.action && <p className="break-words whitespace-pre-wrap overflow-wrap-anywhere mb-3">{(activeTab as any).structuredAnalysis.action}</p>}
+                  <hr className="border-gray-600 my-2" />
+                  {(activeTab as any).structuredAnalysis.result && <p className="break-words whitespace-pre-wrap overflow-wrap-anywhere">{(activeTab as any).structuredAnalysis.result}</p>}
                 </>
-              ) : (
-                // Render comprehensive code analysis
+              )}
+
+              {/* Comprehensive Code/Analysis */}
+              {/* Check for a field unique to comprehensive schema, like think_out_loud */}
+              {(activeTab as any).structuredAnalysis?.think_out_loud && ( // Use 'any' assertion and optional chaining
                 <>
-                  {console.log('[AnalysisPane] Rendering comprehensive analysis:', activeTab.structuredAnalysis)} {/* Add logging */}
-                  {activeTab.structuredAnalysis.planning_steps && activeTab.structuredAnalysis.planning_steps.length > 0 && (
+                  {/* Clarifying Questions (Optional) */}
+                  {(activeTab as any).structuredAnalysis.clarifying_questions && (activeTab as any).structuredAnalysis.clarifying_questions.length > 0 && (
                     <>
-                      <h3 className="text-md font-semibold mt-2 mb-1">Planning Steps:</h3>
-                      <ul className="list-disc list-inside mb-2">
-                        {activeTab.structuredAnalysis.planning_steps.map((step, index) => (
-                          <li key={index} className="break-words whitespace-normal overflow-wrap-anywhere mb-1">{step}</li>
+                      <ul className="list-disc list-inside mb-3">
+                        {(activeTab as any).structuredAnalysis.clarifying_questions.map((q: string, index: number) => ( // Add types for map params
+                          <li key={index} className="break-words whitespace-pre-wrap overflow-wrap-anywhere">{q}</li>
                         ))}
                       </ul>
+                      <hr className="border-gray-600 my-2" />
                     </>
                   )}
-                  {activeTab.structuredAnalysis.complexity && (
+
+                  {/* Think Out Loud */}
+                  <p className="break-words whitespace-pre-wrap overflow-wrap-anywhere mb-3">{(activeTab as any).structuredAnalysis.think_out_loud}</p>
+                  <hr className="border-gray-600 my-2" />
+
+                  {/* Edge Cases */}
+                  <p className="break-words whitespace-pre-wrap overflow-wrap-anywhere mb-3">{(activeTab as any).structuredAnalysis.edge_cases}</p>
+                  <hr className="border-gray-600 my-2" />
+
+                  {/* Test Cases */}
+                  <div className="mb-3">
+                    {(activeTab as any).structuredAnalysis.test_cases?.map((tc: { input: string; expected_output: string }, index: number) => ( // Add types for map params
+                      <div key={index} className="mb-2 p-2 bg-gray-700 rounded">
+                        <p className="font-mono text-xs break-words whitespace-pre-wrap overflow-wrap-anywhere"><strong className="font-semibold text-gray-400">Input:</strong> {tc.input}</p>
+                        <p className="font-mono text-xs break-words whitespace-pre-wrap overflow-wrap-anywhere"><strong className="font-semibold text-gray-400">Output:</strong> {tc.expected_output}</p>
+                      </div>
+                    ))}
+                  </div>
+                  <hr className="border-gray-600 my-2" />
+
+                  {/* Complexity */}
+                  <div className="mb-3">
+                    <p className="mb-1 break-words whitespace-pre-wrap overflow-wrap-anywhere"><strong>Time:</strong> {(activeTab as any).structuredAnalysis.complexity?.time}</p>
+                    <p className="break-words whitespace-pre-wrap overflow-wrap-anywhere"><strong>Space:</strong> {(activeTab as any).structuredAnalysis.complexity?.space}</p>
+                  </div>
+                  <hr className="border-gray-600 my-2" />
+
+                  {/* Potential Optimizations (Optional) */}
+                  {(activeTab as any).structuredAnalysis.potential_optimizations && (
                     <>
-                      <h3 className="text-md font-semibold mt-2 mb-1">Complexity:</h3>
-                      <p className="mb-1">Time: {activeTab.structuredAnalysis.complexity.time}</p>
-                      <p className="mb-2">Space: {activeTab.structuredAnalysis.complexity.space}</p>
-                    </>
-                  )}
-                  {activeTab.structuredAnalysis.explanation && (
-                    <>
-                      <h3 className="text-md font-semibold mt-2 mb-1">Explanation:</h3>
-                      <p className="break-words whitespace-normal overflow-wrap-anywhere">{activeTab.structuredAnalysis.explanation}</p>
+                      <p className="break-words whitespace-pre-wrap overflow-wrap-anywhere">{(activeTab as any).structuredAnalysis.potential_optimizations}</p>
+                      {/* No divider after the last element */}
                     </>
                   )}
                 </>
               )}
+
+              {/* Fallback for unexpected structure - might need adjustment */}
+              {/* {!activeTab.structuredAnalysis.situation && !activeTab.structuredAnalysis.think_out_loud && ( */}
+              {/*   <p className="text-gray-400">Raw analysis data: {JSON.stringify(activeTab.structuredAnalysis)}</p> */}
+              {/* )} */}
             </div>
           ) : (
             // Fallback to raw analysis string if no structured analysis

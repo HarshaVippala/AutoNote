@@ -144,3 +144,9 @@ export interface TabData {
   code: string; // The actual code content
   analysis: string; // The analysis content
 }
+
+// Schema for sending code questions with screenshots
+export interface ComprehensiveCodeSchema {
+  question: string; // The user's question about the code
+  image: string;    // Base64 encoded PNG image data URL of the screenshot
+}

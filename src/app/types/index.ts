@@ -36,18 +36,33 @@ export interface TabData {
   code: string;         // The code content
   analysis: string;     // The textual analysis or explanation 
   // Add the structured analysis field (optional because older tabs might not have it)
-  structuredAnalysis?: AnalysisResponse; 
+  structuredAnalysis?: AnalysisResponse | BehavioralStarResponse; 
 }
 
-// Define the structured analysis type (mirrors the one temporarily in App.tsx)
-// TODO: Remove the duplicate definition in App.tsx after this is confirmed
+// Define the structured analysis type (mirrors ComprehensiveCodeSchema from route.ts)
 export interface AnalysisResponse { 
-  planning_steps: string[];
+  clarifying_questions?: string[]; // Optional array of strings
+  think_out_loud: string;
+  language: string;
+  cd: string; // Changed from 'code' to 'cd' to match API response
+  edge_cases: string;
+  test_cases: {
+    input: string;
+    expected_output: string;
+  }[]; // Array of test case objects
   complexity: {
     time: string;
     space: string;
   };
-  explanation: string;
+  potential_optimizations?: string; // Optional string
+}
+
+// Define the structure for behavioral STAR answers
+export interface BehavioralStarResponse {
+  situation: string;
+  task: string;
+  action: string;
+  result: string;
 }
 
 // You can add other shared types here as the application grows. 

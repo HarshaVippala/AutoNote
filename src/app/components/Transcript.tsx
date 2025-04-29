@@ -115,10 +115,10 @@ const Transcript: React.FC<TranscriptProps> = ({
         // Get the current text
         const textToSend = capitalizeFirstLetter(userText.trim());
         
-        // Create content item for the screenshot
+        // Create content item for the screenshot (treating preview as text for now)
         const screenshotContentItem: ContentItem = {
-          type: 'image_url',
-          image_url: preview
+          type: 'image_text', // Indicate it's an image preview
+          text: `[Screenshot Preview: ${result.path}]` // Store path or placeholder
         };
         
         // Create a special message with both text and image
@@ -127,9 +127,9 @@ const Transcript: React.FC<TranscriptProps> = ({
           type: 'MESSAGE',
           role: 'user',
           timestamp: new Date().toISOString(),
-          title: textToSend,
+          title: textToSend, // Title is just the text part
           expanded: true,
-          data: {
+          data: { // Store text and image info in data
             content: [
               {
                 type: 'text',
@@ -137,11 +137,21 @@ const Transcript: React.FC<TranscriptProps> = ({
               },
               screenshotContentItem
             ]
-          }
+          },
+          createdAtMs: Date.now(), // Add missing property
+          status: "DONE", // Add missing property (assuming done)
+          isHidden: false, // Add missing property
         };
         
         // Use custom dispatch to add this message to context
-        toggleTranscriptItemExpand(messageWithScreenshot);
+        // Assuming toggleTranscriptItemExpand adds/updates items based on itemId
+        // If it strictly toggles, you need another context function to add this item.
+        // For now, let's assume addTranscriptMessage can handle this structure or modify it.
+        // Passing itemId instead of the whole object as per context definition
+        // NOTE: The context `addTranscriptMessage` might need adjustment to handle `data.content`.
+        // For now, just calling toggle to potentially update if item exists, 
+        // but ideally you'd have an `addComplexTranscriptMessage` function.
+        toggleTranscriptItemExpand(messageWithScreenshot.itemId); 
         
         // Clear the input field
         setUserText('');
@@ -183,17 +193,7 @@ const Transcript: React.FC<TranscriptProps> = ({
   };
 
   return (
-    <div className="h-full flex flex-col">
-      <div className="flex items-center justify-between mb-2">
-        <h2 className="text-lg font-semibold">Conversation</h2>
-        <button 
-          onClick={clearPanel}
-          className="px-2 py-1 text-xs rounded bg-gray-700 hover:bg-gray-600 text-white"
-        >
-          Clear
-        </button>
-      </div>
-      
+    <div className="h-full flex flex-col text-sm">
       {isCleared ? (
         <div className="flex-1 flex items-center justify-center text-gray-500">
           <p>Panel cleared</p>
@@ -211,7 +211,7 @@ const Transcript: React.FC<TranscriptProps> = ({
             <div className="relative flex-1 overflow-hidden">
               <div
                 ref={transcriptRef}
-                className="overflow-auto p-4 pt-0 flex flex-col gap-y-0.5 h-full"
+                className="overflow-auto p-4 pt-0 flex flex-col gap-y-1 h-full"
                 style={{ scrollPaddingTop: 56 }}
               >
                 {[...transcriptItems].reverse().map((item, idx) => {
@@ -232,15 +232,20 @@ const Transcript: React.FC<TranscriptProps> = ({
                   const isPrevUser = prev && prev.role === "user" && prev.type === "MESSAGE" && !prev.isHidden;
                   const isNextUser = next && next.role === "user" && next.type === "MESSAGE" && !next.isHidden;
 
-                  // reduce space between user and assistant by using no margin between different roles
+                  // check if previous message is also an assistant message for grouping
                   const isPrevAssistant = prev && prev.role === "assistant" && prev.type === "MESSAGE" && !prev.isHidden;
                   const isNextAssistant = next && next.role === "assistant" && next.type === "MESSAGE" && !next.isHidden;
-                  // Simpler spacing: mt-0.5 unless previous was same role, mb-0.5 unless next is same role
-                  const marginTop = (isUser && isPrevUser) || (!isUser && isPrevAssistant) ? 'mt-0' : 'mt-0.5';
-                  const marginBottom = (isUser && isNextUser) || (!isUser && isNextAssistant) ? 'mb-0' : 'mb-0.5';
+                  
+                  // Simpler spacing: Add a small consistent top margin, no bottom margin within group
+                  const marginTop = (isUser && isPrevUser) || (!isUser && isPrevAssistant) ? 'mt-0' : 'mt-1'; // Consistent gap between groups
+                  const marginBottom = (isUser && isNextUser) || (!isUser && isNextAssistant) ? 'mb-0' : 'mb-1'; // Consistent gap at end of group
+                  
                   const containerClasses = `${baseContainer} ${isUser ? "items-end" : "items-start"} ${marginTop} ${marginBottom}`;
+                  
                   // adjust border radius for grouped bubbles
-                  const bubbleBase = `max-w-lg p-3 ${isUser ? "bg-gray-900 text-gray-100" : theme === 'dark' ? "bg-gray-700 text-gray-200" : "bg-gray-100 text-black"} rounded-xl ${isUser && isPrevUser ? "rounded-tr-md" : ""} ${isUser && isNextUser ? "rounded-br-md" : ""}`;
+                  // Removed complex logic, apply standard rounding always for now
+                  const bubbleBase = `max-w-lg p-3 ${isUser ? "bg-gray-900 text-gray-100" : theme === 'dark' ? "bg-gray-700 text-gray-200" : "bg-gray-100 text-black"} rounded-lg`; // Simpler rounding
+                  
                   const isBracketedMessage = title.startsWith("[") && title.endsWith("]");
                   const messageStyle = isBracketedMessage ? "italic text-gray-400" : "";
                   const displayTitle = isBracketedMessage ? title.slice(1, -1) : title;
