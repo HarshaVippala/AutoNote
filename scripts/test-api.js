@@ -37,6 +37,7 @@ async function testResponsesAPI() {
     // Handle the streamed response 
     const reader = response.body.getReader();
     let accumulatedData = '';
+    let responseId = null;
     
     while (true) {
       const { done, value } = await reader.read();
@@ -46,6 +47,22 @@ async function testResponsesAPI() {
       const chunk = new TextDecoder().decode(value);
       console.log('Received chunk:', chunk);
       accumulatedData += chunk;
+      
+      // Try to extract response ID from completed event
+      try {
+        const lines = chunk.split('\n');
+        for (const line of lines) {
+          if (line.trim() && line.includes('"type":"completed"')) {
+            const parsed = JSON.parse(line);
+            if (parsed.response && parsed.response.id) {
+              responseId = parsed.response.id;
+              console.log('Extracted response ID:', responseId);
+            }
+          }
+        }
+      } catch (e) {
+        // Ignore JSON parse errors in partial chunks
+      }
     }
     
     console.log('\nSimple query - Complete accumulated response:');
@@ -53,6 +70,51 @@ async function testResponsesAPI() {
       console.log(JSON.parse(accumulatedData));
     } catch (e) {
       console.log('Raw response (not valid JSON):', accumulatedData);
+    }
+    
+    // Now test a follow-up question using the previous response ID
+    if (responseId) {
+      console.log('\n' + '-'.repeat(50) + '\n');
+      console.log('Testing follow-up question with previous_response_id...');
+      
+      const followUpQuery = {
+        transcript: "Can you explain that in more detail?",
+        conversationId: "test-conversation",
+        previousResponseId: responseId
+      };
+      
+      const followUpResponse = await fetch(apiUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(followUpQuery),
+      });
+      
+      if (!followUpResponse.ok) {
+        throw new Error(`HTTP error! status: ${followUpResponse.status}`);
+      }
+      
+      // Handle the streamed response
+      const followUpReader = followUpResponse.body.getReader();
+      let followUpData = '';
+      
+      while (true) {
+        const { done, value } = await followUpReader.read();
+        if (done) break;
+        
+        // Convert the chunk to text
+        const chunk = new TextDecoder().decode(value);
+        console.log('Received follow-up chunk:', chunk);
+        followUpData += chunk;
+      }
+      
+      console.log('\nFollow-up query - Complete accumulated response:');
+      try {
+        console.log(JSON.parse(followUpData));
+      } catch (e) {
+        console.log('Raw response (not valid JSON):', followUpData);
+      }
     }
   } catch (error) {
     console.error('Error testing simple query:', error);

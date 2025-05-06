@@ -53,7 +53,8 @@ export async function POST(request: Request) {
   const baseSessionParams: Omit<OpenAI.Beta.Realtime.Sessions.SessionCreateParams, 'model' | 'modalities'> = {
      input_audio_transcription: {
       model: 'whisper-1', // Use whisper-1 for transcription
-      language: 'en',   // Set language to English (can be customized per type if needed)
+      language: 'en',   // Set language to English
+      // Timeout settings moved to turn_detection below
     },
      // Common parameters can go here
   };
@@ -63,12 +64,21 @@ export async function POST(request: Request) {
   if (sessionType === 'mic') {
     // Parameters specific to the user's microphone session
     specificSessionParams = {
-      // Example: Add specific instructions or slightly different config if needed later
-      // instructions: "Focus on the user's speech.",
-      model: 'gpt-4o-mini-realtime-preview-2024-12-17', // Keep the main model
+      // Default configuration for user microphone sessions
+      // Configure turn detection based on documentation
+      turn_detection: {
+        type: "server_vad", // Use server-side VAD
+        silence_duration_ms: 600, // Equivalent to end_silence_timeout from PRD
+        create_response: false,
+        interrupt_response: false,
+      },
+      model: 'gpt-4o-mini-realtime-preview-2024-12-17', // Default model
       modalities: ['text'], // Text modality for user mic input processing
+      instructions: `You are an auxiliary assistant providing immediate, concise information based ONLY on the user's conversation history . The history may include messages labeled 'SYSTEM_AUDIO_TRANSCRIPT' representing what the system/speaker just said.
+DO NOT engage in lengthy conversation (no greetings, apologies, or excessive filler).DO NOT ask clarifying questions.
+FOCUS on providing relevant factual snippets or definitions related to the user's topic or the preceding SYSTEM_AUDIO_TRANSCRIPT.`,
     };
-    console.log("Configuring for 'mic' session.");
+    console.log("Configuring for 'mic' session with transcription/classification instructions and server VAD turn detection.");
   } else { // sessionType === 'speaker'
      // Parameters specific to the speaker's audio session
     specificSessionParams = {

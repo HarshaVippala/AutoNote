@@ -7,6 +7,7 @@ import EnhancedCodePane from './EnhancedCodePane';
 import EnhancedAnalysisPane from './EnhancedAnalysisPane';
 import TabsPanel from './TabsPanel'; // Import TabsPanel
 import { PanelGroup, Panel, PanelResizeHandle } from 'react-resizable-panels';
+import SecondaryPane from './SecondaryPane'; // Assuming this is used
 
 // Component-specific styles
 import './DraggablePanelLayout.css';
@@ -85,10 +86,23 @@ const DraggablePanelLayout: React.FC<DraggablePanelLayoutProps> = ({
     }
   }, []);
 
-  // Filter tabs by type (Improved filtering)
-  const codeTabs = tabs.filter(tab => !tab.filename?.toLowerCase().includes('behavioral') && !tab.filename?.toLowerCase().startsWith('star:'));
-  const behavioralTabs = tabs.filter(tab => tab.filename?.toLowerCase().includes('behavioral') || tab.filename?.toLowerCase().startsWith('star:'));
+  // Filter tabs by type
+  const codeTabs = tabs.filter(tab => {
+    const isCodeTab = !tab.filename?.toLowerCase().includes('behavioral') && 
+                     !tab.filename?.toLowerCase().includes('star') &&
+                     !tab.filename?.toLowerCase().startsWith('star:');
+    return isCodeTab;
+  });
+  
+  const behavioralTabs = tabs.filter(tab => {
+    const isBehavioralTab = tab.filename?.toLowerCase().includes('behavioral') || 
+                           tab.filename?.toLowerCase().includes('star') ||
+                           tab.filename?.toLowerCase().startsWith('star:');
+    return isBehavioralTab;
+  });
 
+  // Find the active tab data
+  const activeTabData = tabs.find(tab => tab.key === activeTabKey);
 
   // Function to cycle to the next view
   const cycleToNextView = () => {
@@ -99,59 +113,59 @@ const DraggablePanelLayout: React.FC<DraggablePanelLayoutProps> = ({
       if (current === 'main') {
         if (hasCodeTabs) {
           const currentCodeTab = codeTabs.find(tab => tab.key === activeTabKey);
-          if (!currentCodeTab && codeTabs[0]) onTabChange(codeTabs[0].key);
+          if (!currentCodeTab && codeTabs[0]) {
+            onTabChange(codeTabs[0].key);
+          }
           return 'code';
         } else if (hasBehavioralTabs) {
           const currentBehavioralTab = behavioralTabs.find(tab => tab.key === activeTabKey);
-          if (!currentBehavioralTab && behavioralTabs[0]) onTabChange(behavioralTabs[0].key);
+          if (!currentBehavioralTab && behavioralTabs[0]) {
+            onTabChange(behavioralTabs[0].key);
+          }
           return 'behavioral';
         }
         return 'main';
       } else if (current === 'code') {
         if (hasBehavioralTabs) {
           const currentBehavioralTab = behavioralTabs.find(tab => tab.key === activeTabKey);
-          if (!currentBehavioralTab && behavioralTabs[0]) onTabChange(behavioralTabs[0].key);
+          if (!currentBehavioralTab && behavioralTabs[0]) {
+            onTabChange(behavioralTabs[0].key);
+          }
           return 'behavioral';
         }
         return 'main';
       } else { // current === 'behavioral'
+        if (hasCodeTabs) {
+          const currentCodeTab = codeTabs.find(tab => tab.key === activeTabKey);
+          if (!currentCodeTab && codeTabs[0]) {
+            onTabChange(codeTabs[0].key);
+          }
+          return 'code';
+        }
         return 'main';
       }
     });
   };
 
   // Auto-switch view based on activeTabKey
-  // Auto-switch view based on activeTabKey - COMMENTED OUT TO PREVENT CONFLICT WITH MANUAL CYCLE
-  /*
   useEffect(() => {
-    console.log('[View Switch Debug] useEffect triggered. activeTabKey:', activeTabKey);
     if (activeTabKey) {
       const activeTab = tabs.find(tab => tab.key === activeTabKey);
-      console.log('[View Switch Debug] Found activeTab:', activeTab);
+      
       if (activeTab) {
         const isInBehavioral = behavioralTabs.some(bt => bt.key === activeTabKey);
         const isInCode = codeTabs.some(ct => ct.key === activeTabKey);
-        console.log(`[View Switch Debug] isInBehavioral: ${isInBehavioral}, isInCode: ${isInCode}`);
+        
+        // Auto-switch to appropriate view when a tab is selected
         if (isInBehavioral) {
-          console.log('[View Switch Debug] Setting view to behavioral');
           setCurrentView('behavioral');
         } else if (isInCode) {
-          console.log('[View Switch Debug] Setting view to code');
           setCurrentView('code');
-        } else {
-          console.log('[View Switch Debug] Active tab not found in code or behavioral tabs. Setting view to main.');
-          setCurrentView('main');
         }
-      } else {
-         console.log('[View Switch Debug] activeTabKey exists but no matching tab found. Setting view to main.');
-         setCurrentView('main');
       }
-    } else {
-       console.log('[View Switch Debug] No activeTabKey. Setting view to main.');
-       setCurrentView('main');
     }
-  }, [activeTabKey, tabs, codeTabs, behavioralTabs]); // Added dependencies
-  */
+  }, [activeTabKey, tabs, codeTabs, behavioralTabs]); // Keep all dependencies
+
   // Set up hotkey handler for view cycling
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -169,7 +183,6 @@ const DraggablePanelLayout: React.FC<DraggablePanelLayoutProps> = ({
   // Effect to cycle view when trigger changes
   useEffect(() => {
     if (cycleViewTrigger > 0) {
-      console.log("DraggablePanelLayout: Cycle view triggered from App");
       cycleToNextView();
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -178,6 +191,9 @@ const DraggablePanelLayout: React.FC<DraggablePanelLayoutProps> = ({
   // Get the active tab based on the current view
   const activeCodeTab = codeTabs.find(tab => tab.key === activeTabKey);
   const activeBehavioralTab = behavioralTabs.find(tab => tab.key === activeTabKey);
+
+  // Determine visible tabs based on the current view
+  const visibleTabs = tabs.filter(tab => tab.filename?.toLowerCase().includes('code') || tab.filename?.toLowerCase().includes('plaintext') || tab.filename?.toLowerCase().startsWith('code:')); // Added plaintext check
 
   // Render the main container structure
   return (

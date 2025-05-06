@@ -1,3 +1,4 @@
+"use client";
 import React, { createContext, useContext, useState } from "react";
 
 type Status = "idle" | "processing" | "done" | "error";

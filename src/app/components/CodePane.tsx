@@ -6,6 +6,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 // Import the TabData type
 import { TabData } from '@/app/types';
+import { preprocessCode } from '@/app/lib/codeUtils';
 
 // REMOVE Example code snippets
 // const javaCode = ...
@@ -47,7 +48,7 @@ const CodePane: React.FC<CodePaneProps> = ({ theme, activeTabKey, onTabChange, t
                 style={codeStyle}
                 customStyle={{ 
                   background: 'transparent', 
-                  fontSize: '0.75rem', 
+                  fontSize: '0.45rem', 
                   margin: 0, 
                   padding: '0.35rem',
                   lineHeight: '1.2',
@@ -61,7 +62,7 @@ const CodePane: React.FC<CodePaneProps> = ({ theme, activeTabKey, onTabChange, t
                 wrapLines={true}
                 showLineNumbers={false}
               >
-                {tab.code} {/* Use dynamic code */}
+                {preprocessCode(tab.code)} {/* Apply preprocessing to code before rendering */}
               </SyntaxHighlighter>
             </div>
           </TabsContent>

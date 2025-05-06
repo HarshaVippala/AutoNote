@@ -3,11 +3,15 @@
 import React, { useState, useEffect, memo, useCallback, useRef } from 'react';
 import Image from 'next/image';
 import { ConnectionState as AppConnectionState, TranscriptTurn, ComprehensiveCodeSchema } from "@/app/types"; // Import ComprehensiveCodeSchema
-import { connectionManager } from '@/app/api/realtime-assistant-webRTC/webRTCConnection-webRTC';
+import { connectionManager, logger } from '@/app/api/realtime-assistant-webRTC/webRTCConnection-webRTC';
 import ErrorDialog from './ErrorDialog';
 import SettingsModal from './SettingsModal'; // Import SettingsModal
 import { useTheme } from "@/app/contexts/ThemeContext";
 import { useStatus } from "@/app/contexts/StatusContext"; // Import useStatus
+import { v4 as uuidv4 } from 'uuid'; // Import uuid
+
+// Set logger level at the beginning
+logger.setLevel('ERROR');
 
 // Define the target sample rate directly
 const TARGET_SAMPLE_RATE = 24000;
@@ -164,6 +168,7 @@ const speakerSessionConfig_Transcription = {
 // <<< ADD Back the type definition here >>>
 type WebRTCConnectionStatus = 'disconnected' | 'connecting' | 'connected' | 'failed' | 'error';
 type ChatStatus = "idle" | "processing" | "done" | "error"; // Add ChatStatus type
+type ResponseData = { functionName: string; arguments: any } | null; // Type for structured response
 
 // Use central types - REVERTED FOR NOW
 // import { TranscriptTurn, ErrorState } from "@/app/types";
@@ -177,7 +182,7 @@ interface TopControlsProps {
   triggerConnect: number;
   triggerDisconnect: number;
   onMicStatusChange: (status: WebRTCConnectionStatus) => void;
-  onProcessTurn: (turn: TranscriptTurn) => void;
+  onProcessTurn: (event: any) => void; // Revert signature to accept any event object
   onSpeakerStatusChange: (status: WebRTCConnectionStatus) => void;
   onReconnectMic?: () => void;
   onReconnectSpeaker?: () => void;
@@ -259,7 +264,6 @@ const TopControls: React.FC<TopControlsProps> = memo(({
   const handleScreenCapture = useCallback(async () => {
     if (isCapturing) return; // Prevent multiple captures
     setIsCapturing(true);
-    console.log("Initiating screen capture...");
 
     try {
       // 1. Request screen capture permission
@@ -269,14 +273,12 @@ const TopControls: React.FC<TopControlsProps> = memo(({
       });
 
       const track = stream.getVideoTracks()[0];
-      console.log("Screen capture stream obtained.");
 
       // 2. Capture a single frame
       // @ts-ignore ImageCapture is experimental but widely supported
       const imageCapture = new ImageCapture(track);
       const bitmap = await imageCapture.grabFrame();
       track.stop(); // Stop the stream track as we only need one frame
-      console.log("Frame captured.");
 
       // 3. Draw frame to canvas
       const canvas = document.createElement('canvas');
@@ -285,11 +287,9 @@ const TopControls: React.FC<TopControlsProps> = memo(({
       const ctx = canvas.getContext('2d');
       if (!ctx) throw new Error("Could not get canvas context");
       ctx.drawImage(bitmap, 0, 0);
-      console.log("Frame drawn to canvas.");
 
       // 4. Convert canvas to base64 data URL (PNG)
       const imageDataUrl = canvas.toDataURL('image/png');
-      console.log("Image converted to data URL (first 100 chars):", imageDataUrl.substring(0, 100));
 
       // 5. Prepare the payload (using placeholder schema)
       const payload: ComprehensiveCodeSchema = {
@@ -298,7 +298,6 @@ const TopControls: React.FC<TopControlsProps> = memo(({
       };
 
       // 6. Send to API endpoint
-      console.log("Sending payload to API endpoint /api/code-question...");
       const response = await fetch('/api/code-question', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -311,7 +310,6 @@ const TopControls: React.FC<TopControlsProps> = memo(({
       }
 
       const result = await response.json();
-      console.log("API Response:", result);
       // Display the response (e.g., in an alert or a dedicated component)
       alert(`Assistant Response:\n${result.response}`);
 
@@ -330,18 +328,21 @@ const TopControls: React.FC<TopControlsProps> = memo(({
 
   // Define message handlers without dependencies to connectMic/connectSpeaker
   const handleMicMessage = useCallback((message: any) => {
-    // Handle FINAL audio transcripts (user speech)
-    if (message.type === 'response.audio_transcript.done' || message.type === 'conversation.item.input_audio_transcription.completed') {
+    // Check for the new structured message format first
+    if (message && typeof message === 'object' && 'transcript' in message && 'question_type' in message) {
+      // Pass the structured data up to the parent component (AppContent)
+      onProcessTurn({ ...message, streamType: 'mic' }); // Add streamType
+    } // Pass the whole event + streamType
+    // Handle original transcript events (fallback/auxiliary assistant)
+    else if (message.type === 'response.audio_transcript.done' || message.type === 'conversation.item.input_audio_transcription.completed') {
       // Determine the transcript text based on the event type
       const finalTranscript = message.transcript || message.item?.content?.[0]?.text; // Adjust based on actual structure
 
       // Check if we actually got a transcript
       if (finalTranscript) {
         const messageId = message.item_id || message.item?.id || `mic-${Date.now()}`;
-        // Keep this log for the final transcript -- Simplified Log
-        console.log(`Mic Transcript: ${finalTranscript}`);
 
-        // Queue this transcript for the main Assistant API
+        // Queue this transcript for the main Assistant API (Legacy path - using local state)
         setTranscriptTurn((prev: TranscriptTurn) => ({
           ...prev,
           micTranscript: finalTranscript,
@@ -349,27 +350,16 @@ const TopControls: React.FC<TopControlsProps> = memo(({
           timestamp: Date.now()
         }));
       } else {
-         console.warn(`[TopControls:Mic] Received ${message.type} but no transcript found:`, message);
+         logger.warn(`[TopControls:Mic] Received ${message.type} but no transcript found:`, message);
       }
     }
-
     // Keep DONE handling in case it's useful later
     else if (message.type === 'response.text.done') {
-       // Add specific log if needed
-       console.log(`[TopControls:Mic] Auxiliary assistant response complete event: ${message.item_id}`);
+       // No need for logging here
     }
-    // Add logs for other specific message types if desired
-    // else if (message.type === 'input_audio_buffer.speech_started') {
-    //    console.log('[TopControls:Mic] Speech started event received.');
-    // }
-     else {
-       // Optionally log unexpected/unhandled message types
-       // console.log("[TopControls:Mic] Received unhandled message type:", message.type, message);
-     }
-  }, []);
+  }, [onProcessTurn]); // Removed setTranscriptTurn dependency as it's handled differently now
 
   const handleMicStateChange = useCallback((state: string) => {
-    console.log("Mic connection state changed:", state);
     let newStatus: WebRTCConnectionStatus;
     // Map manager state strings to our local component state enum
     switch (state) {
@@ -422,18 +412,18 @@ const TopControls: React.FC<TopControlsProps> = memo(({
 
   const handleSpeakerMessage = useCallback((message: any) => {
     // Handle FINAL speaker transcripts
+    // Forward the raw event to App.tsx
+    onProcessTurn({ ...message, streamType: 'speaker' }); // Add streamType and forward
+
     if (message.type === 'response.audio_transcript.done' || message.type === 'conversation.item.input_audio_transcription.completed') {
       const finalTranscript = message.transcript || message.item?.content?.[0]?.text; // Adjust based on actual structure
 
       if (finalTranscript) {
         const messageId = message.item_id || message.item?.id || `spk-${Date.now()}`;
-        // Keep this log for the final transcript -- Simplified Log
-        console.log(`Speaker Transcript: ${finalTranscript}`);
 
         // Inject the speaker transcript into the mic connection's context (Keep this logic)
         if (finalTranscript.trim() && micConnectionStatus === 'connected') {
           try {
-            console.log(`[Context Injection] Injecting speaker transcript into mic connection...`);
             const contextEvent = {
               type: 'conversation.item.create',
               item: {
@@ -447,9 +437,8 @@ const TopControls: React.FC<TopControlsProps> = memo(({
               }
             };
             connectionManager.sendMessage('mic', contextEvent);
-            console.log(`[Context Injection] Speaker context injected into mic connection`);
           } catch (error) {
-            console.error('[Context Injection] Failed to inject speaker context:', error);
+            logger.error('[Context Injection] Failed to inject speaker context:', error);
           }
         }
 
@@ -461,18 +450,12 @@ const TopControls: React.FC<TopControlsProps> = memo(({
           timestamp: Date.now()
         }));
       } else {
-        console.warn(`[TopControls:Speaker] Received ${message.type} but no transcript found:`, message);
+        logger.warn(`[TopControls:Speaker] Received ${message.type} but no transcript found:`, message);
       }
     }
-    // Add logs for other specific message types if desired
-    else {
-      // Optionally log unexpected/unhandled message types
-      // console.log("[TopControls:Speaker] Received unhandled message type:", message.type, message);
-    }
-  }, [micConnectionStatus]);
+  }, [micConnectionStatus, onProcessTurn]); // Added onProcessTurn dependency
 
   const handleSpeakerStateChange = useCallback((status: string) => {
-    console.log(`Speaker connection state changed: ${status}`);
     let newStatus: WebRTCConnectionStatus;
 
     switch (status) {
@@ -485,24 +468,20 @@ const TopControls: React.FC<TopControlsProps> = memo(({
       case 'disconnected':
       case 'closed':
         newStatus = 'disconnected';
-        // Reset the speaker track
-        speakerTrackRef.current = null;
+        speakerTrackRef.current = null; // Clear track ref on close
         break;
       case 'failed':
-      case 'error':
         newStatus = 'failed';
-        // Reset the speaker track
-        speakerTrackRef.current = null;
+        speakerTrackRef.current = null; // Clear track ref on failure
         break;
       default:
-        newStatus = 'disconnected';
-        // Reset the speaker track
+        newStatus = 'error'; // Catch-all for unexpected states
         speakerTrackRef.current = null;
+        break;
     }
 
     setSpeakerConnectionStatus(newStatus);
-    // Call the new callback
-    onSpeakerStatusChange(newStatus);
+    onSpeakerStatusChange(newStatus); // Call the prop callback for parent state
   }, [onSpeakerStatusChange]);
 
   const handleSpeakerError = useCallback((error: Error) => {
@@ -530,21 +509,12 @@ const TopControls: React.FC<TopControlsProps> = memo(({
   // Define connectMic after all its dependencies are defined
   const connectMic = useCallback(async () => {
     if (micConnectionStatus === 'connecting' || micConnectionStatus === 'connected') {
-      console.log('Mic already connecting or connected.');
       return;
     }
     // Don't set local state, rely on prop
-    // setMicConnectionStatus('connecting');
     onMicStatusChange('connecting'); // Notify parent
     try {
-      console.log('Requesting microphone access for connection...');
-
       // --- Find Specific Microphone Device ---
-      console.log('[Device Selection] Enumerating devices...');
-console.log('[Debug] Checking navigator:', typeof navigator);
-      if (navigator) {
-        console.log('[Debug] Checking navigator.mediaDevices:', typeof navigator.mediaDevices);
-      }
       const devices = await navigator.mediaDevices.enumerateDevices();
       const micDevice = devices.find(device =>
         device.kind === 'audioinput' &&
@@ -552,9 +522,7 @@ console.log('[Debug] Checking navigator:', typeof navigator);
         (device.label.includes('MacBook Pro Microphone') || device.label.includes('Built-in Microphone'))
       );
 
-      if (micDevice) {
-        console.log(`[Device Selection] Found specific mic: ${micDevice.label} (ID: ${micDevice.deviceId})`);
-      } else {
+      if (!micDevice) {
         console.warn('[Device Selection] Specific MacBook Pro Microphone not found, using default input.');
         // Fallback to default if specific device isn't found
       }
@@ -562,8 +530,6 @@ console.log('[Debug] Checking navigator:', typeof navigator);
       const micConstraints: MediaStreamConstraints = {
         audio: micDevice ? { deviceId: { exact: micDevice.deviceId } } : true
       };
-      console.log('[Device Selection] Using constraints:', { audio: micConstraints.audio });
-      console.log('[Audio Routing Check] Mic source selected:', micDevice ? `${micDevice.label} (ID: ${micDevice.deviceId})` : 'Default audio input');
 
       // Get the raw microphone stream
       const rawMicStream = await navigator.mediaDevices.getUserMedia({ audio: micConstraints.audio });
@@ -576,12 +542,7 @@ console.log('[Debug] Checking navigator:', typeof navigator);
       }
       micTrackRef.current = rawMicTrack; // Store raw track ref
 
-      // Debug log for mic track initial state
-      console.log(`[Mute Debug] Mic track initial state - enabled: ${rawMicTrack.enabled}, muted: ${rawMicTrack.muted}, readyState: ${rawMicTrack.readyState}`);
-
-      console.log('Attempting to connect mic with raw track...');
-
-      // Pass the raw track and stream directly to the connection manager
+      // Attempting to connect mic with raw track...
       await connectionManager.connect(
         'mic',
         rawMicTrack, // Pass the raw track
@@ -596,15 +557,10 @@ console.log('[Debug] Checking navigator:', typeof navigator);
 
       // Enable the track if it wasn't muted before connection
       if (!isMicrophoneMuted) {
-        console.log('[Mute Debug] Setting initial mic track enabled=true because isMicrophoneMuted is false');
         rawMicTrack.enabled = true;
       } else {
-        console.log('[Mute Debug] Setting initial mic track enabled=false because isMicrophoneMuted is true');
         rawMicTrack.enabled = false; // Ensure it respects the muted state
       }
-
-      // Verify track state after connection
-      console.log(`[Mute Debug] Mic track state after connection - enabled: ${rawMicTrack.enabled}, muted: ${rawMicTrack.muted}, readyState: ${rawMicTrack.readyState}`);
 
     } catch (error) {
       console.error("Failed to connect microphone:", error);
@@ -620,10 +576,8 @@ console.log('[Debug] Checking navigator:', typeof navigator);
 
   const disconnectMic = useCallback(() => {
     if (micConnectionStatus !== 'disconnected') {
-      console.log('Disconnecting microphone...');
       connectionManager.disconnect('mic');
       // Don't set local state, rely on prop
-      // setMicConnectionStatus('disconnected');
       onMicStatusChange('disconnected'); // Propagate state
       micTrackRef.current?.stop(); // Stop the raw track
       micTrackRef.current = null;
@@ -633,21 +587,12 @@ console.log('[Debug] Checking navigator:', typeof navigator);
 
   const connectSpeaker = useCallback(async () => {
     if (speakerConnectionStatus === 'connecting' || speakerConnectionStatus === 'connected') {
-      console.log('Speaker already connecting or connected.');
       return;
     }
     setSpeakerConnectionStatus('connecting');
     onSpeakerStatusChange('connecting'); // Notify parent
     try {
-      console.log('[Device Selection] Enumerating devices for SPEAKER connection...');
       const devices = await navigator.mediaDevices.enumerateDevices()
-      console.log('[Device Selection] Devices:', devices);
-
-      // Log all audio devices for debugging
-      console.log('[Device Selection] Available audio devices:');
-      devices.forEach((device, index) => {
-        console.log(`Device ${index}: kind=${device.kind}, label="${device.label}", id=${device.deviceId}`);
-      });
 
       // Look specifically for BlackHole 2ch as audioinput
       const blackholeDevice = devices.find(device =>
@@ -657,9 +602,7 @@ console.log('[Debug] Checking navigator:', typeof navigator);
       );
 
       if (blackholeDevice) {
-        console.log(`[Device Selection] Found BlackHole virtual device: ${blackholeDevice.label}`);
-        console.log(`[Device Selection] Device ID: ${blackholeDevice.deviceId}`);
-        console.log(`[Device Selection] Group ID: ${blackholeDevice.groupId}`);
+        // Found BlackHole device
       } else {
         console.warn('[Device Selection] BlackHole 2ch (Virtual) device not found. Available audioinput devices:');
         devices
@@ -678,29 +621,20 @@ console.log('[Debug] Checking navigator:', typeof navigator);
           autoGainControl: false
         }
       };
-      console.log('[Device Selection] Using constraints for speaker:', { audio: speakerConstraints.audio });
 
       // Get the raw speaker stream
-      console.log('speakerConstraints', speakerConstraints);
       const rawSpeakerStream = await navigator.mediaDevices.getUserMedia(speakerConstraints);
       rawSpeakerStreamRef.current = rawSpeakerStream; // Store raw stream
 
-      console.log('[Device Selection] Raw speaker stream:', rawSpeakerStream);
       // Get the raw audio track
       const rawSpeakerTrack = rawSpeakerStream.getAudioTracks()[0];
-      console.log('[Device Selection] Raw speaker track:', rawSpeakerTrack);
       if (!rawSpeakerTrack) {
         throw new Error("No audio track found in the speaker stream.");
       }
 
-      // Debug log for speaker track initial state
-      console.log(`[Audio Debug] Speaker track initial state - enabled: ${rawSpeakerTrack.enabled}, muted: ${rawSpeakerTrack.muted}, readyState: ${rawSpeakerTrack.readyState}`);
-
       speakerTrackRef.current = rawSpeakerTrack; // Store raw track ref
 
-      console.log('Attempting to connect speaker with raw track...');
-
-      // Pass the raw track and stream directly to the connection manager
+      // Attempting to connect speaker with raw track...
       await connectionManager.connect(
         'speaker',
         rawSpeakerTrack, // Pass the raw track
@@ -712,9 +646,6 @@ console.log('[Debug] Checking navigator:', typeof navigator);
         },
         speakerSessionConfig_Transcription // Pass the speaker config
       );
-
-      // Verify track state after connection
-      console.log(`[Audio Debug] Speaker track state after connection - enabled: ${rawSpeakerTrack.enabled}, muted: ${rawSpeakerTrack.muted}, readyState: ${rawSpeakerTrack.readyState}`);
 
     } catch (error) {
       console.error("Failed to connect speaker:", error);
@@ -730,7 +661,6 @@ console.log('[Debug] Checking navigator:', typeof navigator);
 
   const disconnectSpeaker = useCallback(() => {
     if (speakerConnectionStatus !== 'disconnected') {
-      console.log('Disconnecting speaker...');
       connectionManager.disconnect('speaker');
       setSpeakerConnectionStatus('disconnected');
       onSpeakerStatusChange('disconnected'); // Notify parent
@@ -753,42 +683,17 @@ console.log('[Debug] Checking navigator:', typeof navigator);
   useEffect(() => {
     // Only modify the track if it exists
     if (micTrackRef.current) {
-      console.log(`[Mute Debug] Prop isMicrophoneMuted changed to ${isMicrophoneMuted}`);
-      console.log(`[Mute Debug] Setting mic track enabled = ${!isMicrophoneMuted}`);
-
       // Log the track state before changing
-      console.log(`[Mute Debug] Before change: micTrack.enabled = ${micTrackRef.current.enabled}, muted = ${micTrackRef.current.muted}`);
-
-      // Update the track's enabled state
       micTrackRef.current.enabled = !isMicrophoneMuted;
-
-      // Log the track state after changing
-      setTimeout(() => {
-        if (micTrackRef.current) {
-          console.log(`[Mute Debug] After change: micTrack.enabled = ${micTrackRef.current.enabled}, muted = ${micTrackRef.current.muted}`);
-        }
-
-        if (speakerTrackRef.current) {
-          console.log(`[Mute Debug] Speaker track state unchanged: enabled=${speakerTrackRef.current.enabled}, muted=${speakerTrackRef.current.muted}, readyState=${speakerTrackRef.current.readyState}`);
-        }
-      }, 100);
-    } else {
-      console.log(`[Mute Debug] Mute state changed to ${isMicrophoneMuted}, but no mic track available`);
     }
   }, [isMicrophoneMuted]);
 
   // Handle connection state reporting more robustly
   useEffect(() => {
-    // Whenever mic status changes, ensure the UI reflects the actual state
-    console.log(`[Connection Debug] Mic connection status: ${micConnectionStatus}`);
-
     // If the connection fails, provide a way to retry
     if (micConnectionStatus === 'failed' || micConnectionStatus === 'error') {
-      console.log('[Connection Debug] Mic connection in failed/error state - retry available');
-
       // Call the optional onReconnectMic callback if provided
       if (onReconnectMic) {
-        console.log('[Connection Debug] Notifying parent component about mic error');
         onReconnectMic();
       }
     }
@@ -796,15 +701,10 @@ console.log('[Debug] Checking navigator:', typeof navigator);
 
   // Similar monitoring for speaker connection
   useEffect(() => {
-    console.log(`[Connection Debug] Speaker connection status: ${speakerConnectionStatus}`);
-
     // If the connection fails, provide a way to retry
     if (speakerConnectionStatus === 'failed' || speakerConnectionStatus === 'error') {
-      console.log('[Connection Debug] Speaker connection in failed/error state - retry available');
-
       // Call the optional onReconnectSpeaker callback if provided
       if (onReconnectSpeaker) {
-        console.log('[Connection Debug] Notifying parent component about speaker error');
         onReconnectSpeaker();
       }
     }
@@ -813,19 +713,13 @@ console.log('[Debug] Checking navigator:', typeof navigator);
   // Add useEffects
   useEffect(() => {
     if (triggerConnect > 0) {
-      console.log("Connect triggered from App");
-
       // Add safety check - don't attempt reconnection if already connected
       if (micConnectionStatus !== 'connected' && micConnectionStatus !== 'connecting') {
         connectMic();
-      } else {
-        console.log('[Connection Debug] Skipping mic connection - already connected or connecting');
       }
 
       if (speakerConnectionStatus !== 'connected' && speakerConnectionStatus !== 'connecting') {
         connectSpeaker();
-      } else {
-        console.log('[Connection Debug] Skipping speaker connection - already connected or connecting');
       }
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -833,19 +727,13 @@ console.log('[Debug] Checking navigator:', typeof navigator);
 
   useEffect(() => {
     if (triggerDisconnect > 0) {
-      console.log("Disconnect triggered from App");
-
       // Safety check for disconnection
       if (micConnectionStatus !== 'disconnected') {
         disconnectMic();
-      } else {
-        console.log('[Connection Debug] Skipping mic disconnection - already disconnected');
       }
 
       if (speakerConnectionStatus !== 'disconnected') {
         disconnectSpeaker();
-      } else {
-        console.log('[Connection Debug] Skipping speaker disconnection - already disconnected');
       }
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -854,53 +742,7 @@ console.log('[Debug] Checking navigator:', typeof navigator);
   // add ref for debounce timer to batch rapid transcript updates
   const debounceRef = useRef<NodeJS.Timeout | null>(null);
 
-  useEffect(() => {
-    // Trigger when a turn has new data (mic OR speaker) and hasn't been processed
-    if (
-      transcriptTurn &&
-      !transcriptTurn.processed &&
-      (transcriptTurn.micTranscript || transcriptTurn.speakerTranscript) // Process if either exists
-    ) {
-      console.log('[Turn Processing] Received unprocessed turn:', transcriptTurn);
-
-      // Mark the current turn as processed to prevent duplicate processing
-      setTranscriptTurn(prev => ({...prev, processed: true}));
-
-      // clear any existing debounce
-      if (debounceRef.current) {
-        console.log('[Turn Processing] Clearing existing debounce timeout');
-        clearTimeout(debounceRef.current);
-      }
-      console.log(`[Turn Processing] Setting debounce timeout (${DEBOUNCE_DELAY_MS}ms)`);
-      // schedule processing of the latest transcriptTurn
-      debounceRef.current = setTimeout(() => {
-        console.log('[Turn Processing] Debounce complete, triggering onProcessTurn with:', transcriptTurn);
-        try {
-          onProcessTurn(transcriptTurn);
-
-          // Reset the transcript turn after processing to avoid combining with next prompt
-          setTranscriptTurn(prev => ({
-            ...prev,
-            speakerTranscript: '', // Clear the speaker transcript
-            micTranscript: '',     // Clear the mic transcript too
-            processed: true,       // Keep it marked as processed
-            timestamp: Date.now()  // Update timestamp
-          }));
-
-        } catch (error) {
-          const err = error instanceof Error ? error : new Error(String(error));
-          console.error('[Turn Processing] Error calling onProcessTurn handler:', err);
-          setErrorState({
-            isOpen: true,
-            title: 'Processing Error',
-            message: 'Could not initiate processing for the latest conversation turn.',
-            details: err.message,
-            retryAction: null
-          });
-        }
-      }, DEBOUNCE_DELAY_MS);
-    }
-  }, [transcriptTurn, onProcessTurn]);
+  // Removed commented-out useEffect for old turn processing logic (now handled in App.tsx)
 
   // clear debounce timer on unmount
   useEffect(() => {
@@ -912,7 +754,6 @@ console.log('[Debug] Checking navigator:', typeof navigator);
   // Cleanup on unmount
   useEffect(() => {
     return () => {
-      console.log("TopControls unmounting, skipping disconnection to preserve connections...");
       // Avoid disconnecting on unmount to prevent premature disconnection during hot reload or navigation.
       // Only disconnect if explicitly triggered via triggerDisconnect prop.
     };
@@ -1005,26 +846,18 @@ console.log('[Debug] Checking navigator:', typeof navigator);
 
   // Handle mic status click
   const handleMicStatusClick = () => {
-    console.log(`[Connection Debug] Mic status button clicked. Current status: ${micConnectionStatus}`);
-
     if (micConnectionStatus === 'disconnected' || micConnectionStatus === 'failed' || micConnectionStatus === 'error') {
-      console.log('[Connection Debug] Attempting to connect mic...');
       connectMic();
     } else if (micConnectionStatus === 'connected' || micConnectionStatus === 'connecting') {
-      console.log('[Connection Debug] Attempting to disconnect mic...');
       disconnectMic();
     }
   };
 
   // Handle speaker status click
   const handleSpeakerStatusClick = () => {
-    console.log(`[Connection Debug] Speaker status button clicked. Current status: ${speakerConnectionStatus}`);
-
     if (speakerConnectionStatus === 'disconnected' || speakerConnectionStatus === 'failed' || speakerConnectionStatus === 'error') {
-      console.log('[Connection Debug] Attempting to connect speaker...');
       connectSpeaker();
     } else if (speakerConnectionStatus === 'connected' || speakerConnectionStatus === 'connecting') {
-      console.log('[Connection Debug] Attempting to disconnect speaker...');
       disconnectSpeaker();
     }
   };
@@ -1032,36 +865,11 @@ console.log('[Debug] Checking navigator:', typeof navigator);
   // Handle mic mute toggle
   const handleMuteToggle = () => {
     const newMutedState = !isMicrophoneMuted;
-    console.log(`[Mute Debug] Toggling mute state from ${isMicrophoneMuted} to ${newMutedState}`);
-
-    // Log current state of both mic and speaker tracks for comparison
-    if (micTrackRef.current) {
-      console.log(`[Mute Debug] BEFORE TOGGLE - Mic track: enabled=${micTrackRef.current.enabled}, muted=${micTrackRef.current.muted}, readyState=${micTrackRef.current.readyState}`);
-    } else {
-      console.log(`[Mute Debug] No mic track available to mute!`);
-    }
-
-    if (speakerTrackRef.current) {
-      console.log(`[Mute Debug] Speaker track state: enabled=${speakerTrackRef.current.enabled}, muted=${speakerTrackRef.current.muted}, readyState=${speakerTrackRef.current.readyState}`);
-    }
-
     setIsMicrophoneMuted(newMutedState);
 
     // Toggle the actual track state if it exists
     if (micTrackRef.current) {
-      console.log(`[Mute Debug] Setting mic track enabled state to: ${!newMutedState}`);
       micTrackRef.current.enabled = !newMutedState;
-
-      // Log the state after changing
-      setTimeout(() => {
-        if (micTrackRef.current) {
-          console.log(`[Mute Debug] AFTER TOGGLE - Mic track: enabled=${micTrackRef.current.enabled}, muted=${micTrackRef.current.muted}, readyState=${micTrackRef.current.readyState}`);
-        }
-
-        if (speakerTrackRef.current) {
-          console.log(`[Mute Debug] Speaker track state unchanged: enabled=${speakerTrackRef.current.enabled}, muted=${speakerTrackRef.current.muted}, readyState=${speakerTrackRef.current.readyState}`);
-        }
-      }, 100);
     }
   };
 

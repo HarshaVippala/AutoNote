@@ -16,33 +16,35 @@ const openaiSDK = new OpenAI({
 
 // Using shorter keys for token optimization
 const ComprehensiveCodeSchema = z.object({
-    cq: z.array(z.string()).optional().describe("Clarifying questions (cq) if request is ambiguous."),
-    tol: z.string().describe(`Think out loud (tol): 1. Ask, 2. Approach, 3. Data Structures, 4. Algorithm/Logic.`),
-    lang: z.string().describe("Language (lang) of code (e.g., 'python'). Empty if none."),
-    cd: z.string().describe("Code (cd) snippet. Empty if none."),
-    ec: z.string().describe("Edge cases (ec) considered."),
+    analysis: z.string().describe(
+      "Step 1–2: Paraphrase the problem, list inputs/outputs/constraints, and hand-run the sample."
+    ),
+    tol: z.string().describe(`High-level approach only: 1. Problem understanding 2. Algorithm approach 3. Data structures chosen. Keep short and focused, no code duplication.`),
+    lang: z.string().describe("Language (lang) of code (e.g., 'python', 'java', 'javascript'). Required for syntax highlighting."),
+    cd: z.string().describe("Well-commented code with implementation details directly in code comments. Include thorough explanations within the code itself."),
+    ec: z.string().describe("Edge cases (ec) considered. Only list 2-3 important ones."),
     tc: z.array(z.object({
       in: z.string().describe("Test case input (in)."),
       out: z.string().describe("Test case expected output (out).")
-    })).describe("Test cases (tc): 2-3 examples (in/out)."),
+    })).max(3).describe("Exactly 3 test cases with input/output examples."),
     cmplx: z.object({
-      t: z.string().describe("Time complexity (t) (e.g., O(n log n))."),
-      s: z.string().describe("Space complexity (s) (e.g., O(n)).")
-    }).describe("Complexity (cmplx) analysis (t/s)."),
-    opt: z.string().optional().describe("Potential optimizations (opt). Omit if none.")
-  }).describe("Comprehensive structured response for coding/analysis requests using short keys (cq, tol, lang, cd, ec, tc, cmplx, opt).");
+      t: z.string().describe("Time complexity (t) (e.g., O(n log n)). Include brief explanation of why."),
+      s: z.string().describe("Space complexity (s) (e.g., O(n)). Include brief explanation of why.")
+    }).describe("Complexity (cmplx) analysis with clear formatting."),
+    opt: z.string().optional().describe("Potential optimizations (opt). Keep brief, omit if none.")
+  }).describe("Structured code response with well-commented code and high-level explanation. Do not duplicate code in explanation.");
 // Schema for simple text explanations
 const SimpleExplanationSchema = z.object({
-  explanation: z.string().describe("A direct answer or explanation to the user's query.")
-}).describe("A simple text explanation or answer. Use for general knowledge questions, simple clarifications, or when a comprehensive structure is not needed.");
+  explanation: z.string().describe("A direct answer or explanation based on the SYSTEM_AUDIO_TRANSCRIPT and any preceding user input.")
+}).describe("A simple text explanation or answer. Use for general knowledge, simple clarifications, or when a comprehensive structure is not needed. Base response primarily on the most recent SYSTEM_AUDIO_TRANSCRIPT.");
 
 // Schema for STAR behavioral answers - LPs integrated implicitly
 const BehavioralStarSchema = z.object({
-  situation: z.string().describe("Describe the specific situation or context based on retrieved resume info. Include relevant company name, project scope, and technical environment."),
-  task: z.string().describe("Describe the technical challenge, goal, or problem you were faced with in detail. Include technical specifications, requirements, constraints, and stakeholder expectations."),
-  action: z.string().describe("Provide a detailed, technically-focused description of the specific actions *you* took. Include technical frameworks, languages, methodologies, and tools used. Describe your technical decision-making process, architecture choices, implementation details, code optimizations, and how you overcame technical obstacles. Clearly demonstrate deep technical expertise and ownership of the solution. Weave in relevant leadership principles (e.g., bias for action, diving deep, ownership) naturally within the description."),
-  result: z.string().describe("Describe the outcome of your actions, quantifying with specific technical metrics/data from the resume where possible (e.g., performance improvements, scalability gains, latency reduction, user adoption metrics). Include technical impact on systems, processes, or business outcomes. Explain how your technical implementation created lasting value.")
-}).describe("Structured behavioral answer using STAR. Grounds response in user's resume (via file_search) and implicitly references leadership principles. Focus on technical details and implementation specifics. Use ONLY for behavioral questions AFTER searching the resume.");
+  situation: z.string().describe("Describe the specific situation or context based on retrieved resume info. The trigger for this is likely a behavioral question in the SYSTEM_AUDIO_TRANSCRIPT."),
+  task: z.string().describe("Describe the technical challenge, goal, or problem you were faced with in detail."),
+  action: z.string().describe("Provide a detailed, technically-focused description of the specific actions *you* took. Include technical details."),
+  result: z.string().describe("Describe the outcome of your actions, quantifying with specific technical metrics/data where possible.")
+}).describe("Structured behavioral answer using STAR, triggered by SYSTEM_AUDIO_TRANSCRIPT containing a behavioral question. Grounds response in user's resume (via file_search). Focus on technical details.");
 
 
 // --- Convert Zod schemas to JSON Schemas for Tool Parameters ---
@@ -70,196 +72,400 @@ const behavioralStarTool: any = {
     description: BehavioralStarSchema.description ?? "Formats behavioral answers using STAR.",
     parameters: behavioralStarJsonSchema
 };
+
+// --- Define Message Interface ---
+interface ChatMessage {
+  role: 'user' | 'assistant' | 'system';
+  content: string | null | any[];
+  function_call?: {
+    name: string;
+    arguments: string;
+  };
+}
+
+
+// --- Context Management Functions ---
+
+// Simple in-memory store for conversation context (replace with persistent store later if needed)
+const conversationContextStore = new Map<string, { messages: ChatMessage[]; lastQuestionType: string | null }>();
+
+async function getConversationContext(id: string): Promise<{ messages: ChatMessage[]; lastQuestionType: string | null } | null> {
+  return conversationContextStore.get(id) || null;
+}
+
+async function saveConversationContext(id: string, context: { messages: ChatMessage[]; lastQuestionType: string | null }): Promise<void> {
+  // Ensure all messages have valid content format before saving
+  const safeMessages = context.messages.map(msg => {
+    // If the message has a function_call but null content, provide an empty array
+    if (msg.function_call && (msg.content === null || msg.content === undefined)) {
+      return {
+        ...msg,
+        content: [] // Empty array as per OpenAI format for function calls
+      };
+    }
+    return msg;
+  });
+  
+  // Save the sanitized messages
+  const contextToSave = {
+    ...context,
+    messages: safeMessages.filter(msg => msg.role === 'assistant') // Keep only assistant messages in store
+  };
+  
+  conversationContextStore.set(id, contextToSave);
+}
+
+// --- Follow-up Detection ---
+
+function detectFollowUp(transcript: string, context: any, hasPreviousResponseId: boolean): boolean {
+  // If previousResponseId is provided, it's definitely a follow-up
+  if (hasPreviousResponseId) {
+    return true;
+  }
+  
+  // No context means no follow-up
+  if (!context || !context.messages || context.messages.length === 0) {
+    return false;
+  }
+  
+  // Check the most recent assistant message to see if it was a behavioral response
+  const lastMessage = context.messages[context.messages.length - 1];
+  const lastMessageWasBehavioral = lastMessage?.function_call?.name === 'format_behavioral_star_answer';
+  const lastQuestionType = context.lastQuestionType;
+  
+  // Common follow-up phrase detection
+  const followUpKeywords = [
+    "what about", "tell me more", "how did you", "explain that", 
+    "why did you", "could you explain", "how would you", "what was the",
+    "can you elaborate", "how was", "what were", "how were"
+  ];
+  
+  // Check for explicit follow-up patterns
+  const hasFollowUpKeyword = followUpKeywords.some(kw => 
+    transcript.toLowerCase().startsWith(kw) || 
+    transcript.toLowerCase().includes(` ${kw} `)
+  );
+
+  // References to previous content
+  const referencesPercentage = transcript.toLowerCase().includes("percent") || 
+                               transcript.toLowerCase().includes("%") ||
+                               /\d+%/.test(transcript);
+  
+  // References to previous results/outcomes
+  const referencesResults = transcript.toLowerCase().includes("result") || 
+                           transcript.toLowerCase().includes("outcome") ||
+                           transcript.toLowerCase().includes("impact") ||
+                           transcript.toLowerCase().includes("effect");
+  
+  // Checks if the question is very short (likely a follow-up)
+  const isShortQuestion = transcript.split(" ").length < 8;
+  
+  // Determine if it's a follow-up based on multiple signals
+  const isFollowUp = 
+    // Strong signals
+    (lastMessageWasBehavioral && (hasFollowUpKeyword || referencesPercentage || referencesResults)) ||
+    // Context-aware signals
+    (lastQuestionType === "BEHAVIORAL_QUESTION" && isShortQuestion && 
+      (hasFollowUpKeyword || referencesPercentage || referencesResults));
+  
+  return isFollowUp;
+}
+
+
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    // Destructure vector_store_id from the request body
-    const { messages, previous_response_id, vector_store_id } = body;
+    // **MODIFIED**: Expect speaker's transcript as 'transcript', user's as 'lastUserTranscript'
+    const {
+        transcript, // Speaker's transcript (the trigger)
+        conversationId,
+        questionType: initialQuestionType,
+        model: initialModel,
+        lastUserTranscript, // Optional: Most recent completed user transcript from mic
+        previousResponseId // Optional: ID of the previous response for follow-up context
+    } = body;
 
-    if (!messages) {
-      return NextResponse.json({ error: "Messages are required" }, { status: 400 });
+    // Validate required fields
+    if (!transcript || typeof transcript !== 'string' || !conversationId) {
+        console.warn('[API Route] Invalid request: Missing or invalid speaker transcript/conversationId.', { transcript, conversationId });
+        return NextResponse.json({ error: "Valid speaker transcript (string) and conversationId are required" }, { status: 400 });
+    }
+    // Validate optional lastUserTranscript
+    if (lastUserTranscript && typeof lastUserTranscript !== 'string') {
+       console.warn('[API Route] Invalid request: lastUserTranscript provided but not a string.', { lastUserTranscript });
+       return NextResponse.json({ error: "If provided, lastUserTranscript must be a string" }, { status: 400 });
     }
 
-    console.log('[API Route] Received messages:', messages);
-    console.log('[API Route] Previous Response ID:', previous_response_id);
+    // --- Context Management ---
+    // Retrieve context first to check for follow-ups
+    let context = await getConversationContext(conversationId);
+    let assistantHistory: ChatMessage[] = context?.messages || [];
 
-    // 1. Prepare messages (update system prompt to guide tool selection)
-    // Clean the "Speaker: " prefix from user messages
-    const cleanedMessages = messages.map((msg: any) => {
-        if (msg.role === 'user' && typeof msg.content === 'string' && msg.content.startsWith('Speaker: ')) {
-            return { ...msg, content: msg.content.substring('Speaker: '.length) };
+    // Check if this is a follow-up question based on context
+    const isFollowUp = detectFollowUp(transcript, context, !!previousResponseId);
+
+    // --- Determine Question Type and Model (based on SPEAKER transcript) ---
+    let determinedQuestionType: string | null = null;
+    let determinedModel: string | null = null;
+
+    const selectModelBasedOnType = (type: string): string => {
+        switch (type) {
+            case "CODE_QUESTION":
+            case "BEHAVIORAL_QUESTION":
+                return "gpt-4o-mini";
+            case "GENERAL_QUESTION":
+            default:
+                return "gpt-4.1-mini-2025-04-14";
         }
-        return msg;
+    };
+
+    // If it's a follow-up, use the previous question type
+    if (isFollowUp && context?.lastQuestionType) {
+        determinedQuestionType = context.lastQuestionType;
+        determinedModel = selectModelBasedOnType(determinedQuestionType || "BEHAVIORAL_QUESTION");
+    }
+    // If explicit question type provided and not a follow-up, use it
+    else if (initialQuestionType) {
+        determinedQuestionType = initialQuestionType;
+        determinedModel = initialModel || (typeof determinedQuestionType === 'string' ? selectModelBasedOnType(determinedQuestionType) : selectModelBasedOnType("GENERAL_QUESTION"));
+    }
+    // Otherwise classify the transcript
+    else {
+        try {
+            // **MODIFIED**: Classify the SPEAKER'S transcript with improved few-shot examples
+            const classificationPrompt = `Classify the following system audio transcript into one category: CODE_QUESTION, BEHAVIORAL_QUESTION, or GENERAL_QUESTION.
+
+Examples:
+- "Write a function to reverse a linked list" → CODE_QUESTION
+- "Tell me about your experience handling a difficult team situation" → BEHAVIORAL_QUESTION
+- "What is binary search?" → GENERAL_QUESTION
+- "Explain how quicksort works" → GENERAL_QUESTION
+- "Implement a binary search tree in Python" → CODE_QUESTION
+
+Classification guidelines:
+- CODE_QUESTION: Requests to write, implement, or debug specific code
+- BEHAVIORAL_QUESTION: Questions about personal experiences or situational responses
+- GENERAL_QUESTION: Requests for explanations, concepts, or information (including algorithm explanations)
+
+Respond ONLY with the category name. Transcript: "${transcript}"`;
+            const classificationResponse = await openaiSDK.chat.completions.create({
+                model: "gpt-4o-mini",
+                messages: [{ role: "user", content: classificationPrompt }],
+                max_tokens: 15,
+                temperature: 0,
+            });
+            const classifiedType = classificationResponse.choices[0]?.message?.content?.trim();
+
+            if (classifiedType && ["CODE_QUESTION", "BEHAVIORAL_QUESTION", "GENERAL_QUESTION"].includes(classifiedType)) {
+                determinedQuestionType = classifiedType;
+                determinedModel = selectModelBasedOnType(determinedQuestionType);
+            } else {
+                determinedQuestionType = "GENERAL_QUESTION"; // Default
+                determinedModel = selectModelBasedOnType(determinedQuestionType);
+            }
+        } catch (classificationError) {
+             console.error('[API Route] Classification error:', classificationError);
+             determinedQuestionType = "GENERAL_QUESTION";
+             determinedModel = selectModelBasedOnType(determinedQuestionType);
+        }
+    }
+
+    // Ensure both are non-null after all logic
+    if (!determinedQuestionType) {
+        determinedQuestionType = "GENERAL_QUESTION";
+    }
+    if (!determinedModel) {
+         // determinedQuestionType is guaranteed to be a string here
+         determinedModel = selectModelBasedOnType(determinedQuestionType);
+    }
+
+    // --- Prepare Message History for API Call ---
+    let messagesForApi: ChatMessage[] = [...assistantHistory]; // Start with assistant history
+
+    // **MODIFIED**: Add last user transcript (if exists) and speaker transcript
+    if (lastUserTranscript) {
+        messagesForApi.push({
+            role: "user", // Denote speaker transcript as system info
+            content: [{ type: 'input_text', text: lastUserTranscript }]
+        });
+    }
+    
+    messagesForApi.push({
+        role: "system", // Denote speaker transcript as system info
+        content: [{ type: 'input_text', text: `SYSTEM_AUDIO_TRANSCRIPT: ${transcript}` }]
     });
 
-    let apiMessages = [...cleanedMessages]; // Use cleaned messages
-    // Revised system prompt for multi-tool guidance including behavioral questions and file search
-    apiMessages.unshift({
-        role: 'system',
-        content: `You are an expert AI assistant. Analyze the user's request:
-1.  **Behavioral Question?** If it looks like a behavioral interview question (e.g., starts with 'Tell me about a time...', 'Describe a situation...', asks about failures, leadership, teamwork):
-    a.  Confirm it's asking the user to speak about a particular experience or situation. **Crucially, use the 'file_search' tool** to find relevant context, examples, and details from the user's attached resume or files within the provided vector store. Base the response *firmly* on this retrieved information.
-    b.  Then, use the 'format_behavioral_star_answer' tool to structure the response.
-    c.  **Elaborate extensively** on each STAR component (Situation, Task, Action, Result). Aim for **detailed, wordy, and explanatory descriptions**. Use a narrative style, making the response comprehensive and easy to follow.
-    d.  For the **Action** section: Provide a highly detailed, technical narrative. Explain *how* technologies were used, going beyond simple listing. Include specific programming languages (e.g., Python 3.9, Java 11), frameworks (e.g., React 18, Spring Boot 2.5), design patterns (e.g., Singleton, Factory, Observer), architectural choices (e.g., microservices deployment on Kubernetes, serverless functions on AWS Lambda), database interactions (e.g., complex SQL joins, NoSQL data modeling strategies), API designs (e.g., RESTful principles, GraphQL schema design), and specific methodologies (e.g., Agile sprints with daily stand-ups, TDD implementation details).
-    e.  Demonstrate significant technical depth by **explaining in detail** specific implementation steps, algorithms chosen (and why), relevant code logic (describe, don't just show snippets unless essential), technical trade-offs analyzed, performance optimizations implemented (explaining the 'before' and 'after'), and how specific engineering challenges or bugs were diagnosed (mentioning debugging tools/techniques) and resolved. Be highly specific, technical, and **explanatory**.
-    f.  Implicitly weave relevant leadership principles (like Bias for Action, Ownership, Dive Deep, Deliver Results) naturally into the 'action' and 'result' descriptions, **explaining how** these principles guided your technical decisions and execution.
-    g.  Be factual and avoid exaggeration. Quantify results using specific metrics and technical KPIs found via file search whenever possible, and **explain the significance** of these results.
-2.  **Code Request:**  a. If the user asks to write, explain, analyze, or debug code, YOU MUST use the 'format_comprehensive_code' tool. **Do NOT use the 'file_search' tool for these requests.** When generating code, keep it concise and remove unnecessary blank lines. Use simple, Structure the response using these exact fields: 'clarifying_questions' (optional), 'think_out_loud', 'language', 'code', 'edge_cases', 'test_cases' (2-3 examples), 'complexity', and 'potential_optimizations' (optional).
-      b. use a mix of programming paradigms (e.g., OOP and functional), varied syntax (e.g., both ternary and if/else), inconsistent variable naming styles, and one legacy syntax element. Make the code appear as if written and revised by a human.
-3.  **Follow-up to Behavioral?** If the user's message is clearly a follow-up question *directly related* to the immediately preceding behavioral (STAR) answer you just provided, use the 'format_simple_explanation' tool to give a concise answer addressing the follow-up. Do NOT generate a new STAR response for a follow-up. Reference the context of the previous STAR answer implicitly.
-4.  **Follow-up to Code?** If the user's message is clearly a follow-up question *directly related* to the immediately preceding code/analysis response (\`format_comprehensive_code\`) you just provided (e.g., asking to explain a part of the code, modify it slightly, clarify complexity), use the 'format_simple_explanation' tool to give a concise answer addressing the specific follow-up. Do NOT generate a new comprehensive code response unless the request is substantially different. Reference the context of the previous code/analysis implicitly.
-5.  **Simple Question?** For other simpler questions needing only a direct explanation or answer (and not a follow-up to a STAR or code answer), use the 'format_simple_explanation' tool.
+    // Limit context window (e.g., last 10 effective messages: user, system, assistant)
+    const limitedMessagesForApi = messagesForApi.slice(-10);
 
-Structure your entire response using ONLY the chosen tool based on the analysis above.` // Ensure closing backtick is inside the content property
-    }); // Ensure closing parenthesis and brace for unshift are correct
+    // --- Refine System Prompt ---
+    // System prompt guides the response based on the *speaker's* transcript being the main trigger
+    let systemPromptContent = "";
+    switch(determinedQuestionType) {
+        case "CODE_QUESTION":
+            systemPromptContent = `You are an expert AI code assistant. Respond to the coding question posed in the SYSTEM_AUDIO_TRANSCRIPT.
+  Consider any immediately preceding user message for context.
 
-    console.log('[API Route] Prepared messages for OpenAI (prefix cleaned):', apiMessages);
+  Important instructions for format_comprehensive_code:
+  1. analysis - Paraphrase the problem, enumerate inputs/outputs/constraints, and simulate the sample by hand.
+  2. tol - Outline your step-by-step solution in pseudo-code: the algorithmic steps and data structures you'll use.
+  3. cd - Provide well-commented code with detailed explanations DIRECTLY IN THE CODE COMMENTS. The comments should thoroughly explain the thinking process and approach.
+  4. tc - Provide EXACTLY 3 test cases with clear input/output examples.
+  5. ec - Keep edge cases brief with only 2-3 important scenarios identified.
+  6. cmplx - Format complexity consistently with both notation (e.g., O(n log n)) and a brief human-style rationale (e.g., "because we sort the array once").
+  7. lang - Always specify the correct language (e.g., 'python', 'java', 'javascript') for syntax highlighting.
 
-    // Define the base tools
-    let toolsForApiCall: any[] = [ 
-        comprehensiveTool, 
-        simpleExplanationTool, 
-        behavioralStarTool
+  The code should be production-quality with descriptive variable names and thorough inline comments explaining the approach.`;
+            break;
+        case "BEHAVIORAL_QUESTION":
+            systemPromptContent = `You are an expert AI behavioral interview assistant. Respond to the behavioral question in the SYSTEM_AUDIO_TRANSCRIPT using the STAR method (format_behavioral_star_answer). Consider preceding user message and resume context (if available in history).`;
+            break;
+        case "GENERAL_QUESTION":
+        default:
+            systemPromptContent = `You are an expert AI assistant. Provide a concise answer to the query or statement in the SYSTEM_AUDIO_TRANSCRIPT using format_simple_explanation. Consider any immediately preceding user message for context.`;
+            break;
+    }
+    // Revert back to input_text based on API error
+    const systemPromptForApi = { role: "system", content: [{ type: 'input_text', text: systemPromptContent }] };
+
+    // --- Prepare final input for the API call ---
+    const apiInput: OpenAI.Responses.ResponseInput = [
+      systemPromptForApi as any,
+      ...(limitedMessagesForApi.map((msg: ChatMessage) => {
+        // Only include role and content, strip function_call
+        return {
+          role: msg.role,
+          content: typeof msg.content === 'string' ? [{ type: 'input_text', text: msg.content }] : msg.content
+        };
+      }) as any[])
     ];
 
-    // Conditionally add the file_search tool if vector_store_id is provided
-    if (vector_store_id) {
-        toolsForApiCall.push({
-            type: "file_search",
-            vector_store_ids: [vector_store_id]
-        });
-        // Removed duplicated lines from here
-        console.log('[API Route] Added file_search tool with vector store ID:', vector_store_id);
-    } // Correctly closes the first if (vector_store_id) block
-    // Removed duplicate closing brace and duplicate if block
+    // **MODIFIED**: Filter tools based on type and set tool_choice to 'required'
+    let finalTool: any;
+    let toolChoice: any = 'required'; // Force tool usage
 
-    // 2. Call OpenAI Responses API with streaming enabled (Correctly placed after if block)
+    switch(determinedQuestionType) {
+        case "CODE_QUESTION":
+            finalTool = comprehensiveTool;
+            break;
+        case "BEHAVIORAL_QUESTION":
+            finalTool = behavioralStarTool;
+            break;
+        case "GENERAL_QUESTION":
+        default:
+            finalTool = simpleExplanationTool;
+            break;
+    }
+
+    const toolsForApiCall = [finalTool]; // Array containing only the chosen tool
+
+    // Call OpenAI Responses API
     const stream = await openaiSDK.responses.create({
-        model: "gpt-4.1",
-        input: apiMessages, // Use 'input'
-        ...(previous_response_id && { previous_response_id: previous_response_id }),
-        tools: toolsForApiCall, // Use the potentially modified array
-        tool_choice: 'auto',
-        stream: true, // Enable streaming
+            model: determinedModel!,
+            input: apiInput,
+            tools: toolsForApiCall,
+            tool_choice: toolChoice,
+            ...(previousResponseId ? { previous_response_id: previousResponseId } : {}),
+            stream: true
     });
 
-    console.log(`[API Route] OpenAI Responses stream initiated.`);
-
-    // Create a custom ReadableStream to process and forward structured events
+    // --- Stream Processing (Mostly unchanged, but context saving logic simplified) ---
     const readableStream = new ReadableStream({
       async start(controller) {
         const encoder = new TextEncoder();
-        // Helper function to enqueue JSON lines
         const enqueueJsonLine = (data: object) => {
-          controller.enqueue(encoder.encode(JSON.stringify(data) + '\n'));
+          try { controller.enqueue(encoder.encode(JSON.stringify(data) + '\n')); }
+          catch (e) { console.warn("[Stream] Failed to enqueue data:", e); }
         };
 
+        let assistantResponseArgs = "";
+        let finalAssistantMessage: any = null; // Stores the completed function call item
+
         try {
-          // Use type assertion as workaround for potential SDK typing issue
           for await (const event of stream as unknown as AsyncIterable<any>) {
             switch (event.type) {
               case 'response.output_item.added':
-                // Check if it's a function call item being added
                 if (event.item?.type === 'function_call') {
-                  console.log(`[Stream] Function call started: ${event.item.name}`);
-                  enqueueJsonLine({
-                    type: 'function_call_start',
-                    index: event.output_index,
-                    name: event.item.name,
-                    id: event.item.id, // Include id if needed by frontend
-                    call_id: event.item.call_id // Include call_id if needed
-                  });
+                  enqueueJsonLine({ type: 'function_call_start', index: event.output_index, name: event.item.name, id: event.item.id, call_id: event.item.call_id });
                 }
                 break;
-
               case 'response.function_call_arguments.delta':
                 if (event.delta) {
-                  // console.log(`[Stream] Function args delta (index ${event.output_index}):`, event.delta);
-                  enqueueJsonLine({
-                    type: 'function_call_delta',
-                    index: event.output_index,
-                    delta: event.delta
-                  });
+                  assistantResponseArgs += event.delta;
+                  enqueueJsonLine({ type: 'function_call_delta', index: event.output_index, delta: event.delta });
                 }
                 break;
-              
               case 'response.output_item.done':
                  if (event.item?.type === 'function_call') {
-                    console.log(`[Stream] Function call done (index ${event.output_index})`);
+                    finalAssistantMessage = event.item; // Capture final item
                     enqueueJsonLine({ type: 'function_call_done', index: event.output_index, item: event.item });
-                 } else if (event.item?.type === 'message') {
-                    // Potentially signal end of a text message part if needed
                  }
                  break;
-
               case 'response.output_text.delta':
                 if (event.text_delta?.value) {
-                  // console.log("[Stream] Text delta:", event.text_delta.value);
                   enqueueJsonLine({ type: 'text_delta', delta: event.text_delta.value });
                 }
                 break;
-
               case 'response.completed':
-                console.log('[API Route] OpenAI Responses stream completed event received.');
-                enqueueJsonLine({ type: 'completed', response: event.response }); // Send final response object
+                enqueueJsonLine({ type: 'completed', response: event.response });
                 break;
-
               case 'error':
-                console.error('[API Route] Error event in stream:', event.error);
+                console.error('[API Route] Stream error event:', event.error);
                 enqueueJsonLine({ type: 'error', error: { message: event.error?.message, code: event.error?.code } });
                 controller.error(new Error(event.error?.message || 'Unknown stream error'));
-                return; // Stop processing on error
-
-              // Add cases for other event types if needed (e.g., file_search, refusal)
-              
-              default:
-                // console.log("[Stream] Unhandled event type:", event.type);
-                break;
+                return;
+              default: break; // Ignore others
             }
           }
         } catch (streamError) {
-          console.error('[API Route] Error processing OpenAI stream:', streamError);
-          try {
-             enqueueJsonLine({ type: 'error', error: { message: (streamError as Error).message || 'Stream processing error' } });
-          } catch (e) { /* Ignore enqueue error if controller is already closed */ }
+          console.error('[API Route] Error processing stream:', streamError);
+          enqueueJsonLine({ type: 'error', error: { message: (streamError instanceof Error ? streamError.message : String(streamError)) } });
           controller.error(streamError);
         } finally {
-          console.log('[API Route] Closing custom readable stream.');
+          // --- Context Saving (Save only the assistant's response) ---
+          try {
+            // Re-fetch context to ensure we have the latest before modifying
+            let finalContext = await getConversationContext(conversationId) || { messages: [], lastQuestionType: null };
+
+            if (finalAssistantMessage && finalAssistantMessage.type === 'function_call') {
+                const assistantMessageToSave: ChatMessage = {
+                    role: 'assistant',
+                    content: [], // Use empty array instead of null
+                    function_call: {
+                        name: finalAssistantMessage.name,
+                        arguments: assistantResponseArgs // Use accumulated args
+                    }
+                };
+                // Add only the assistant message to the history for saving
+                finalContext.messages.push(assistantMessageToSave);
+                finalContext.lastQuestionType = determinedQuestionType; // Update last question type
+                await saveConversationContext(conversationId, finalContext);
+            } else {
+               // Optionally save text responses if accumulated
+            }
+             // Note: We are NOT saving user/system transcripts here, relying on OpenAI's session state.
+
+          } catch (saveError) {
+             console.error("[Context] Error saving context:", saveError);
+          }
+
           controller.close();
         }
       },
-    });
-
-    // Return the custom stream as a Response with appropriate content type
-    return new Response(readableStream, {
-      headers: {
-        'Content-Type': 'application/jsonl; charset=utf-8', // Use JSON Lines format
-        'X-Content-Type-Options': 'nosniff',
-      },
-    });
-
-  } catch (error) { // This is the main catch block for the try starting at line 75
-    console.error('[API Route] Error initiating responses request:', error);
-    // Correctly check for OpenAI APIError using the static member
-    if (error instanceof OpenAI.APIError) {
-      console.error('[API Route] OpenAI API Error:', error.status, error.message, error.code, error.type);
-      // Correct Response constructor usage
-      return new Response(
-        JSON.stringify({ error: error.message, details: error.code }),
-        { // Options object is the second argument
-          status: error.status,
-          headers: { 'Content-Type': 'application/json' }
-        }
-      );
-    }
-    // Handle other potential errors
-    return new Response(
-      JSON.stringify({ error: 'Failed to process responses request', details: (error instanceof Error ? error.message : String(error)) }),
-      { // Options object is the second argument
-        status: 500,
-        headers: { 'Content-Type': 'application/json' }
+      cancel(reason) {
+        console.warn('[API Route] Stream cancelled:', reason);
       }
-    );
-  } // Closes the main catch block
-} // Closes the POST function
+    });
+
+    return new Response(readableStream, {
+      headers: { 'Content-Type': 'application/jsonl; charset=utf-8', 'X-Content-Type-Options': 'nosniff' },
+    });
+
+  } catch (error) {
+    console.error('[API Route] Top-level error:', error);
+    if (error instanceof OpenAI.APIError) {
+      return new Response(JSON.stringify({ error: error.message, details: error.code }), { status: error.status, headers: { 'Content-Type': 'application/json' } });
+    }
+    return new Response(JSON.stringify({ error: 'Failed request', details: (error instanceof Error ? error.message : String(error)) }), { status: 500, headers: { 'Content-Type': 'application/json' } });
+  }
+}

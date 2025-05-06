@@ -7,6 +7,7 @@ import { coy } from 'react-syntax-highlighter/dist/cjs/styles/prism'; // Light t
 import ReactMarkdown from 'react-markdown';
 import { TabData } from '@/app/types';
 import TabsPanel from './TabsPanel';
+import { preprocessCode } from '@/app/lib/codeUtils';
 
 interface EnhancedCodePaneProps {
   theme: 'light' | 'dark';
@@ -33,6 +34,17 @@ const EnhancedCodePane: React.FC<EnhancedCodePaneProps> = ({
   
   // Find the active tab data
   const activeTab = tabs.find(tab => tab.key === activeTabKey);
+
+  // <<< ADD DEBUG LOG HERE >>>
+  console.log(`[EnhancedCodePane] Rendering for activeTabKey: ${activeTabKey}. Found activeTab:`, activeTab ? true : false);
+  if (activeTab) {
+    console.log(`[EnhancedCodePane] activeTab.code value: "${activeTab.code}"`); // Log the actual code value
+    console.log(`[EnhancedCodePane] activeTab.language value: "${activeTab.language}"`);
+    // Log the whole object for inspection
+    console.log('[EnhancedCodePane] Full activeTab object:', activeTab); // Log the object directly
+  }
+  // <<< END DEBUG LOG >>>
+
   return (
     <div className="h-full flex flex-col text-xs">
       {tabs.length > 0 ? (
@@ -47,6 +59,9 @@ const EnhancedCodePane: React.FC<EnhancedCodePaneProps> = ({
           />
           <div className="flex-1 overflow-y-auto overflow-x-auto mt-1">
             {activeTab ? (
+              activeTab.code === "Streaming..." ? (
+                <div className={`p-4 text-xs italic ${theme === 'dark' ? 'text-gray-400' : 'text-gray-600'}`}>Streaming code...</div>
+              ) :
               activeTab.language === 'markdown' ? (
                 <div className="p-2">
                   <ReactMarkdown 
@@ -61,7 +76,7 @@ const EnhancedCodePane: React.FC<EnhancedCodePaneProps> = ({
                   style={codeStyle}
                   customStyle={{ 
                     background: 'transparent', 
-                    fontSize: '0.75rem', 
+                    fontSize: '0.45rem', 
                     margin: 0, 
                     padding: '0.35rem',
                     lineHeight: '1.2',
@@ -72,7 +87,8 @@ const EnhancedCodePane: React.FC<EnhancedCodePaneProps> = ({
                   wrapLines={true}
                   showLineNumbers={false}
                 >
-                  {activeTab.code}
+                  {/* Apply preprocessing to code before rendering */}
+                  {preprocessCode(activeTab.code)}
                 </SyntaxHighlighter>
               )
             ) : (
