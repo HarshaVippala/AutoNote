@@ -2,12 +2,12 @@
 
 import React, { useEffect, useRef, useState, useCallback } from "react";
 import ReactMarkdown from "react-markdown";
-import { TranscriptItem, ContentItem } from "@/app/types";
+import { TranscriptItem, ContentItem } from "@/types";
 import Image from "next/image";
-import { useTranscript } from "@/app/contexts/TranscriptContext";
-import { capitalizeFirstLetter } from "@/app/lib/textUtils";
+import { useTranscript } from "@/contexts/TranscriptContext";
+import { capitalizeFirstLetter } from "@/lib/textUtils";
 import { SendHorizonal } from "lucide-react";
-import { useTheme } from "@/app/contexts/ThemeContext";
+import { useTheme } from "@/contexts/ThemeContext";
 
 declare global {
   interface Window {

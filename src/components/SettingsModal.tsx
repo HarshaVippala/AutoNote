@@ -1,8 +1,8 @@
 "use client";
 
 import React, { useState, useEffect, useCallback } from 'react';
-import { useTheme } from "@/app/contexts/ThemeContext";
-import { useEvent } from "@/app/contexts/EventContext"; // Import useEvent
+import { useTheme } from "@/contexts/ThemeContext";
+import { useEvent } from "@/contexts/EventContext"; // Import useEvent
 
 type WebRTCConnectionStatus = 'disconnected' | 'connecting' | 'connected' | 'failed' | 'error';
 

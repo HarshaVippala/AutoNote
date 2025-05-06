@@ -2,12 +2,12 @@
 
 import React, { useState, useEffect, memo, useCallback, useRef } from 'react';
 import Image from 'next/image';
-import { ConnectionState as AppConnectionState, TranscriptTurn, ComprehensiveCodeSchema } from "@/app/types"; // Import ComprehensiveCodeSchema
+import { AppConnectionState, TranscriptTurn, ComprehensiveCodeSchema } from "@/types"; // Import ComprehensiveCodeSchema
 import { connectionManager, logger } from '@/app/api/realtime-assistant-webRTC/webRTCConnection-webRTC';
 import ErrorDialog from './ErrorDialog';
 import SettingsModal from './SettingsModal'; // Import SettingsModal
-import { useTheme } from "@/app/contexts/ThemeContext";
-import { useStatus } from "@/app/contexts/StatusContext"; // Import useStatus
+import { useTheme } from "@/contexts/ThemeContext";
+import { useStatus } from "@/contexts/StatusContext"; // Import useStatus
 import { v4 as uuidv4 } from 'uuid'; // Import uuid
 
 // Set logger level at the beginning

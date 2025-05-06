@@ -11,29 +11,28 @@ import { logger } from '@/app/api/realtime-assistant-webRTC/webRTCConnection-web
 logger.setLevel('ERROR');
 
 // UI components
-import Transcript from "./components/Transcript";
-import TopControls from "./components/TopControls";
-import DraggablePanelLayout from './components/DraggablePanelLayout';
+// UI components
+import Transcript from "../components/Transcript";
+import TopControls from "../components/TopControls";
+import DraggablePanelLayout from '../components/DraggablePanelLayout';
 
 // Types
-import { AgentConfig, ConnectionState, TranscriptItem, TranscriptTurn, TabData } from "@/app/types";
+import { AgentConfig, AppConnectionState as ConnectionState, TranscriptItem, TranscriptTurn, TabData } from "@/types";
 
 // Define StarData alias locally for clarity
 type StarData = Record<string, any>;
 
 // Context providers & hooks
-import { useTranscript } from "@/app/contexts/TranscriptContext";
-import { useEvent } from "@/app/contexts/EventContext";
-import { useStatus } from "@/app/contexts/StatusContext"; // Removed StatusProvider import
-import { useTheme } from "./contexts/ThemeContext";
-
+import { useTranscript } from "@/contexts/TranscriptContext";
+import { useEvent } from "@/contexts/EventContext";
+import { useStatus } from "@/contexts/StatusContext"; // Removed StatusProvider import
+import { useTheme } from "../contexts/ThemeContext";
 // Define WebRTC status type locally
 type WebRTCConnectionStatus = 'disconnected' | 'connecting' | 'connected' | 'failed' | 'error';
 
 // Extend TabData locally for state management including followUps
 interface LocalTabData extends TabData {
   followUps?: StarData[];
-  structuredAnalysis?: StarData | { status: string };
   responseId?: string | null;
   functionCall?: {
     id: string;

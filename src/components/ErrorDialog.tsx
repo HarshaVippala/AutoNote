@@ -3,7 +3,7 @@
 import React from 'react';
 import { Dialog } from '@headlessui/react';
 import { ExclamationTriangleIcon, XMarkIcon } from '@heroicons/react/24/outline';
-import { useTheme } from "@/app/contexts/ThemeContext";
+import { useTheme } from "@/contexts/ThemeContext";
 
 export interface ErrorDialogProps {
   isOpen: boolean;

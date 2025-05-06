@@ -5,9 +5,9 @@ import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { vscDarkPlus } from 'react-syntax-highlighter/dist/cjs/styles/prism'; // Dark theme
 import { coy } from 'react-syntax-highlighter/dist/cjs/styles/prism'; // Light theme
 import ReactMarkdown from 'react-markdown';
-import { TabData } from '@/app/types';
+import { TabData } from '@/types';
 import TabsPanel from './TabsPanel';
-import { preprocessCode } from '@/app/lib/codeUtils';
+import { preprocessCode } from '@/lib/codeUtils';
 
 interface EnhancedCodePaneProps {
   theme: 'light' | 'dark';

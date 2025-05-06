@@ -1,0 +1,638 @@
+hot-reloader-client.tsx:371 [Fast Refresh] rebuilding
+hot-reloader-client.tsx:116 [Fast Refresh] done in 289ms
+hook.js:608 [speaker] Received JSON message without expected 'transcript' and 'question_type' keys: Object
+overrideMethod @ hook.js:608
+hook.js:608 [mic] Received JSON message without expected 'transcript' and 'question_type' keys: Object
+overrideMethod @ hook.js:608
+hook.js:608 [speaker] Received JSON message without expected 'transcript' and 'question_type' keys: {type: 'input_audio_buffer.speech_started', event_id: 'event_BUMLKYHYWX0JBvyJxjTWP', audio_start_ms: 9716, item_id: 'item_BUMLKGX8OR0OWrk9iiskd'}
+overrideMethod @ hook.js:608
+warn @ webRTCConnection-webRTC.ts:28
+dc.onmessage @ webRTCConnection-webRTC.ts:359
+hook.js:608 [speaker] Received JSON message without expected 'transcript' and 'question_type' keys: {type: 'input_audio_buffer.speech_stopped', event_id: 'event_BUMLM7p96U4SU55Kg5W6g', audio_end_ms: 12544, item_id: 'item_BUMLKGX8OR0OWrk9iiskd'}
+overrideMethod @ hook.js:608
+warn @ webRTCConnection-webRTC.ts:28
+dc.onmessage @ webRTCConnection-webRTC.ts:359
+hook.js:608 [speaker] Received JSON message without expected 'transcript' and 'question_type' keys: {type: 'input_audio_buffer.committed', event_id: 'event_BUMLMTDX0mUVglhSq5ErM', previous_item_id: null, item_id: 'item_BUMLKGX8OR0OWrk9iiskd'}
+overrideMethod @ hook.js:608
+warn @ webRTCConnection-webRTC.ts:28
+dc.onmessage @ webRTCConnection-webRTC.ts:359
+hook.js:608 [speaker] Received JSON message without expected 'transcript' and 'question_type' keys: {type: 'conversation.item.created', event_id: 'event_BUMLMJ8QCUIhs4wuaXyBr', previous_item_id: null, item: {…}}
+overrideMethod @ hook.js:608
+warn @ webRTCConnection-webRTC.ts:28
+dc.onmessage @ webRTCConnection-webRTC.ts:359
+hook.js:608 [speaker] Received JSON message without expected 'transcript' and 'question_type' keys: {type: 'conversation.item.input_audio_transcription.delta', event_id: 'event_BUMLNXy1jbYe4z9mZNoai', item_id: 'item_BUMLKGX8OR0OWrk9iiskd', content_index: 0, delta: 'Write two-sum code in Python\n'}
+overrideMethod @ hook.js:608
+warn @ webRTCConnection-webRTC.ts:28
+dc.onmessage @ webRTCConnection-webRTC.ts:359
+hook.js:608 [speaker] Received JSON message without expected 'transcript' and 'question_type' keys: {type: 'conversation.item.input_audio_transcription.completed', event_id: 'event_BUMLNtTafZy7ZZ6CdjTHK', item_id: 'item_BUMLKGX8OR0OWrk9iiskd', content_index: 0, transcript: 'Write two-sum code in Python\n'}
+overrideMethod @ hook.js:608
+warn @ webRTCConnection-webRTC.ts:28
+dc.onmessage @ webRTCConnection-webRTC.ts:359
+hot-reloader-client.tsx:371 [Fast Refresh] rebuilding
+webpack.js?v=1746575414084:1367 Fetch finished loading: GET "https://localhost:3000/_next/static/webpack/69848285cd8417c7.webpack.hot-update.json".
+__webpack_require__.hmrM @ webpack.js?v=1746575414084:1367
+Promise.then
+hotCheck @ webpack.js?v=1746575414084:553
+tryApplyUpdates @ hot-reloader-client.tsx:258
+handleHotUpdate @ hot-reloader-client.tsx:326
+processMessage @ hot-reloader-client.tsx:441
+handler @ hot-reloader-client.tsx:685
+hot-reloader-client.tsx:116 [Fast Refresh] done in 262ms
+EnhancedCodePane.tsx:39 [EnhancedCodePane] Rendering for activeTabKey: response-c8979be2-567f-435f-a54e-7cd3571498cf. Found activeTab: true
+EnhancedCodePane.tsx:41 [EnhancedCodePane] activeTab.code value: "Streaming..."
+EnhancedCodePane.tsx:42 [EnhancedCodePane] activeTab.language value: "plaintext"
+EnhancedCodePane.tsx:44 [EnhancedCodePane] Full activeTab object: {key: 'response-c8979be2-567f-435f-a54e-7cd3571498cf', filename: 'two-2', language: 'plaintext', code: 'Streaming...', analysis: '{\n  "status": "streaming"\n}', …}
+hook.js:377 [EnhancedCodePane] Rendering for activeTabKey: response-c8979be2-567f-435f-a54e-7cd3571498cf. Found activeTab: true
+hook.js:377 [EnhancedCodePane] activeTab.code value: "Streaming..."
+hook.js:377 [EnhancedCodePane] activeTab.language value: "plaintext"
+hook.js:377 [EnhancedCodePane] Full activeTab object: {key: 'response-c8979be2-567f-435f-a54e-7cd3571498cf', filename: 'two-2', language: 'plaintext', code: 'Streaming...', analysis: '{\n  "status": "streaming"\n}', …}
+EnhancedCodePane.tsx:39 [EnhancedCodePane] Rendering for activeTabKey: response-c8979be2-567f-435f-a54e-7cd3571498cf. Found activeTab: true
+EnhancedCodePane.tsx:41 [EnhancedCodePane] activeTab.code value: "Streaming..."
+EnhancedCodePane.tsx:42 [EnhancedCodePane] activeTab.language value: "plaintext"
+EnhancedCodePane.tsx:44 [EnhancedCodePane] Full activeTab object: {key: 'response-c8979be2-567f-435f-a54e-7cd3571498cf', filename: 'two-2', language: 'plaintext', code: 'Streaming...', analysis: '{\n  "status": "streaming"\n}', …}
+hook.js:377 [EnhancedCodePane] Rendering for activeTabKey: response-c8979be2-567f-435f-a54e-7cd3571498cf. Found activeTab: true
+hook.js:377 [EnhancedCodePane] activeTab.code value: "Streaming..."
+hook.js:377 [EnhancedCodePane] activeTab.language value: "plaintext"
+hook.js:377 [EnhancedCodePane] Full activeTab object: {key: 'response-c8979be2-567f-435f-a54e-7cd3571498cf', filename: 'two-2', language: 'plaintext', code: 'Streaming...', analysis: '{\n  "status": "streaming"\n}', …}
+App.tsx:266 Fetch finished loading: POST "https://localhost:3000/api/responses".
+App.useCallback[handleProcessTurn] @ App.tsx:266
+TopControls.useCallback[handleSpeakerMessage] @ TopControls.tsx:416
+dc.onmessage @ webRTCConnection-webRTC.ts:361
+EnhancedCodePane.tsx:39 [EnhancedCodePane] Rendering for activeTabKey: response-c8979be2-567f-435f-a54e-7cd3571498cf. Found activeTab: true
+EnhancedCodePane.tsx:41 [EnhancedCodePane] activeTab.code value: "def two_sum(nums, target):
+    # Create a dictionary to store the potential complements and their indices
+    num_to_index = {}
+
+    # Loop through each number in the list
+    for index, number in enumerate(nums):
+        # Calculate the number we need to find a pair
+        complement = target - number
+        # Check if the complement exists in the previously seen numbers
+        if complement in num_to_index:
+            # If found, return the indices
+            return [num_to_index[complement], index]
+        # Otherwise, store the number and its index in the dictionary
+        num_to_index[number] = index
+
+    # If there's no solution, we could return None or raise an exception
+    return None  # Assuming there's always one solution as per problem constraints"
+EnhancedCodePane.tsx:42 [EnhancedCodePane] activeTab.language value: "python"
+EnhancedCodePane.tsx:44 [EnhancedCodePane] Full activeTab object: {key: 'response-c8979be2-567f-435f-a54e-7cd3571498cf', filename: 'two-2', language: 'python', code: "def two_sum(nums, target):\n    # Create a dictiona…'s always one solution as per problem constraints", analysis: '{\n  "analysis": "The problem requires finding two … optimizations needed; algorithm is efficient."\n}', …}
+hook.js:377 [EnhancedCodePane] Rendering for activeTabKey: response-c8979be2-567f-435f-a54e-7cd3571498cf. Found activeTab: true
+hook.js:377 [EnhancedCodePane] activeTab.code value: "def two_sum(nums, target):    # Create a dictionary to store the potential complements and their indices    num_to_index = {}    # Loop through each number in the list    for index, number in enumerate(nums):        # Calculate the number we need to find a pair        complement = target - number        # Check if the complement exists in the previously seen numbers        if complement in num_to_index:            # If found, return the indices            return [num_to_index[complement], index]        # Otherwise, store the number and its index in the dictionary        num_to_index[number] = index    # If there's no solution, we could return None or raise an exception    return None  # Assuming there's always one solution as per problem constraints"
+hook.js:377 [EnhancedCodePane] activeTab.language value: "python"
+hook.js:377 [EnhancedCodePane] Full activeTab object: {key: 'response-c8979be2-567f-435f-a54e-7cd3571498cf', filename: 'two-2', language: 'python', code: "def two_sum(nums, target):\n    # Create a dictiona…'s always one solution as per problem constraints", analysis: '{\n  "analysis": "The problem requires finding two … optimizations needed; algorithm is efficient."\n}', …}
+hook.js:608 [speaker] Received JSON message without expected 'transcript' and 'question_type' keys: {type: 'input_audio_buffer.speech_started', event_id: 'event_BUMN1YaW0M7gPIHeXTSlz', audio_start_ms: 114612, item_id: 'item_BUMN1YVzfroWGaZ1VdsUe'}
+overrideMethod @ hook.js:608
+warn @ webRTCConnection-webRTC.ts:28
+dc.onmessage @ webRTCConnection-webRTC.ts:359
+hook.js:608 [speaker] Received JSON message without expected 'transcript' and 'question_type' keys: {type: 'input_audio_buffer.speech_stopped', event_id: 'event_BUMN5IktUgNPliSB8UVWN', audio_end_ms: 119392, item_id: 'item_BUMN1YVzfroWGaZ1VdsUe'}
+overrideMethod @ hook.js:608
+warn @ webRTCConnection-webRTC.ts:28
+dc.onmessage @ webRTCConnection-webRTC.ts:359
+hook.js:608 [speaker] Received JSON message without expected 'transcript' and 'question_type' keys: {type: 'input_audio_buffer.committed', event_id: 'event_BUMN58uhBwoOBlKun8pnB', previous_item_id: 'item_BUMLKGX8OR0OWrk9iiskd', item_id: 'item_BUMN1YVzfroWGaZ1VdsUe'}
+overrideMethod @ hook.js:608
+warn @ webRTCConnection-webRTC.ts:28
+dc.onmessage @ webRTCConnection-webRTC.ts:359
+hook.js:608 [speaker] Received JSON message without expected 'transcript' and 'question_type' keys: {type: 'conversation.item.created', event_id: 'event_BUMN5dV2ANlLVtwmCKKiN', previous_item_id: 'item_BUMLKGX8OR0OWrk9iiskd', item: {…}}
+overrideMethod @ hook.js:608
+warn @ webRTCConnection-webRTC.ts:28
+dc.onmessage @ webRTCConnection-webRTC.ts:359
+hook.js:608 [speaker] Received JSON message without expected 'transcript' and 'question_type' keys: {type: 'conversation.item.input_audio_transcription.delta', event_id: 'event_BUMN7JhEfTnPtpUV4p4Q1', item_id: 'item_BUMN1YVzfroWGaZ1VdsUe', content_index: 0, delta: 'Tell me about a time when you had to work extra time to get work done.\n'}
+overrideMethod @ hook.js:608
+warn @ webRTCConnection-webRTC.ts:28
+dc.onmessage @ webRTCConnection-webRTC.ts:359
+hook.js:608 [speaker] Received JSON message without expected 'transcript' and 'question_type' keys: {type: 'conversation.item.input_audio_transcription.completed', event_id: 'event_BUMN7UrRVAS0etpp3WoSu', item_id: 'item_BUMN1YVzfroWGaZ1VdsUe', content_index: 0, transcript: 'Tell me about a time when you had to work extra time to get work done.\n'}
+overrideMethod @ hook.js:608
+warn @ webRTCConnection-webRTC.ts:28
+dc.onmessage @ webRTCConnection-webRTC.ts:359
+EnhancedCodePane.tsx:39 [EnhancedCodePane] Rendering for activeTabKey: response-c8979be2-567f-435f-a54e-7cd3571498cf. Found activeTab: true
+EnhancedCodePane.tsx:41 [EnhancedCodePane] activeTab.code value: "def two_sum(nums, target):
+    # Create a dictionary to store the potential complements and their indices
+    num_to_index = {}
+
+    # Loop through each number in the list
+    for index, number in enumerate(nums):
+        # Calculate the number we need to find a pair
+        complement = target - number
+        # Check if the complement exists in the previously seen numbers
+        if complement in num_to_index:
+            # If found, return the indices
+            return [num_to_index[complement], index]
+        # Otherwise, store the number and its index in the dictionary
+        num_to_index[number] = index
+
+    # If there's no solution, we could return None or raise an exception
+    return None  # Assuming there's always one solution as per problem constraints"
+EnhancedCodePane.tsx:42 [EnhancedCodePane] activeTab.language value: "python"
+EnhancedCodePane.tsx:44 [EnhancedCodePane] Full activeTab object: {key: 'response-c8979be2-567f-435f-a54e-7cd3571498cf', filename: 'two-2', language: 'python', code: "def two_sum(nums, target):\n    # Create a dictiona…'s always one solution as per problem constraints", analysis: '{\n  "analysis": "The problem requires finding two … optimizations needed; algorithm is efficient."\n}', …}
+hook.js:377 [EnhancedCodePane] Rendering for activeTabKey: response-c8979be2-567f-435f-a54e-7cd3571498cf. Found activeTab: true
+hook.js:377 [EnhancedCodePane] activeTab.code value: "def two_sum(nums, target):    # Create a dictionary to store the potential complements and their indices    num_to_index = {}    # Loop through each number in the list    for index, number in enumerate(nums):        # Calculate the number we need to find a pair        complement = target - number        # Check if the complement exists in the previously seen numbers        if complement in num_to_index:            # If found, return the indices            return [num_to_index[complement], index]        # Otherwise, store the number and its index in the dictionary        num_to_index[number] = index    # If there's no solution, we could return None or raise an exception    return None  # Assuming there's always one solution as per problem constraints"
+hook.js:377 [EnhancedCodePane] activeTab.language value: "python"
+hook.js:377 [EnhancedCodePane] Full activeTab object: {key: 'response-c8979be2-567f-435f-a54e-7cd3571498cf', filename: 'two-2', language: 'python', code: "def two_sum(nums, target):\n    # Create a dictiona…'s always one solution as per problem constraints", analysis: '{\n  "analysis": "The problem requires finding two … optimizations needed; algorithm is efficient."\n}', …}
+EnhancedCodePane.tsx:39 [EnhancedCodePane] Rendering for activeTabKey: . Found activeTab: false
+hook.js:377 [EnhancedCodePane] Rendering for activeTabKey: . Found activeTab: false
+App.tsx:266 Fetch finished loading: POST "https://localhost:3000/api/responses".
+App.useCallback[handleProcessTurn] @ App.tsx:266
+TopControls.useCallback[handleSpeakerMessage] @ TopControls.tsx:416
+dc.onmessage @ webRTCConnection-webRTC.ts:361
+hook.js:608 Cannot update a component (`App`) while rendering a different component (`DraggablePanelLayout`). To locate the bad setState() call inside `DraggablePanelLayout`, follow the stack trace as described in https://react.dev/link/setstate-in-render
+overrideMethod @ hook.js:608
+error @ intercept-console-error.ts:41
+scheduleUpdateOnFiber @ react-dom-client.development.js:14371
+dispatchSetStateInternal @ react-dom-client.development.js:6518
+dispatchSetState @ react-dom-client.development.js:6476
+eval @ DraggablePanelLayout.tsx:141
+basicStateReducer @ react-dom-client.development.js:5351
+updateReducerImpl @ react-dom-client.development.js:5459
+updateReducer @ react-dom-client.development.js:5384
+useState @ react-dom-client.development.js:23295
+exports.useState @ react.development.js:1224
+DraggablePanelLayout @ DraggablePanelLayout.tsx:65
+react-stack-bottom-frame @ react-dom-client.development.js:23949
+renderWithHooks @ react-dom-client.development.js:5078
+updateFunctionComponent @ react-dom-client.development.js:8327
+beginWork @ react-dom-client.development.js:9944
+runWithFiberInDEV @ react-dom-client.development.js:1510
+performUnitOfWork @ react-dom-client.development.js:15119
+workLoopSync @ react-dom-client.development.js:14943
+renderRootSync @ react-dom-client.development.js:14923
+performWorkOnRoot @ react-dom-client.development.js:14410
+performWorkOnRootViaSchedulerTask @ react-dom-client.development.js:16274
+performWorkUntilDeadline @ scheduler.development.js:45
+EnhancedCodePane.tsx:39 [EnhancedCodePane] Rendering for activeTabKey: . Found activeTab: false
+hook.js:377 [EnhancedCodePane] Rendering for activeTabKey: . Found activeTab: false
+EnhancedCodePane.tsx:39 [EnhancedCodePane] Rendering for activeTabKey: response-c8979be2-567f-435f-a54e-7cd3571498cf. Found activeTab: true
+EnhancedCodePane.tsx:41 [EnhancedCodePane] activeTab.code value: "def two_sum(nums, target):
+    # Create a dictionary to store the potential complements and their indices
+    num_to_index = {}
+
+    # Loop through each number in the list
+    for index, number in enumerate(nums):
+        # Calculate the number we need to find a pair
+        complement = target - number
+        # Check if the complement exists in the previously seen numbers
+        if complement in num_to_index:
+            # If found, return the indices
+            return [num_to_index[complement], index]
+        # Otherwise, store the number and its index in the dictionary
+        num_to_index[number] = index
+
+    # If there's no solution, we could return None or raise an exception
+    return None  # Assuming there's always one solution as per problem constraints"
+EnhancedCodePane.tsx:42 [EnhancedCodePane] activeTab.language value: "python"
+EnhancedCodePane.tsx:44 [EnhancedCodePane] Full activeTab object: {key: 'response-c8979be2-567f-435f-a54e-7cd3571498cf', filename: 'two-2', language: 'python', code: "def two_sum(nums, target):\n    # Create a dictiona…'s always one solution as per problem constraints", analysis: '{\n  "analysis": "The problem requires finding two … optimizations needed; algorithm is efficient."\n}', …}
+hook.js:377 [EnhancedCodePane] Rendering for activeTabKey: response-c8979be2-567f-435f-a54e-7cd3571498cf. Found activeTab: true
+hook.js:377 [EnhancedCodePane] activeTab.code value: "def two_sum(nums, target):    # Create a dictionary to store the potential complements and their indices    num_to_index = {}    # Loop through each number in the list    for index, number in enumerate(nums):        # Calculate the number we need to find a pair        complement = target - number        # Check if the complement exists in the previously seen numbers        if complement in num_to_index:            # If found, return the indices            return [num_to_index[complement], index]        # Otherwise, store the number and its index in the dictionary        num_to_index[number] = index    # If there's no solution, we could return None or raise an exception    return None  # Assuming there's always one solution as per problem constraints"
+hook.js:377 [EnhancedCodePane] activeTab.language value: "python"
+hook.js:377 [EnhancedCodePane] Full activeTab object: {key: 'response-c8979be2-567f-435f-a54e-7cd3571498cf', filename: 'two-2', language: 'python', code: "def two_sum(nums, target):\n    # Create a dictiona…'s always one solution as per problem constraints", analysis: '{\n  "analysis": "The problem requires finding two … optimizations needed; algorithm is efficient."\n}', …}
+EnhancedCodePane.tsx:39 [EnhancedCodePane] Rendering for activeTabKey: response-c8979be2-567f-435f-a54e-7cd3571498cf. Found activeTab: true
+EnhancedCodePane.tsx:41 [EnhancedCodePane] activeTab.code value: "def two_sum(nums, target):
+    # Create a dictionary to store the potential complements and their indices
+    num_to_index = {}
+
+    # Loop through each number in the list
+    for index, number in enumerate(nums):
+        # Calculate the number we need to find a pair
+        complement = target - number
+        # Check if the complement exists in the previously seen numbers
+        if complement in num_to_index:
+            # If found, return the indices
+            return [num_to_index[complement], index]
+        # Otherwise, store the number and its index in the dictionary
+        num_to_index[number] = index
+
+    # If there's no solution, we could return None or raise an exception
+    return None  # Assuming there's always one solution as per problem constraints"
+EnhancedCodePane.tsx:42 [EnhancedCodePane] activeTab.language value: "python"
+EnhancedCodePane.tsx:44 [EnhancedCodePane] Full activeTab object: {key: 'response-c8979be2-567f-435f-a54e-7cd3571498cf', filename: 'two-2', language: 'python', code: "def two_sum(nums, target):\n    # Create a dictiona…'s always one solution as per problem constraints", analysis: '{\n  "analysis": "The problem requires finding two … optimizations needed; algorithm is efficient."\n}', …}
+hook.js:377 [EnhancedCodePane] Rendering for activeTabKey: response-c8979be2-567f-435f-a54e-7cd3571498cf. Found activeTab: true
+hook.js:377 [EnhancedCodePane] activeTab.code value: "def two_sum(nums, target):    # Create a dictionary to store the potential complements and their indices    num_to_index = {}    # Loop through each number in the list    for index, number in enumerate(nums):        # Calculate the number we need to find a pair        complement = target - number        # Check if the complement exists in the previously seen numbers        if complement in num_to_index:            # If found, return the indices            return [num_to_index[complement], index]        # Otherwise, store the number and its index in the dictionary        num_to_index[number] = index    # If there's no solution, we could return None or raise an exception    return None  # Assuming there's always one solution as per problem constraints"
+hook.js:377 [EnhancedCodePane] activeTab.language value: "python"
+hook.js:377 [EnhancedCodePane] Full activeTab object: {key: 'response-c8979be2-567f-435f-a54e-7cd3571498cf', filename: 'two-2', language: 'python', code: "def two_sum(nums, target):\n    # Create a dictiona…'s always one solution as per problem constraints", analysis: '{\n  "analysis": "The problem requires finding two … optimizations needed; algorithm is efficient."\n}', …}
+stack-frame.ts:95 Fetch finished loading: POST "https://localhost:3000/__nextjs_original-stack-frames".
+getOriginalStackFrames @ stack-frame.ts:95
+eval @ get-error-by-type.ts:58
+createMemoizedPromise @ get-error-by-type.ts:97
+getErrorByType @ get-error-by-type.ts:57
+eval @ render-error.tsx:98
+react-stack-bottom-frame @ react-dom-client.development.js:24035
+runWithFiberInDEV @ react-dom-client.development.js:1510
+commitHookEffectListMount @ react-dom-client.development.js:10514
+commitHookPassiveMountEffects @ react-dom-client.development.js:10635
+commitPassiveMountOnFiber @ react-dom-client.development.js:12441
+recursivelyTraversePassiveMountEffects @ react-dom-client.development.js:12415
+commitPassiveMountOnFiber @ react-dom-client.development.js:12434
+recursivelyTraversePassiveMountEffects @ react-dom-client.development.js:12415
+commitPassiveMountOnFiber @ react-dom-client.development.js:12557
+recursivelyTraversePassiveMountEffects @ react-dom-client.development.js:12415
+commitPassiveMountOnFiber @ react-dom-client.development.js:12434
+recursivelyTraversePassiveMountEffects @ react-dom-client.development.js:12415
+commitPassiveMountOnFiber @ react-dom-client.development.js:12434
+recursivelyTraversePassiveMountEffects @ react-dom-client.development.js:12415
+commitPassiveMountOnFiber @ react-dom-client.development.js:12434
+recursivelyTraversePassiveMountEffects @ react-dom-client.development.js:12415
+commitPassiveMountOnFiber @ react-dom-client.development.js:12434
+recursivelyTraversePassiveMountEffects @ react-dom-client.development.js:12415
+commitPassiveMountOnFiber @ react-dom-client.development.js:12557
+recursivelyTraversePassiveMountEffects @ react-dom-client.development.js:12415
+commitPassiveMountOnFiber @ react-dom-client.development.js:12557
+recursivelyTraversePassiveMountEffects @ react-dom-client.development.js:12415
+commitPassiveMountOnFiber @ react-dom-client.development.js:12557
+recursivelyTraversePassiveMountEffects @ react-dom-client.development.js:12415
+commitPassiveMountOnFiber @ react-dom-client.development.js:12557
+recursivelyTraversePassiveMountEffects @ react-dom-client.development.js:12415
+commitPassiveMountOnFiber @ react-dom-client.development.js:12557
+recursivelyTraversePassiveMountEffects @ react-dom-client.development.js:12415
+commitPassiveMountOnFiber @ react-dom-client.development.js:12557
+recursivelyTraversePassiveMountEffects @ react-dom-client.development.js:12415
+commitPassiveMountOnFiber @ react-dom-client.development.js:12434
+recursivelyTraversePassiveMountEffects @ react-dom-client.development.js:12415
+commitPassiveMountOnFiber @ react-dom-client.development.js:12444
+recursivelyTraversePassiveMountEffects @ react-dom-client.development.js:12415
+commitPassiveMountOnFiber @ react-dom-client.development.js:12434
+recursivelyTraversePassiveMountEffects @ react-dom-client.development.js:12415
+commitPassiveMountOnFiber @ react-dom-client.development.js:12434
+recursivelyTraversePassiveMountEffects @ react-dom-client.development.js:12415
+commitPassiveMountOnFiber @ react-dom-client.development.js:12557
+recursivelyTraversePassiveMountEffects @ react-dom-client.development.js:12415
+commitPassiveMountOnFiber @ react-dom-client.development.js:12434
+recursivelyTraversePassiveMountEffects @ react-dom-client.development.js:12415
+commitPassiveMountOnFiber @ react-dom-client.development.js:12434
+recursivelyTraversePassiveMountEffects @ react-dom-client.development.js:12415
+commitPassiveMountOnFiber @ react-dom-client.development.js:12557
+recursivelyTraversePassiveMountEffects @ react-dom-client.development.js:12415
+commitPassiveMountOnFiber @ react-dom-client.development.js:12557
+recursivelyTraversePassiveMountEffects @ react-dom-client.development.js:12415
+commitPassiveMountOnFiber @ react-dom-client.development.js:12453
+flushPassiveEffects @ react-dom-client.development.js:15795
+eval @ react-dom-client.development.js:15366
+performWorkUntilDeadline @ scheduler.development.js:45
+EnhancedCodePane.tsx:39 [EnhancedCodePane] Rendering for activeTabKey: response-c8979be2-567f-435f-a54e-7cd3571498cf. Found activeTab: true
+EnhancedCodePane.tsx:41 [EnhancedCodePane] activeTab.code value: "def two_sum(nums, target):
+    # Create a dictionary to store the potential complements and their indices
+    num_to_index = {}
+
+    # Loop through each number in the list
+    for index, number in enumerate(nums):
+        # Calculate the number we need to find a pair
+        complement = target - number
+        # Check if the complement exists in the previously seen numbers
+        if complement in num_to_index:
+            # If found, return the indices
+            return [num_to_index[complement], index]
+        # Otherwise, store the number and its index in the dictionary
+        num_to_index[number] = index
+
+    # If there's no solution, we could return None or raise an exception
+    return None  # Assuming there's always one solution as per problem constraints"
+EnhancedCodePane.tsx:42 [EnhancedCodePane] activeTab.language value: "python"
+EnhancedCodePane.tsx:44 [EnhancedCodePane] Full activeTab object: {key: 'response-c8979be2-567f-435f-a54e-7cd3571498cf', filename: 'two-2', language: 'python', code: "def two_sum(nums, target):\n    # Create a dictiona…'s always one solution as per problem constraints", analysis: '{\n  "analysis": "The problem requires finding two … optimizations needed; algorithm is efficient."\n}', …}
+hook.js:377 [EnhancedCodePane] Rendering for activeTabKey: response-c8979be2-567f-435f-a54e-7cd3571498cf. Found activeTab: true
+hook.js:377 [EnhancedCodePane] activeTab.code value: "def two_sum(nums, target):    # Create a dictionary to store the potential complements and their indices    num_to_index = {}    # Loop through each number in the list    for index, number in enumerate(nums):        # Calculate the number we need to find a pair        complement = target - number        # Check if the complement exists in the previously seen numbers        if complement in num_to_index:            # If found, return the indices            return [num_to_index[complement], index]        # Otherwise, store the number and its index in the dictionary        num_to_index[number] = index    # If there's no solution, we could return None or raise an exception    return None  # Assuming there's always one solution as per problem constraints"
+hook.js:377 [EnhancedCodePane] activeTab.language value: "python"
+hook.js:377 [EnhancedCodePane] Full activeTab object: {key: 'response-c8979be2-567f-435f-a54e-7cd3571498cf', filename: 'two-2', language: 'python', code: "def two_sum(nums, target):\n    # Create a dictiona…'s always one solution as per problem constraints", analysis: '{\n  "analysis": "The problem requires finding two … optimizations needed; algorithm is efficient."\n}', …}
+EnhancedCodePane.tsx:39 [EnhancedCodePane] Rendering for activeTabKey: response-c8979be2-567f-435f-a54e-7cd3571498cf. Found activeTab: true
+EnhancedCodePane.tsx:41 [EnhancedCodePane] activeTab.code value: "def two_sum(nums, target):
+    # Create a dictionary to store the potential complements and their indices
+    num_to_index = {}
+
+    # Loop through each number in the list
+    for index, number in enumerate(nums):
+        # Calculate the number we need to find a pair
+        complement = target - number
+        # Check if the complement exists in the previously seen numbers
+        if complement in num_to_index:
+            # If found, return the indices
+            return [num_to_index[complement], index]
+        # Otherwise, store the number and its index in the dictionary
+        num_to_index[number] = index
+
+    # If there's no solution, we could return None or raise an exception
+    return None  # Assuming there's always one solution as per problem constraints"
+EnhancedCodePane.tsx:42 [EnhancedCodePane] activeTab.language value: "python"
+EnhancedCodePane.tsx:44 [EnhancedCodePane] Full activeTab object: {key: 'response-c8979be2-567f-435f-a54e-7cd3571498cf', filename: 'two-2', language: 'python', code: "def two_sum(nums, target):\n    # Create a dictiona…'s always one solution as per problem constraints", analysis: '{\n  "analysis": "The problem requires finding two … optimizations needed; algorithm is efficient."\n}', …}
+hook.js:377 [EnhancedCodePane] Rendering for activeTabKey: response-c8979be2-567f-435f-a54e-7cd3571498cf. Found activeTab: true
+hook.js:377 [EnhancedCodePane] activeTab.code value: "def two_sum(nums, target):    # Create a dictionary to store the potential complements and their indices    num_to_index = {}    # Loop through each number in the list    for index, number in enumerate(nums):        # Calculate the number we need to find a pair        complement = target - number        # Check if the complement exists in the previously seen numbers        if complement in num_to_index:            # If found, return the indices            return [num_to_index[complement], index]        # Otherwise, store the number and its index in the dictionary        num_to_index[number] = index    # If there's no solution, we could return None or raise an exception    return None  # Assuming there's always one solution as per problem constraints"
+hook.js:377 [EnhancedCodePane] activeTab.language value: "python"
+hook.js:377 [EnhancedCodePane] Full activeTab object: {key: 'response-c8979be2-567f-435f-a54e-7cd3571498cf', filename: 'two-2', language: 'python', code: "def two_sum(nums, target):\n    # Create a dictiona…'s always one solution as per problem constraints", analysis: '{\n  "analysis": "The problem requires finding two … optimizations needed; algorithm is efficient."\n}', …}
+EnhancedCodePane.tsx:39 [EnhancedCodePane] Rendering for activeTabKey: response-c8979be2-567f-435f-a54e-7cd3571498cf. Found activeTab: true
+EnhancedCodePane.tsx:41 [EnhancedCodePane] activeTab.code value: "def two_sum(nums, target):
+    # Create a dictionary to store the potential complements and their indices
+    num_to_index = {}
+
+    # Loop through each number in the list
+    for index, number in enumerate(nums):
+        # Calculate the number we need to find a pair
+        complement = target - number
+        # Check if the complement exists in the previously seen numbers
+        if complement in num_to_index:
+            # If found, return the indices
+            return [num_to_index[complement], index]
+        # Otherwise, store the number and its index in the dictionary
+        num_to_index[number] = index
+
+    # If there's no solution, we could return None or raise an exception
+    return None  # Assuming there's always one solution as per problem constraints"
+EnhancedCodePane.tsx:42 [EnhancedCodePane] activeTab.language value: "python"
+EnhancedCodePane.tsx:44 [EnhancedCodePane] Full activeTab object: {key: 'response-c8979be2-567f-435f-a54e-7cd3571498cf', filename: 'two-2', language: 'python', code: "def two_sum(nums, target):\n    # Create a dictiona…'s always one solution as per problem constraints", analysis: '{\n  "analysis": "The problem requires finding two … optimizations needed; algorithm is efficient."\n}', …}
+hook.js:377 [EnhancedCodePane] Rendering for activeTabKey: response-c8979be2-567f-435f-a54e-7cd3571498cf. Found activeTab: true
+hook.js:377 [EnhancedCodePane] activeTab.code value: "def two_sum(nums, target):    # Create a dictionary to store the potential complements and their indices    num_to_index = {}    # Loop through each number in the list    for index, number in enumerate(nums):        # Calculate the number we need to find a pair        complement = target - number        # Check if the complement exists in the previously seen numbers        if complement in num_to_index:            # If found, return the indices            return [num_to_index[complement], index]        # Otherwise, store the number and its index in the dictionary        num_to_index[number] = index    # If there's no solution, we could return None or raise an exception    return None  # Assuming there's always one solution as per problem constraints"
+hook.js:377 [EnhancedCodePane] activeTab.language value: "python"
+hook.js:377 [EnhancedCodePane] Full activeTab object: {key: 'response-c8979be2-567f-435f-a54e-7cd3571498cf', filename: 'two-2', language: 'python', code: "def two_sum(nums, target):\n    # Create a dictiona…'s always one solution as per problem constraints", analysis: '{\n  "analysis": "The problem requires finding two … optimizations needed; algorithm is efficient."\n}', …}
+hook.js:608 [speaker] Received JSON message without expected 'transcript' and 'question_type' keys: {type: 'input_audio_buffer.speech_started', event_id: 'event_BUMNydqGuwJSw0qmvHHcA', audio_start_ms: 174356, item_id: 'item_BUMNyxwgaYkfwW6OMLrr2'}
+overrideMethod @ hook.js:608
+warn @ webRTCConnection-webRTC.ts:28
+dc.onmessage @ webRTCConnection-webRTC.ts:359
+hook.js:608 [speaker] Received JSON message without expected 'transcript' and 'question_type' keys: {type: 'input_audio_buffer.speech_stopped', event_id: 'event_BUMO2O5Z9hUJp7qfXk883', audio_end_ms: 178432, item_id: 'item_BUMNyxwgaYkfwW6OMLrr2'}
+overrideMethod @ hook.js:608
+warn @ webRTCConnection-webRTC.ts:28
+dc.onmessage @ webRTCConnection-webRTC.ts:359
+hook.js:608 [speaker] Received JSON message without expected 'transcript' and 'question_type' keys: {type: 'input_audio_buffer.committed', event_id: 'event_BUMO2w9iu6GBHJEZrVsRC', previous_item_id: 'item_BUMN1YVzfroWGaZ1VdsUe', item_id: 'item_BUMNyxwgaYkfwW6OMLrr2'}
+overrideMethod @ hook.js:608
+warn @ webRTCConnection-webRTC.ts:28
+dc.onmessage @ webRTCConnection-webRTC.ts:359
+hook.js:608 [speaker] Received JSON message without expected 'transcript' and 'question_type' keys: {type: 'conversation.item.created', event_id: 'event_BUMO2DAykYPlUmRHEA8EZ', previous_item_id: 'item_BUMN1YVzfroWGaZ1VdsUe', item: {…}}
+overrideMethod @ hook.js:608
+warn @ webRTCConnection-webRTC.ts:28
+dc.onmessage @ webRTCConnection-webRTC.ts:359
+hook.js:608 [speaker] Received JSON message without expected 'transcript' and 'question_type' keys: {type: 'conversation.item.input_audio_transcription.delta', event_id: 'event_BUMO35uJ5pDYka4XOVFxx', item_id: 'item_BUMNyxwgaYkfwW6OMLrr2', content_index: 0, delta: 'Write a Python program to merge two sorted arrays\n'}
+overrideMethod @ hook.js:608
+warn @ webRTCConnection-webRTC.ts:28
+dc.onmessage @ webRTCConnection-webRTC.ts:359
+hook.js:608 [speaker] Received JSON message without expected 'transcript' and 'question_type' keys: {type: 'conversation.item.input_audio_transcription.completed', event_id: 'event_BUMO3rx7qlDzXxWhzb3Ry', item_id: 'item_BUMNyxwgaYkfwW6OMLrr2', content_index: 0, transcript: 'Write a Python program to merge two sorted arrays\n'}
+overrideMethod @ hook.js:608
+warn @ webRTCConnection-webRTC.ts:28
+dc.onmessage @ webRTCConnection-webRTC.ts:359
+EnhancedCodePane.tsx:39 [EnhancedCodePane] Rendering for activeTabKey: response-c8979be2-567f-435f-a54e-7cd3571498cf. Found activeTab: true
+EnhancedCodePane.tsx:41 [EnhancedCodePane] activeTab.code value: "def two_sum(nums, target):
+    # Create a dictionary to store the potential complements and their indices
+    num_to_index = {}
+
+    # Loop through each number in the list
+    for index, number in enumerate(nums):
+        # Calculate the number we need to find a pair
+        complement = target - number
+        # Check if the complement exists in the previously seen numbers
+        if complement in num_to_index:
+            # If found, return the indices
+            return [num_to_index[complement], index]
+        # Otherwise, store the number and its index in the dictionary
+        num_to_index[number] = index
+
+    # If there's no solution, we could return None or raise an exception
+    return None  # Assuming there's always one solution as per problem constraints"
+EnhancedCodePane.tsx:42 [EnhancedCodePane] activeTab.language value: "python"
+EnhancedCodePane.tsx:44 [EnhancedCodePane] Full activeTab object: {key: 'response-c8979be2-567f-435f-a54e-7cd3571498cf', filename: 'two-2', language: 'python', code: "def two_sum(nums, target):\n    # Create a dictiona…'s always one solution as per problem constraints", analysis: '{\n  "analysis": "The problem requires finding two … optimizations needed; algorithm is efficient."\n}', …}
+hook.js:377 [EnhancedCodePane] Rendering for activeTabKey: response-c8979be2-567f-435f-a54e-7cd3571498cf. Found activeTab: true
+hook.js:377 [EnhancedCodePane] activeTab.code value: "def two_sum(nums, target):    # Create a dictionary to store the potential complements and their indices    num_to_index = {}    # Loop through each number in the list    for index, number in enumerate(nums):        # Calculate the number we need to find a pair        complement = target - number        # Check if the complement exists in the previously seen numbers        if complement in num_to_index:            # If found, return the indices            return [num_to_index[complement], index]        # Otherwise, store the number and its index in the dictionary        num_to_index[number] = index    # If there's no solution, we could return None or raise an exception    return None  # Assuming there's always one solution as per problem constraints"
+hook.js:377 [EnhancedCodePane] activeTab.language value: "python"
+hook.js:377 [EnhancedCodePane] Full activeTab object: {key: 'response-c8979be2-567f-435f-a54e-7cd3571498cf', filename: 'two-2', language: 'python', code: "def two_sum(nums, target):\n    # Create a dictiona…'s always one solution as per problem constraints", analysis: '{\n  "analysis": "The problem requires finding two … optimizations needed; algorithm is efficient."\n}', …}
+EnhancedCodePane.tsx:39 [EnhancedCodePane] Rendering for activeTabKey: response-0c630efd-ffa6-4a19-acb7-e66e073425a8. Found activeTab: true
+EnhancedCodePane.tsx:41 [EnhancedCodePane] activeTab.code value: "Streaming..."
+EnhancedCodePane.tsx:42 [EnhancedCodePane] activeTab.language value: "plaintext"
+EnhancedCodePane.tsx:44 [EnhancedCodePane] Full activeTab object: {key: 'response-0c630efd-ffa6-4a19-acb7-e66e073425a8', filename: 'two-2', language: 'plaintext', code: 'Streaming...', analysis: '{\n  "status": "streaming"\n}', …}
+hook.js:377 [EnhancedCodePane] Rendering for activeTabKey: response-0c630efd-ffa6-4a19-acb7-e66e073425a8. Found activeTab: true
+hook.js:377 [EnhancedCodePane] activeTab.code value: "Streaming..."
+hook.js:377 [EnhancedCodePane] activeTab.language value: "plaintext"
+hook.js:377 [EnhancedCodePane] Full activeTab object: {key: 'response-0c630efd-ffa6-4a19-acb7-e66e073425a8', filename: 'two-2', language: 'plaintext', code: 'Streaming...', analysis: '{\n  "status": "streaming"\n}', …}
+EnhancedCodePane.tsx:39 [EnhancedCodePane] Rendering for activeTabKey: response-c8979be2-567f-435f-a54e-7cd3571498cf. Found activeTab: true
+EnhancedCodePane.tsx:41 [EnhancedCodePane] activeTab.code value: "def two_sum(nums, target):
+    # Create a dictionary to store the potential complements and their indices
+    num_to_index = {}
+
+    # Loop through each number in the list
+    for index, number in enumerate(nums):
+        # Calculate the number we need to find a pair
+        complement = target - number
+        # Check if the complement exists in the previously seen numbers
+        if complement in num_to_index:
+            # If found, return the indices
+            return [num_to_index[complement], index]
+        # Otherwise, store the number and its index in the dictionary
+        num_to_index[number] = index
+
+    # If there's no solution, we could return None or raise an exception
+    return None  # Assuming there's always one solution as per problem constraints"
+EnhancedCodePane.tsx:42 [EnhancedCodePane] activeTab.language value: "python"
+EnhancedCodePane.tsx:44 [EnhancedCodePane] Full activeTab object: {key: 'response-c8979be2-567f-435f-a54e-7cd3571498cf', filename: 'two-2', language: 'python', code: "def two_sum(nums, target):\n    # Create a dictiona…'s always one solution as per problem constraints", analysis: '{\n  "analysis": "The problem requires finding two … optimizations needed; algorithm is efficient."\n}', …}
+hook.js:377 [EnhancedCodePane] Rendering for activeTabKey: response-c8979be2-567f-435f-a54e-7cd3571498cf. Found activeTab: true
+hook.js:377 [EnhancedCodePane] activeTab.code value: "def two_sum(nums, target):    # Create a dictionary to store the potential complements and their indices    num_to_index = {}    # Loop through each number in the list    for index, number in enumerate(nums):        # Calculate the number we need to find a pair        complement = target - number        # Check if the complement exists in the previously seen numbers        if complement in num_to_index:            # If found, return the indices            return [num_to_index[complement], index]        # Otherwise, store the number and its index in the dictionary        num_to_index[number] = index    # If there's no solution, we could return None or raise an exception    return None  # Assuming there's always one solution as per problem constraints"
+hook.js:377 [EnhancedCodePane] activeTab.language value: "python"
+hook.js:377 [EnhancedCodePane] Full activeTab object: {key: 'response-c8979be2-567f-435f-a54e-7cd3571498cf', filename: 'two-2', language: 'python', code: "def two_sum(nums, target):\n    # Create a dictiona…'s always one solution as per problem constraints", analysis: '{\n  "analysis": "The problem requires finding two … optimizations needed; algorithm is efficient."\n}', …}
+EnhancedCodePane.tsx:39 [EnhancedCodePane] Rendering for activeTabKey: response-0c630efd-ffa6-4a19-acb7-e66e073425a8. Found activeTab: true
+EnhancedCodePane.tsx:41 [EnhancedCodePane] activeTab.code value: "Streaming..."
+EnhancedCodePane.tsx:42 [EnhancedCodePane] activeTab.language value: "plaintext"
+EnhancedCodePane.tsx:44 [EnhancedCodePane] Full activeTab object: {key: 'response-0c630efd-ffa6-4a19-acb7-e66e073425a8', filename: 'two-2', language: 'plaintext', code: 'Streaming...', analysis: '{\n  "status": "streaming"\n}', …}
+hook.js:377 [EnhancedCodePane] Rendering for activeTabKey: response-0c630efd-ffa6-4a19-acb7-e66e073425a8. Found activeTab: true
+hook.js:377 [EnhancedCodePane] activeTab.code value: "Streaming..."
+hook.js:377 [EnhancedCodePane] activeTab.language value: "plaintext"
+hook.js:377 [EnhancedCodePane] Full activeTab object: {key: 'response-0c630efd-ffa6-4a19-acb7-e66e073425a8', filename: 'two-2', language: 'plaintext', code: 'Streaming...', analysis: '{\n  "status": "streaming"\n}', …}
+EnhancedCodePane.tsx:39 [EnhancedCodePane] Rendering for activeTabKey: response-0c630efd-ffa6-4a19-acb7-e66e073425a8. Found activeTab: true
+EnhancedCodePane.tsx:41 [EnhancedCodePane] activeTab.code value: "def merge_sorted_arrays(arr1, arr2):
+    # Initialize two pointers for both arrays
+    i, j = 0, 0
+    merged_array = []  # List to hold the merged result
+
+    # While both pointers are within the bounds of their respective arrays
+    while i < len(arr1) and j < len(arr2):
+        if arr1[i] < arr2[j]:  # Compare elements at both pointers
+            merged_array.append(arr1[i])  # Append smaller element to merged_array
+            i += 1  # Move pointer in arr1
+        else:
+            merged_array.append(arr2[j])  # Append smaller element to merged_array
+            j += 1  # Move pointer in arr2
+
+    # If there are remaining elements in arr1, add them
+    while i < len(arr1):
+        merged_array.append(arr1[i])
+        i += 1
+
+    # If there are remaining elements in arr2, add them
+    while j < len(arr2):
+        merged_array.append(arr2[j])
+        j += 1
+
+    return merged_array  # Return the sorted merged array"
+EnhancedCodePane.tsx:42 [EnhancedCodePane] activeTab.language value: "python"
+EnhancedCodePane.tsx:44 [EnhancedCodePane] Full activeTab object: {key: 'response-0c630efd-ffa6-4a19-acb7-e66e073425a8', filename: 'two-2', language: 'python', code: 'def merge_sorted_arrays(arr1, arr2):\n    # Initial…rn merged_array  # Return the sorted merged array', analysis: '{\n  "analysis": "We need to merge two sorted array…g to save memory in case of very large arrays."\n}', …}
+hook.js:377 [EnhancedCodePane] Rendering for activeTabKey: response-0c630efd-ffa6-4a19-acb7-e66e073425a8. Found activeTab: true
+hook.js:377 [EnhancedCodePane] activeTab.code value: "def merge_sorted_arrays(arr1, arr2):    # Initialize two pointers for both arrays    i, j = 0, 0    merged_array = []  # List to hold the merged result    # While both pointers are within the bounds of their respective arrays    while i < len(arr1) and j < len(arr2):        if arr1[i] < arr2[j]:  # Compare elements at both pointers            merged_array.append(arr1[i])  # Append smaller element to merged_array            i += 1  # Move pointer in arr1        else:            merged_array.append(arr2[j])  # Append smaller element to merged_array            j += 1  # Move pointer in arr2    # If there are remaining elements in arr1, add them    while i < len(arr1):        merged_array.append(arr1[i])        i += 1    # If there are remaining elements in arr2, add them    while j < len(arr2):        merged_array.append(arr2[j])        j += 1    return merged_array  # Return the sorted merged array"
+hook.js:377 [EnhancedCodePane] activeTab.language value: "python"
+hook.js:377 [EnhancedCodePane] Full activeTab object: {key: 'response-0c630efd-ffa6-4a19-acb7-e66e073425a8', filename: 'two-2', language: 'python', code: 'def merge_sorted_arrays(arr1, arr2):\n    # Initial…rn merged_array  # Return the sorted merged array', analysis: '{\n  "analysis": "We need to merge two sorted array…g to save memory in case of very large arrays."\n}', …}
+EnhancedCodePane.tsx:39 [EnhancedCodePane] Rendering for activeTabKey: response-0c630efd-ffa6-4a19-acb7-e66e073425a8. Found activeTab: true
+EnhancedCodePane.tsx:41 [EnhancedCodePane] activeTab.code value: "def merge_sorted_arrays(arr1, arr2):
+    # Initialize two pointers for both arrays
+    i, j = 0, 0
+    merged_array = []  # List to hold the merged result
+
+    # While both pointers are within the bounds of their respective arrays
+    while i < len(arr1) and j < len(arr2):
+        if arr1[i] < arr2[j]:  # Compare elements at both pointers
+            merged_array.append(arr1[i])  # Append smaller element to merged_array
+            i += 1  # Move pointer in arr1
+        else:
+            merged_array.append(arr2[j])  # Append smaller element to merged_array
+            j += 1  # Move pointer in arr2
+
+    # If there are remaining elements in arr1, add them
+    while i < len(arr1):
+        merged_array.append(arr1[i])
+        i += 1
+
+    # If there are remaining elements in arr2, add them
+    while j < len(arr2):
+        merged_array.append(arr2[j])
+        j += 1
+
+    return merged_array  # Return the sorted merged array"
+EnhancedCodePane.tsx:42 [EnhancedCodePane] activeTab.language value: "python"
+EnhancedCodePane.tsx:44 [EnhancedCodePane] Full activeTab object: {key: 'response-0c630efd-ffa6-4a19-acb7-e66e073425a8', filename: 'two-2', language: 'python', code: 'def merge_sorted_arrays(arr1, arr2):\n    # Initial…rn merged_array  # Return the sorted merged array', analysis: '{\n  "analysis": "We need to merge two sorted array…g to save memory in case of very large arrays."\n}', …}
+hook.js:377 [EnhancedCodePane] Rendering for activeTabKey: response-0c630efd-ffa6-4a19-acb7-e66e073425a8. Found activeTab: true
+hook.js:377 [EnhancedCodePane] activeTab.code value: "def merge_sorted_arrays(arr1, arr2):    # Initialize two pointers for both arrays    i, j = 0, 0    merged_array = []  # List to hold the merged result    # While both pointers are within the bounds of their respective arrays    while i < len(arr1) and j < len(arr2):        if arr1[i] < arr2[j]:  # Compare elements at both pointers            merged_array.append(arr1[i])  # Append smaller element to merged_array            i += 1  # Move pointer in arr1        else:            merged_array.append(arr2[j])  # Append smaller element to merged_array            j += 1  # Move pointer in arr2    # If there are remaining elements in arr1, add them    while i < len(arr1):        merged_array.append(arr1[i])        i += 1    # If there are remaining elements in arr2, add them    while j < len(arr2):        merged_array.append(arr2[j])        j += 1    return merged_array  # Return the sorted merged array"
+hook.js:377 [EnhancedCodePane] activeTab.language value: "python"
+hook.js:377 [EnhancedCodePane] Full activeTab object: {key: 'response-0c630efd-ffa6-4a19-acb7-e66e073425a8', filename: 'two-2', language: 'python', code: 'def merge_sorted_arrays(arr1, arr2):\n    # Initial…rn merged_array  # Return the sorted merged array', analysis: '{\n  "analysis": "We need to merge two sorted array…g to save memory in case of very large arrays."\n}', …}
+EnhancedCodePane.tsx:39 [EnhancedCodePane] Rendering for activeTabKey: response-0c630efd-ffa6-4a19-acb7-e66e073425a8. Found activeTab: true
+EnhancedCodePane.tsx:41 [EnhancedCodePane] activeTab.code value: "def merge_sorted_arrays(arr1, arr2):
+    # Initialize two pointers for both arrays
+    i, j = 0, 0
+    merged_array = []  # List to hold the merged result
+
+    # While both pointers are within the bounds of their respective arrays
+    while i < len(arr1) and j < len(arr2):
+        if arr1[i] < arr2[j]:  # Compare elements at both pointers
+            merged_array.append(arr1[i])  # Append smaller element to merged_array
+            i += 1  # Move pointer in arr1
+        else:
+            merged_array.append(arr2[j])  # Append smaller element to merged_array
+            j += 1  # Move pointer in arr2
+
+    # If there are remaining elements in arr1, add them
+    while i < len(arr1):
+        merged_array.append(arr1[i])
+        i += 1
+
+    # If there are remaining elements in arr2, add them
+    while j < len(arr2):
+        merged_array.append(arr2[j])
+        j += 1
+
+    return merged_array  # Return the sorted merged array"
+EnhancedCodePane.tsx:42 [EnhancedCodePane] activeTab.language value: "python"
+EnhancedCodePane.tsx:44 [EnhancedCodePane] Full activeTab object: {key: 'response-0c630efd-ffa6-4a19-acb7-e66e073425a8', filename: 'two-2', language: 'python', code: 'def merge_sorted_arrays(arr1, arr2):\n    # Initial…rn merged_array  # Return the sorted merged array', analysis: '{\n  "analysis": "We need to merge two sorted array…g to save memory in case of very large arrays."\n}', …}
+hook.js:377 [EnhancedCodePane] Rendering for activeTabKey: response-0c630efd-ffa6-4a19-acb7-e66e073425a8. Found activeTab: true
+hook.js:377 [EnhancedCodePane] activeTab.code value: "def merge_sorted_arrays(arr1, arr2):    # Initialize two pointers for both arrays    i, j = 0, 0    merged_array = []  # List to hold the merged result    # While both pointers are within the bounds of their respective arrays    while i < len(arr1) and j < len(arr2):        if arr1[i] < arr2[j]:  # Compare elements at both pointers            merged_array.append(arr1[i])  # Append smaller element to merged_array            i += 1  # Move pointer in arr1        else:            merged_array.append(arr2[j])  # Append smaller element to merged_array            j += 1  # Move pointer in arr2    # If there are remaining elements in arr1, add them    while i < len(arr1):        merged_array.append(arr1[i])        i += 1    # If there are remaining elements in arr2, add them    while j < len(arr2):        merged_array.append(arr2[j])        j += 1    return merged_array  # Return the sorted merged array"
+hook.js:377 [EnhancedCodePane] activeTab.language value: "python"
+hook.js:377 [EnhancedCodePane] Full activeTab object: {key: 'response-0c630efd-ffa6-4a19-acb7-e66e073425a8', filename: 'two-2', language: 'python', code: 'def merge_sorted_arrays(arr1, arr2):\n    # Initial…rn merged_array  # Return the sorted merged array', analysis: '{\n  "analysis": "We need to merge two sorted array…g to save memory in case of very large arrays."\n}', …}
+EnhancedCodePane.tsx:39 [EnhancedCodePane] Rendering for activeTabKey: . Found activeTab: false
+hook.js:377 [EnhancedCodePane] Rendering for activeTabKey: . Found activeTab: false
+App.tsx:266 Fetch finished loading: POST "https://localhost:3000/api/responses".
+App.useCallback[handleProcessTurn] @ App.tsx:266
+TopControls.useCallback[handleSpeakerMessage] @ TopControls.tsx:416
+dc.onmessage @ webRTCConnection-webRTC.ts:361
+EnhancedCodePane.tsx:39 [EnhancedCodePane] Rendering for activeTabKey: . Found activeTab: false
+hook.js:377 [EnhancedCodePane] Rendering for activeTabKey: . Found activeTab: false
+EnhancedCodePane.tsx:39 [EnhancedCodePane] Rendering for activeTabKey: response-c8979be2-567f-435f-a54e-7cd3571498cf. Found activeTab: true
+EnhancedCodePane.tsx:41 [EnhancedCodePane] activeTab.code value: "def two_sum(nums, target):
+    # Create a dictionary to store the potential complements and their indices
+    num_to_index = {}
+
+    # Loop through each number in the list
+    for index, number in enumerate(nums):
+        # Calculate the number we need to find a pair
+        complement = target - number
+        # Check if the complement exists in the previously seen numbers
+        if complement in num_to_index:
+            # If found, return the indices
+            return [num_to_index[complement], index]
+        # Otherwise, store the number and its index in the dictionary
+        num_to_index[number] = index
+
+    # If there's no solution, we could return None or raise an exception
+    return None  # Assuming there's always one solution as per problem constraints"
+EnhancedCodePane.tsx:42 [EnhancedCodePane] activeTab.language value: "python"
+EnhancedCodePane.tsx:44 [EnhancedCodePane] Full activeTab object: {key: 'response-c8979be2-567f-435f-a54e-7cd3571498cf', filename: 'two-2', language: 'python', code: "def two_sum(nums, target):\n    # Create a dictiona…'s always one solution as per problem constraints", analysis: '{\n  "analysis": "The problem requires finding two … optimizations needed; algorithm is efficient."\n}', …}
+hook.js:377 [EnhancedCodePane] Rendering for activeTabKey: response-c8979be2-567f-435f-a54e-7cd3571498cf. Found activeTab: true
+hook.js:377 [EnhancedCodePane] activeTab.code value: "def two_sum(nums, target):    # Create a dictionary to store the potential complements and their indices    num_to_index = {}    # Loop through each number in the list    for index, number in enumerate(nums):        # Calculate the number we need to find a pair        complement = target - number        # Check if the complement exists in the previously seen numbers        if complement in num_to_index:            # If found, return the indices            return [num_to_index[complement], index]        # Otherwise, store the number and its index in the dictionary        num_to_index[number] = index    # If there's no solution, we could return None or raise an exception    return None  # Assuming there's always one solution as per problem constraints"
+hook.js:377 [EnhancedCodePane] activeTab.language value: "python"
+hook.js:377 [EnhancedCodePane] Full activeTab object: {key: 'response-c8979be2-567f-435f-a54e-7cd3571498cf', filename: 'two-2', language: 'python', code: "def two_sum(nums, target):\n    # Create a dictiona…'s always one solution as per problem constraints", analysis: '{\n  "analysis": "The problem requires finding two … optimizations needed; algorithm is efficient."\n}', …}
+EnhancedCodePane.tsx:39 [EnhancedCodePane] Rendering for activeTabKey: response-c8979be2-567f-435f-a54e-7cd3571498cf. Found activeTab: true
+EnhancedCodePane.tsx:41 [EnhancedCodePane] activeTab.code value: "def two_sum(nums, target):
+    # Create a dictionary to store the potential complements and their indices
+    num_to_index = {}
+
+    # Loop through each number in the list
+    for index, number in enumerate(nums):
+        # Calculate the number we need to find a pair
+        complement = target - number
+        # Check if the complement exists in the previously seen numbers
+        if complement in num_to_index:
+            # If found, return the indices
+            return [num_to_index[complement], index]
+        # Otherwise, store the number and its index in the dictionary
+        num_to_index[number] = index
+
+    # If there's no solution, we could return None or raise an exception
+    return None  # Assuming there's always one solution as per problem constraints"
+EnhancedCodePane.tsx:42 [EnhancedCodePane] activeTab.language value: "python"
+EnhancedCodePane.tsx:44 [EnhancedCodePane] Full activeTab object: {key: 'response-c8979be2-567f-435f-a54e-7cd3571498cf', filename: 'two-2', language: 'python', code: "def two_sum(nums, target):\n    # Create a dictiona…'s always one solution as per problem constraints", analysis: '{\n  "analysis": "The problem requires finding two … optimizations needed; algorithm is efficient."\n}', …}
+hook.js:377 [EnhancedCodePane] Rendering for activeTabKey: response-c8979be2-567f-435f-a54e-7cd3571498cf. Found activeTab: true
+hook.js:377 [EnhancedCodePane] activeTab.code value: "def two_sum(nums, target):    # Create a dictionary to store the potential complements and their indices    num_to_index = {}    # Loop through each number in the list    for index, number in enumerate(nums):        # Calculate the number we need to find a pair        complement = target - number        # Check if the complement exists in the previously seen numbers        if complement in num_to_index:            # If found, return the indices            return [num_to_index[complement], index]        # Otherwise, store the number and its index in the dictionary        num_to_index[number] = index    # If there's no solution, we could return None or raise an exception    return None  # Assuming there's always one solution as per problem constraints"
+hook.js:377 [EnhancedCodePane] activeTab.language value: "python"
+hook.js:377 [EnhancedCodePane] Full activeTab object: {key: 'response-c8979be2-567f-435f-a54e-7cd3571498cf', filename: 'two-2', language: 'python', code: "def two_sum(nums, target):\n    # Create a dictiona…'s always one solution as per problem constraints", analysis: '{\n  "analysis": "The problem requires finding two … optimizations needed; algorithm is efficient."\n}', …}
+EnhancedCodePane.tsx:39 [EnhancedCodePane] Rendering for activeTabKey: response-0c630efd-ffa6-4a19-acb7-e66e073425a8. Found activeTab: true
+EnhancedCodePane.tsx:41 [EnhancedCodePane] activeTab.code value: "def merge_sorted_arrays(arr1, arr2):
+    # Initialize two pointers for both arrays
+    i, j = 0, 0
+    merged_array = []  # List to hold the merged result
+
+    # While both pointers are within the bounds of their respective arrays
+    while i < len(arr1) and j < len(arr2):
+        if arr1[i] < arr2[j]:  # Compare elements at both pointers
+            merged_array.append(arr1[i])  # Append smaller element to merged_array
+            i += 1  # Move pointer in arr1
+        else:
+            merged_array.append(arr2[j])  # Append smaller element to merged_array
+            j += 1  # Move pointer in arr2
+
+    # If there are remaining elements in arr1, add them
+    while i < len(arr1):
+        merged_array.append(arr1[i])
+        i += 1
+
+    # If there are remaining elements in arr2, add them
+    while j < len(arr2):
+        merged_array.append(arr2[j])
+        j += 1
+
+    return merged_array  # Return the sorted merged array"
+EnhancedCodePane.tsx:42 [EnhancedCodePane] activeTab.language value: "python"
+EnhancedCodePane.tsx:44 [EnhancedCodePane] Full activeTab object: {key: 'response-0c630efd-ffa6-4a19-acb7-e66e073425a8', filename: 'two-2', language: 'python', code: 'def merge_sorted_arrays(arr1, arr2):\n    # Initial…rn merged_array  # Return the sorted merged array', analysis: '{\n  "analysis": "We need to merge two sorted array…g to save memory in case of very large arrays."\n}', …}
+hook.js:377 [EnhancedCodePane] Rendering for activeTabKey: response-0c630efd-ffa6-4a19-acb7-e66e073425a8. Found activeTab: true
+hook.js:377 [EnhancedCodePane] activeTab.code value: "def merge_sorted_arrays(arr1, arr2):    # Initialize two pointers for both arrays    i, j = 0, 0    merged_array = []  # List to hold the merged result    # While both pointers are within the bounds of their respective arrays    while i < len(arr1) and j < len(arr2):        if arr1[i] < arr2[j]:  # Compare elements at both pointers            merged_array.append(arr1[i])  # Append smaller element to merged_array            i += 1  # Move pointer in arr1        else:            merged_array.append(arr2[j])  # Append smaller element to merged_array            j += 1  # Move pointer in arr2    # If there are remaining elements in arr1, add them    while i < len(arr1):        merged_array.append(arr1[i])        i += 1    # If there are remaining elements in arr2, add them    while j < len(arr2):        merged_array.append(arr2[j])        j += 1    return merged_array  # Return the sorted merged array"
+hook.js:377 [EnhancedCodePane] activeTab.language value: "python"
+hook.js:377 [EnhancedCodePane] Full activeTab object: {key: 'response-0c630efd-ffa6-4a19-acb7-e66e073425a8', filename: 'two-2', language: 'python', code: 'def merge_sorted_arrays(arr1, arr2):\n    # Initial…rn merged_array  # Return the sorted merged array', analysis: '{\n  "analysis": "We need to merge two sorted array…g to save memory in case of very large arrays."\n}', …}
+EnhancedCodePane.tsx:39 [EnhancedCodePane] Rendering for activeTabKey: response-c8979be2-567f-435f-a54e-7cd3571498cf. Found activeTab: true
+EnhancedCodePane.tsx:41 [EnhancedCodePane] activeTab.code value: "def two_sum(nums, target):
+    # Create a dictionary to store the potential complements and their indices
+    num_to_index = {}
+
+    # Loop through each number in the list
+    for index, number in enumerate(nums):
+        # Calculate the number we need to find a pair
+        complement = target - number
+        # Check if the complement exists in the previously seen numbers
+        if complement in num_to_index:
+            # If found, return the indices
+            return [num_to_index[complement], index]
+        # Otherwise, store the number and its index in the dictionary
+        num_to_index[number] = index
+
+    # If there's no solution, we could return None or raise an exception
+    return None  # Assuming there's always one solution as per problem constraints"
+EnhancedCodePane.tsx:42 [EnhancedCodePane] activeTab.language value: "python"
+EnhancedCodePane.tsx:44 [EnhancedCodePane] Full activeTab object: {key: 'response-c8979be2-567f-435f-a54e-7cd3571498cf', filename: 'two-2', language: 'python', code: "def two_sum(nums, target):\n    # Create a dictiona…'s always one solution as per problem constraints", analysis: '{\n  "analysis": "The problem requires finding two … optimizations needed; algorithm is efficient."\n}', …}
+hook.js:377 [EnhancedCodePane] Rendering for activeTabKey: response-c8979be2-567f-435f-a54e-7cd3571498cf. Found activeTab: true
+hook.js:377 [EnhancedCodePane] activeTab.code value: "def two_sum(nums, target):    # Create a dictionary to store the potential complements and their indices    num_to_index = {}    # Loop through each number in the list    for index, number in enumerate(nums):        # Calculate the number we need to find a pair        complement = target - number        # Check if the complement exists in the previously seen numbers        if complement in num_to_index:            # If found, return the indices            return [num_to_index[complement], index]        # Otherwise, store the number and its index in the dictionary        num_to_index[number] = index    # If there's no solution, we could return None or raise an exception    return None  # Assuming there's always one solution as per problem constraints"
+hook.js:377 [EnhancedCodePane] activeTab.language value: "python"
+hook.js:377 [EnhancedCodePane] Full activeTab object: {key: 'response-c8979be2-567f-435f-a54e-7cd3571498cf', filename: 'two-2', language: 'python', code: "def two_sum(nums, target):\n    # Create a dictiona…'s always one solution as per problem constraints", analysis: '{\n  "analysis": "The problem requires finding two … optimizations needed; algorithm is efficient."\n}', …}
