@@ -2,7 +2,7 @@
 
 import React, { FC, memo } from 'react';
 // Import all needed types from the central file
-import { TabData, AnalysisResponse, BehavioralStarResponse } from '@/app/types/index'; // Assuming these types exist in types/index.ts
+import { TabData, AnalysisResponse, BehavioralStarResponse } from '@/types'; // Assuming these types exist in types/index.ts
 import TabsPanel from './TabsPanel'; // Import TabsPanel
 
 // Define a type for the structured STAR data within the tab

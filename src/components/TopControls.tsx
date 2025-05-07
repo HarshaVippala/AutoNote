@@ -3,7 +3,7 @@
 import React, { useState, useEffect, memo, useCallback, useRef } from 'react';
 import Image from 'next/image';
 import { AppConnectionState, TranscriptTurn, ComprehensiveCodeSchema } from "@/types"; // Import ComprehensiveCodeSchema
-import { connectionManager, logger } from '@/app/api/realtime-assistant-webRTC/webRTCConnection-webRTC';
+import { connectionManager, logger } from '@/app/api/realtime-assistant-webRTC/webRTCConnectionManager';
 import ErrorDialog from './ErrorDialog';
 import SettingsModal from './SettingsModal'; // Import SettingsModal
 import { useTheme } from "@/contexts/ThemeContext";

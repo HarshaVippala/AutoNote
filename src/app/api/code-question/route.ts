@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import OpenAI from 'openai';
-import { ComprehensiveCodeSchema } from '@/app/types'; // Import the schema
+import { ComprehensiveCodeSchema } from '@/types'; // Import the schema
 
 // Initialize OpenAI client (ensure OPENAI_API_KEY is set in your environment)
 const openai = new OpenAI({

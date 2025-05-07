@@ -1,8 +1,7 @@
 "use client";
 
-import React, { useState, useRef, useEffect } from 'react';
-import { TabData } from '@/app/types';
-import './DraggablePanelLayout.css';
+import React, { useRef, useEffect } from 'react';
+import { TabData } from '@/types';
 
 interface TabsPanelProps {
   tabs: TabData[];
@@ -48,30 +47,30 @@ const TabsPanel: React.FC<TabsPanelProps> = ({
   }
 
   return (
-    <div 
-      ref={tabsContainerRef} 
-      className="tab-container"
+    <div
+      ref={tabsContainerRef}
+      className="flex flex-row space-x-2 overflow-x-auto border-b border-gray-300 pb-0 mb-2 whitespace-nowrap scrollbar-thin"
     >
       {tabs.map((tab) => (
         <div
           key={tab.key}
           data-tab-key={tab.key}
-          className={`tab-item ${activeTabKey === tab.key ? 'active' : ''} ${
-            theme === 'dark' 
-              ? activeTabKey === tab.key 
-                ? 'bg-gray-800 text-blue-400' 
-                : 'bg-gray-900 text-gray-400 hover:text-gray-300' 
-              : activeTabKey === tab.key 
-                ? 'bg-white text-blue-600' 
-                : 'bg-gray-100 text-gray-600 hover:text-gray-900'
-          }`}
           onClick={() => onTabChange(tab.key)}
           title={tab.filename}
+          className={`flex items-center px-2 py-1 text-xs cursor-pointer rounded-t-md border truncate ${
+            activeTabKey === tab.key
+              ? theme === 'dark'
+                ? 'bg-gray-800 border-gray-600 text-blue-400 border-b-0'
+                : 'bg-white border-gray-300 text-blue-600 border-b-0'
+              : theme === 'dark'
+                ? 'bg-gray-900 border-transparent text-gray-400 hover:text-gray-300'
+                : 'bg-gray-100 border-transparent text-gray-600 hover:text-gray-900'
+          }`}
         >
           {getTruncatedFilename(tab.filename)}
           {onTabClose && (
-            <span 
-              className="tab-close" 
+            <span
+              className="ml-1 opacity-60 hover:opacity-100"
               onClick={(e) => {
                 e.stopPropagation();
                 onTabClose(tab.key);

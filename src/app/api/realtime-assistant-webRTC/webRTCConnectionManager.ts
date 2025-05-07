@@ -1,5 +1,3 @@
-import { RefObject } from "react";
-
 // Define log levels
 type LogLevel = 'DEBUG' | 'INFO' | 'WARN' | 'ERROR' | 'NONE';
 

@@ -5,7 +5,7 @@ import { useSearchParams } from "next/navigation";
 import { v4 as uuidv4 } from "uuid";
 import Image from "next/image";
 import { createParser } from 'eventsource-parser';
-import { logger } from '@/app/api/realtime-assistant-webRTC/webRTCConnection-webRTC';
+import { logger } from '@/app/api/realtime-assistant-webRTC/webRTCConnectionManager';
 
 // Set logger level at the beginning
 logger.setLevel('ERROR');

@@ -1,7 +1,6 @@
 "use client";
 import React, { createContext, useContext, useState } from "react";
-
-type Status = "idle" | "processing" | "done" | "error";
+import { Status } from "@/types"; // Import Status from central types
 
 interface StatusContextType {
   userRealtimeStatus: Status;

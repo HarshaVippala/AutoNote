@@ -67,7 +67,7 @@ export interface BehavioralStarResponse {
 
 // You can add other shared types here as the application grows.
 
-// Types from src/app/types.ts
+// Shared application type definitions
 export type SessionStatus = "DISCONNECTED" | "CONNECTING" | "CONNECTED";
 
 export interface ToolParameterProperty {
@@ -123,16 +123,6 @@ export interface TranscriptItem {
   agentName?: string;
 }
 
-export interface Log {
-  id: number;
-  timestamp: string;
-  direction: string;
-  eventName: string;
-  data: any;
-  expanded: boolean;
-  type: string;
-}
-
 // New type definition based on ServerEvent item content structure
 export interface ContentItem {
   type?: string;
@@ -184,8 +174,10 @@ export interface LoggedEvent {
   timestamp: string;
   eventName: string;
   eventData: Record<string, any>; // can have arbitrary objects logged
+  timestampMs: number; // Added for consistency with EventContext
 }
 
+export type Status = "idle" | "processing" | "done" | "error";
 export type LogLevel = "DEBUG" | "INFO" | "WARN" | "ERROR";
 
 // Schema for sending code questions with screenshots

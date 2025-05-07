@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import "./globals.css";
-import { ThemeProvider } from "../contexts/ThemeContext";
-import { StatusProvider } from "../contexts/StatusContext"; // Import StatusProvider
+import { ThemeProvider } from "@/contexts/ThemeContext";
+import { StatusProvider } from "@/contexts/StatusContext"; // Import StatusProvider
 
 export const metadata: Metadata = {
   title: "Realtime API Agents",

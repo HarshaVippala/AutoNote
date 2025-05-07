@@ -2,7 +2,7 @@
 
 import React, { createContext, useContext, useState, useEffect, FC, PropsWithChildren, useCallback } from "react";
 import { v4 as uuidv4 } from "uuid";
-import { LoggedEvent as OriginalLoggedEvent } from "@/app/types";
+import { LoggedEvent as OriginalLoggedEvent } from "@/types";
 
 interface LoggedEvent extends OriginalLoggedEvent {
   timestampMs: number;

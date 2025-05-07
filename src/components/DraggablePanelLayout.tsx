@@ -1,16 +1,15 @@
 "use client";
 
-import React, { useState, useEffect } from 'react';
-import { TabData } from '@/app/types';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
+import { TabData } from '@/types';
 import Transcript from './Transcript';
 import EnhancedCodePane from './EnhancedCodePane';
 import EnhancedAnalysisPane from './EnhancedAnalysisPane';
 import TabsPanel from './TabsPanel'; // Import TabsPanel
 import { PanelGroup, Panel, PanelResizeHandle } from 'react-resizable-panels';
-import SecondaryPane from './SecondaryPane'; // Assuming this is used
 
 // Component-specific styles
-import './DraggablePanelLayout.css';
+import styles from './DraggablePanelLayout.module.css';
 
 // Define view types
 export type ViewType = 'main' | 'code' | 'behavioral';
@@ -38,7 +37,7 @@ interface DraggablePanelLayoutProps {
 }
 
 // Re-import BehavioralStarResponse if needed for casting
-import { BehavioralStarResponse } from '@/app/types/index'; // Note: This import might cause issues if types/index.ts doesn't exist or export this. Assuming it does for now.
+import { BehavioralStarResponse } from '@/types'; // Note: This import might cause issues if types/index.ts doesn't exist or export this. Assuming it does for now.
 
 
 const DraggablePanelLayout: React.FC<DraggablePanelLayoutProps> = ({
@@ -64,88 +63,96 @@ const DraggablePanelLayout: React.FC<DraggablePanelLayoutProps> = ({
   // State for current view
   const [currentView, setCurrentView] = useState<ViewType>('main');
 
-  // State for code panel sizes
+  // State for code panel sizes (only used for initial load)
   const [codePanelSizes, setCodePanelSizes] = useState<number[]>([50, 50]);
 
-  // Save panel layout when it changes
-  const handleCodeLayoutChange = (sizes: number[]) => {
-    setCodePanelSizes(sizes);
-    localStorage.setItem('code-panel-layout', JSON.stringify(sizes));
-  };
+  // Use ref to track current sizes without causing re-renders
+  const currentSizesRef = useRef<number[]>([50, 50]);
 
-  // Load saved layout on component mount
+  // Load saved layout on component mount - only run once
   useEffect(() => {
-    const savedLayout = localStorage.getItem('code-panel-layout');
-    if (savedLayout) {
-      try {
-        const sizes = JSON.parse(savedLayout);
-        setCodePanelSizes(sizes);
-      } catch (e) {
-        console.error('Failed to parse saved code panel layout', e);
+    try {
+      const savedLayout = localStorage.getItem('code-panel-layout');
+      if (savedLayout) {
+        const parsedSizes = JSON.parse(savedLayout);
+        if (
+          Array.isArray(parsedSizes) &&
+          parsedSizes.length === 2 &&
+          typeof parsedSizes[0] === 'number' &&
+          typeof parsedSizes[1] === 'number' &&
+          parsedSizes[0] >= 0 && parsedSizes[1] >= 0 &&
+          Math.abs(parsedSizes[0] + parsedSizes[1] - 100) < 1
+        ) {
+          setCodePanelSizes(parsedSizes);
+          currentSizesRef.current = parsedSizes;
+        }
       }
+    } catch (e) {
+      console.error('Failed to load panel layout', e);
     }
-  }, []);
+  }, []); // Empty dependency array = run once on mount
 
-  // Filter tabs by type
-  const codeTabs = tabs.filter(tab => {
-    const isCodeTab = !tab.filename?.toLowerCase().includes('behavioral') && 
+  // Memoize filtered tabs to stabilize dependencies
+  const codeTabs = useMemo(() => tabs.filter(tab => {
+    const isCodeTab = !tab.filename?.toLowerCase().includes('behavioral') &&
                      !tab.filename?.toLowerCase().includes('star') &&
                      !tab.filename?.toLowerCase().startsWith('star:');
     return isCodeTab;
-  });
-  
-  const behavioralTabs = tabs.filter(tab => {
-    const isBehavioralTab = tab.filename?.toLowerCase().includes('behavioral') || 
+  }), [tabs]);
+
+  const behavioralTabs = useMemo(() => tabs.filter(tab => {
+    const isBehavioralTab = tab.filename?.toLowerCase().includes('behavioral') ||
                            tab.filename?.toLowerCase().includes('star') ||
                            tab.filename?.toLowerCase().startsWith('star:');
     return isBehavioralTab;
-  });
-
+  }), [tabs]);
   // Find the active tab data
   const activeTabData = tabs.find(tab => tab.key === activeTabKey);
 
   // Function to cycle to the next view
+  // Function to cycle to the next view - ONLY determines the next view
   const cycleToNextView = () => {
     setCurrentView(current => {
       const hasCodeTabs = codeTabs.length > 0;
       const hasBehavioralTabs = behavioralTabs.length > 0;
 
       if (current === 'main') {
-        if (hasCodeTabs) {
-          const currentCodeTab = codeTabs.find(tab => tab.key === activeTabKey);
-          if (!currentCodeTab && codeTabs[0]) {
-            onTabChange(codeTabs[0].key);
-          }
-          return 'code';
-        } else if (hasBehavioralTabs) {
-          const currentBehavioralTab = behavioralTabs.find(tab => tab.key === activeTabKey);
-          if (!currentBehavioralTab && behavioralTabs[0]) {
-            onTabChange(behavioralTabs[0].key);
-          }
-          return 'behavioral';
-        }
+        if (hasCodeTabs) return 'code';
+        if (hasBehavioralTabs) return 'behavioral';
         return 'main';
       } else if (current === 'code') {
-        if (hasBehavioralTabs) {
-          const currentBehavioralTab = behavioralTabs.find(tab => tab.key === activeTabKey);
-          if (!currentBehavioralTab && behavioralTabs[0]) {
-            onTabChange(behavioralTabs[0].key);
-          }
-          return 'behavioral';
-        }
+        if (hasBehavioralTabs) return 'behavioral';
         return 'main';
       } else { // current === 'behavioral'
-        if (hasCodeTabs) {
-          const currentCodeTab = codeTabs.find(tab => tab.key === activeTabKey);
-          if (!currentCodeTab && codeTabs[0]) {
-            onTabChange(codeTabs[0].key);
-          }
-          return 'code';
-        }
+        if (hasCodeTabs) return 'code';
         return 'main';
       }
     });
   };
+
+  // Effect to synchronize the active tab after the view changes, only on view transitions
+  const prevViewRef = useRef<ViewType>(currentView);
+  useEffect(() => {
+    // only act when the view has just changed
+    if (prevViewRef.current !== currentView) {
+      let targetTabKey: string | null = null;
+      if (currentView === 'code' && codeTabs.length > 0) {
+        // if active tab isn't a code tab, switch to first code tab
+        if (!codeTabs.some(tab => tab.key === activeTabKey)) {
+          targetTabKey = codeTabs[0].key;
+        }
+      } else if (currentView === 'behavioral' && behavioralTabs.length > 0) {
+        if (!behavioralTabs.some(tab => tab.key === activeTabKey)) {
+          targetTabKey = behavioralTabs[0].key;
+        }
+      }
+      if (targetTabKey) {
+        onTabChange(targetTabKey);
+      }
+    }
+    // update previous view for next comparison
+    prevViewRef.current = currentView;
+  }, [currentView, codeTabs, behavioralTabs, onTabChange]);
 
   // Auto-switch view based on activeTabKey
   useEffect(() => {
@@ -178,7 +185,8 @@ const DraggablePanelLayout: React.FC<DraggablePanelLayoutProps> = ({
     return () => {
       window.removeEventListener('keydown', handleKeyDown);
     };
-  }, [cycleToNextView]); // Dependency on cycleToNextView
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cycleToNextView]); // Keep dependency on cycleToNextView, disable lint warning if needed
 
   // Effect to cycle view when trigger changes
   useEffect(() => {
@@ -194,6 +202,31 @@ const DraggablePanelLayout: React.FC<DraggablePanelLayoutProps> = ({
 
   // Determine visible tabs based on the current view
   const visibleTabs = tabs.filter(tab => tab.filename?.toLowerCase().includes('code') || tab.filename?.toLowerCase().includes('plaintext') || tab.filename?.toLowerCase().startsWith('code:')); // Added plaintext check
+
+  // Create a simple, stable render function for the code view
+  const renderCodeView = () => {
+    if (!activeCodeTab) return <div className="h-full flex items-center justify-center">No code tab selected</div>;
+    
+    return (
+      <div className="h-full grid grid-cols-2 gap-2">
+        <div className={`overflow-auto ${theme === 'dark' ? 'bg-gray-900' : 'bg-white'}`}>
+          <EnhancedCodePane
+            theme={theme}
+            activeTabKey={activeCodeTab?.key || ''}
+            onTabChange={onTabChange}
+            onTabClose={onTabClose}
+            tabs={codeTabs}
+          />
+        </div>
+        <div className={`overflow-auto ${theme === 'dark' ? 'bg-gray-900' : 'bg-white'}`}>
+          <EnhancedAnalysisPane
+            theme={theme}
+            activeTabData={activeCodeTab}
+          />
+        </div>
+      </div>
+    );
+  };
 
   // Render the main container structure
   return (
@@ -224,41 +257,7 @@ const DraggablePanelLayout: React.FC<DraggablePanelLayoutProps> = ({
 
           {currentView === 'code' && (
             <div className="h-full"> {/* Ensure code view takes full height */}
-              {/* Restore the PanelGroup for side-by-side view */}
-              <PanelGroup
-                direction="horizontal"
-                onLayout={handleCodeLayoutChange}
-                className="h-full"
-              >
-                <Panel
-                  defaultSize={codePanelSizes[0]}
-                  minSize={20}
-                  className={`${theme === 'dark' ? 'bg-gray-900' : 'bg-white'} overflow-hidden flex flex-col`}
-                >
-                  <EnhancedCodePane
-                    theme={theme}
-                    activeTabKey={activeCodeTab?.key || ''}
-                    onTabChange={onTabChange}
-                    onTabClose={onTabClose}
-                    tabs={codeTabs}
-                  />
-                </Panel>
-                <PanelResizeHandle
-                  className={`panel-resize-handle ${theme === 'dark' ? 'bg-gray-700 hover:bg-gray-600' : 'bg-gray-200 hover:bg-gray-300'}`}
-                >
-                  <div className={`handle-bar ${theme === 'dark' ? 'bg-gray-500' : 'bg-gray-400'}`}></div>
-                </PanelResizeHandle>
-                <Panel
-                  defaultSize={codePanelSizes[1]}
-                  minSize={20}
-                  className={`${theme === 'dark' ? 'bg-gray-900' : 'bg-white'} overflow-hidden flex flex-col`}
-                >
-                  <EnhancedAnalysisPane
-                    theme={theme}
-                    activeTabData={activeCodeTab}
-                  />
-                </Panel>
-              </PanelGroup>
+              {renderCodeView()}
             </div>
           )}
 

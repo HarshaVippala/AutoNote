@@ -1,30 +1,11 @@
 import React from 'react'; // Import React for types like Dispatch, SetStateAction
-// import { TranscriptTurn, ErrorState } from "../../types"; // Use relative path to the central types file - COMMENTED OUT
-
-// --- Type Definitions (Duplicated temporarily) ---
-// Defines the structure for a turn in the transcript
-interface TranscriptTurn {
-    micTranscript?: string;
-    speakerTranscript?: string;
-    timestamp: number;
-    processed: boolean;
-}
-
-// Defines the structure for holding error dialog information.
-interface ErrorState {
-    isOpen: boolean;
-    title: string;
-    message: string;
-    details: string;
-    retryAction: (() => void) | null;
-}
-// --- End Duplicated Type Definitions ---
+import { TranscriptTurn, ErrorState } from "@/types"; // Use central types file
 
 const ASSISTANT_ID = process.env.NEXT_PUBLIC_OPENAI_ASSISTANT_ID || '';
 
 interface LegacyAssistantProcessorProps {
   addTranscriptMessage: (itemId: string, role: 'user' | 'assistant', text: string, hidden?: boolean, agentName?: string) => void;
-  setErrorState: React.Dispatch<React.SetStateAction<ErrorState>>; // Use locally defined ErrorState
+  setErrorState: React.Dispatch<React.SetStateAction<ErrorState>>;
   setAssistantRunInProgress: React.Dispatch<React.SetStateAction<boolean>>;
   setCurrentRunInfo: React.Dispatch<React.SetStateAction<{ threadId?: string; runId?: string }>>;
 }
@@ -80,7 +61,7 @@ const pollRunStatus = async (
 
 // Define processTranscriptTurn function (moved from TopControls)
 const processTranscriptTurnInternal = async (
-  turn: TranscriptTurn, // Use locally defined TranscriptTurn
+  turn: TranscriptTurn,
   props: LegacyAssistantProcessorProps
 ) => {
   const { setErrorState, setAssistantRunInProgress, setCurrentRunInfo } = props;
@@ -150,6 +131,6 @@ const processTranscriptTurnInternal = async (
 // Export a function to initialize the processor with necessary callbacks/state setters
 export const initializeLegacyAssistantProcessor = (props: LegacyAssistantProcessorProps) => {
   return {
-    processTranscriptTurn: (turn: TranscriptTurn) => processTranscriptTurnInternal(turn, props) // Use locally defined TranscriptTurn
+    processTranscriptTurn: (turn: TranscriptTurn) => processTranscriptTurnInternal(turn, props)
   };
 }; 
