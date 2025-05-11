@@ -110,23 +110,22 @@ const DraggablePanelLayout: React.FC<DraggablePanelLayoutProps> = ({
   const activeTabData = tabs.find(tab => tab.key === activeTabKey);
 
   // Function to cycle to the next view
-  // Function to cycle to the next view - ONLY determines the next view
   const cycleToNextView = () => {
     setCurrentView(current => {
-      const hasCodeTabs = codeTabs.length > 0;
-      const hasBehavioralTabs = behavioralTabs.length > 0;
-
+      const hasCode = codeTabs.length > 0;
+      const hasBehavioral = behavioralTabs.length > 0;
+      // cycle order: main -> code -> behavioral -> main
       if (current === 'main') {
-        if (hasCodeTabs) return 'code';
-        if (hasBehavioralTabs) return 'behavioral';
-        return 'main';
-      } else if (current === 'code') {
-        if (hasBehavioralTabs) return 'behavioral';
-        return 'main';
-      } else { // current === 'behavioral'
-        if (hasCodeTabs) return 'code';
+        if (hasCode) return 'code';
+        if (hasBehavioral) return 'behavioral';
         return 'main';
       }
+      if (current === 'code') {
+        if (hasBehavioral) return 'behavioral';
+        return 'main';
+      }
+      // current === 'behavioral'
+      return 'main';
     });
   };
 
@@ -163,16 +162,23 @@ const DraggablePanelLayout: React.FC<DraggablePanelLayoutProps> = ({
         const isInBehavioral = behavioralTabs.some(bt => bt.key === activeTabKey);
         const isInCode = codeTabs.some(ct => ct.key === activeTabKey);
         
-        // Auto-switch to appropriate view when a tab is selected
         if (isInBehavioral) {
           setCurrentView('behavioral');
         } else if (isInCode) {
           setCurrentView('code');
         }
+        // If activeTabKey is set but doesn't match code or behavioral, it might imply main view
+        // However, explicit setting to 'main' should happen if activeTabKey is null or irrelevant
+      } else {
+        // If activeTabKey is not null but doesn't match any tab, default to main.
+        // This case might be less common if activeTabKey is managed well.
+        setCurrentView('main');
       }
+    } else {
+      // If activeTabKey is null, explicitly switch to main view
+      setCurrentView('main');
     }
   }, [activeTabKey, tabs, codeTabs, behavioralTabs]); // Keep all dependencies
-
   // Set up hotkey handler for view cycling
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -209,7 +215,7 @@ const DraggablePanelLayout: React.FC<DraggablePanelLayoutProps> = ({
     
     return (
       <div className="h-full grid grid-cols-2 gap-2">
-        <div className={`overflow-auto ${theme === 'dark' ? 'bg-gray-900' : 'bg-white'}`}>
+        <div className={`overflow-auto ${theme === 'dark' ? 'bg-slate-900' : 'bg-slate-100'}`}>
           <EnhancedCodePane
             theme={theme}
             activeTabKey={activeCodeTab?.key || ''}
@@ -218,7 +224,7 @@ const DraggablePanelLayout: React.FC<DraggablePanelLayoutProps> = ({
             tabs={codeTabs}
           />
         </div>
-        <div className={`overflow-auto ${theme === 'dark' ? 'bg-gray-900' : 'bg-white'}`}>
+        <div className={`overflow-auto ${theme === 'dark' ? 'bg-slate-900' : 'bg-slate-100'}`}>
           <EnhancedAnalysisPane
             theme={theme}
             activeTabData={activeCodeTab}
@@ -237,7 +243,7 @@ const DraggablePanelLayout: React.FC<DraggablePanelLayoutProps> = ({
         height: 'calc(100vh - 48px)', // Adjusted height based on TopControls height
         margin: 0,
         padding: 0,
-        backgroundColor: theme === 'dark' ? '#1f2937' : '#f9fafb', // Use theme colors
+        backgroundColor: theme === 'dark' ? '#0f172a' : '#f1f5f9', // slate-900 or slate-100
         overflow: 'hidden'
       }}>
       {/* Main content */}
@@ -245,7 +251,7 @@ const DraggablePanelLayout: React.FC<DraggablePanelLayoutProps> = ({
         {/* Content area - changes based on current view */}
         <div className="flex-1 overflow-hidden"> {/* Ensure content area fills space */}
           {currentView === 'main' && (
-            <div className={`h-full ${theme === 'dark' ? 'bg-gray-900' : 'bg-white'}`}>
+            <div className={`h-full ${theme === 'dark' ? 'bg-slate-900' : 'bg-slate-100'}`}>
               <Transcript
                 userText={userText}
                 setUserText={setUserText}
@@ -263,7 +269,7 @@ const DraggablePanelLayout: React.FC<DraggablePanelLayoutProps> = ({
 
           {currentView === 'behavioral' && (
             // Single column layout for behavioral view
-            <div className={`h-full w-full ${theme === 'dark' ? 'bg-gray-900' : 'bg-white'} overflow-hidden flex flex-col`}>
+            <div className={`h-full w-full ${theme === 'dark' ? 'bg-slate-900' : 'bg-slate-100'} overflow-hidden flex flex-col`}>
               {/* Render TabsPanel for behavioral tabs */}
               <TabsPanel
                 tabs={behavioralTabs}

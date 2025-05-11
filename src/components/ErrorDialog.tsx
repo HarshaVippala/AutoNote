@@ -27,10 +27,11 @@ const ErrorDialog: React.FC<ErrorDialogProps> = ({
 }) => {
   const { theme } = useTheme();
   
-  const bgColor = theme === 'dark' ? 'bg-gray-800' : 'bg-white';
-  const textColor = theme === 'dark' ? 'text-gray-200' : 'text-gray-900';
-  const borderColor = theme === 'dark' ? 'border-gray-700' : 'border-gray-200';
-  const secondaryTextColor = theme === 'dark' ? 'text-gray-400' : 'text-gray-500';
+  // Dark theme is now the only theme
+  const bgColor = 'bg-slate-800';
+  const textColor = 'text-slate-200';
+  const borderColor = 'border-slate-700';
+  const secondaryTextColor = 'text-slate-400';
   
   return (
     <Dialog
@@ -53,7 +54,7 @@ const ErrorDialog: React.FC<ErrorDialogProps> = ({
                 </Dialog.Title>
                 <button
                   type="button"
-                  className="ml-2 inline-flex rounded-md bg-transparent text-gray-400 hover:text-gray-500"
+                  className={`ml-2 inline-flex rounded-md bg-transparent ${theme === 'dark' ? 'text-slate-400 hover:text-slate-300' : 'text-gray-400 hover:text-gray-500'}`}
                   onClick={onDismiss}
                 >
                   <span className="sr-only">Close</span>
@@ -77,7 +78,7 @@ const ErrorDialog: React.FC<ErrorDialogProps> = ({
                 {retryAction && (
                   <button
                     type="button"
-                    className={`inline-flex justify-center rounded-md border ${theme === 'dark' ? 'border-gray-700 bg-gray-700 text-gray-200 hover:bg-gray-600' : 'border-gray-300 bg-white text-gray-700 hover:bg-gray-50'} px-4 py-2 text-sm font-medium shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2`}
+                    className={`inline-flex justify-center rounded-md border ${theme === 'dark' ? 'border-slate-600 bg-slate-700 text-slate-200 hover:bg-slate-600' : 'border-gray-300 bg-white text-gray-700 hover:bg-gray-50'} px-4 py-2 text-sm font-medium shadow-sm focus:outline-none focus:ring-2 focus:ring-sky-500 focus:ring-offset-2 ${theme === 'dark' ? 'focus:ring-offset-slate-800' : 'focus:ring-offset-white'}`}
                     onClick={retryAction}
                   >
                     Retry
@@ -85,7 +86,7 @@ const ErrorDialog: React.FC<ErrorDialogProps> = ({
                 )}
                 <button
                   type="button"
-                  className={`inline-flex justify-center rounded-md ${theme === 'dark' ? 'bg-red-700 hover:bg-red-600 text-white' : 'bg-red-600 hover:bg-red-700 text-white'} px-4 py-2 text-sm font-medium shadow-sm focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2`}
+                  className={`inline-flex justify-center rounded-md ${theme === 'dark' ? 'bg-red-600 hover:bg-red-500 text-white' : 'bg-red-600 hover:bg-red-700 text-white'} px-4 py-2 text-sm font-medium shadow-sm focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2 ${theme === 'dark' ? 'focus:ring-offset-slate-800' : 'focus:ring-offset-white'}`}
                   onClick={onDismiss}
                 >
                   Dismiss

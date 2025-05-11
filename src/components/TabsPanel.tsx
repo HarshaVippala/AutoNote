@@ -49,7 +49,7 @@ const TabsPanel: React.FC<TabsPanelProps> = ({
   return (
     <div
       ref={tabsContainerRef}
-      className="flex flex-row space-x-2 overflow-x-auto border-b border-gray-300 pb-0 mb-2 whitespace-nowrap scrollbar-thin"
+      className={`flex flex-row space-x-2 overflow-x-auto border-b pb-0 mb-2 whitespace-nowrap scrollbar-thin ${theme === 'dark' ? 'border-slate-700' : 'border-slate-300'}`}
     >
       {tabs.map((tab) => (
         <div
@@ -59,12 +59,12 @@ const TabsPanel: React.FC<TabsPanelProps> = ({
           title={tab.filename}
           className={`flex items-center px-2 py-1 text-xs cursor-pointer rounded-t-md border truncate ${
             activeTabKey === tab.key
-              ? theme === 'dark'
-                ? 'bg-gray-800 border-gray-600 text-blue-400 border-b-0'
-                : 'bg-white border-gray-300 text-blue-600 border-b-0'
-              : theme === 'dark'
-                ? 'bg-gray-900 border-transparent text-gray-400 hover:text-gray-300'
-                : 'bg-gray-100 border-transparent text-gray-600 hover:text-gray-900'
+              ? theme === 'dark' // Active tab - Dark theme
+                ? 'bg-slate-800 border-slate-600 text-sky-400 border-b-0'
+                : 'bg-white border-slate-300 text-sky-600 border-b-0' // Active tab - Light theme (retained for consistency)
+              : theme === 'dark' // Inactive tab - Dark theme
+                ? 'bg-slate-900 border-transparent text-slate-400 hover:text-slate-200 hover:bg-slate-700'
+                : 'bg-slate-100 border-transparent text-slate-500 hover:text-slate-700 hover:bg-slate-200' // Inactive tab - Light theme (retained)
           }`}
         >
           {getTruncatedFilename(tab.filename)}

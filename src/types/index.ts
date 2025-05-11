@@ -37,6 +37,7 @@ export interface TabData {
   analysis: string;     // The textual analysis or explanation
   // Add the structured analysis field (optional because older tabs might not have it)
   structuredAnalysis?: AnalysisResponse | BehavioralStarResponse | { status: string };
+  previous_response_id?: string; // Optional: ID of the response that generated this tab
 }
 
 // Define the structured analysis type (mirrors ComprehensiveCodeSchema from route.ts)

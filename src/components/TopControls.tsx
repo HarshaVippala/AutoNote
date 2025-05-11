@@ -3,7 +3,8 @@
 import React, { useState, useEffect, memo, useCallback, useRef } from 'react';
 import Image from 'next/image';
 import { AppConnectionState, TranscriptTurn, ComprehensiveCodeSchema } from "@/types"; // Import ComprehensiveCodeSchema
-import { connectionManager, logger } from '@/app/api/realtime-assistant-webRTC/webRTCConnectionManager';
+import { connectionManager } from '@/app/api/realtime-assistant-webRTC/webRTCConnectionManager';
+import { logger } from '@/lib/logger';
 import ErrorDialog from './ErrorDialog';
 import SettingsModal from './SettingsModal'; // Import SettingsModal
 import { useTheme } from "@/contexts/ThemeContext";
@@ -116,8 +117,8 @@ const AudioLevelMeter: React.FC<AudioLevelMeterProps> = ({ audioSource, isActive
           key={i}
           className={`w-1 h-${1 + i} rounded-full transition-colors duration-100 ${
             i < filledSegments
-              ? theme === 'dark' ? 'bg-green-600' : 'bg-green-500'
-              : theme === 'dark' ? 'bg-gray-600' : 'bg-gray-300'
+              ? theme === 'dark' ? 'bg-sky-500' : 'bg-sky-500' // Accent color for active segments
+              : theme === 'dark' ? 'bg-slate-700' : 'bg-slate-300' // Base color for inactive
           }`}
         />
       ))}
@@ -125,12 +126,8 @@ const AudioLevelMeter: React.FC<AudioLevelMeterProps> = ({ audioSource, isActive
   );
 };
 
-// <<< Session Configurations (Plan A) >>>
+// <<< Session Configurations (Transcription Session Only) >>>
 const micSessionConfig_AuxAssistant = {
-  model: "gpt-4o-mini-realtime-preview-2024-12-17",
-  modalities: ["text"],
-  instructions: `You are an auxiliary assistant providing immediate, concise information based ONLY on the user's conversation history . The history may include messages labeled 'SYSTEM_AUDIO_TRANSCRIPT' representing what the system/speaker just said.\nDO NOT engage in lengthy conversation (no greetings, apologies, or excessive filler).DO NOT ask clarifying questions.\nFOCUS on providing relevant factual snippets or definitions related to the user's topic or the preceding SYSTEM_AUDIO_TRANSCRIPT.\nIf the user sounds hesitant (umm, hmm, uh), proactively offer a brief, relevant suggestion based on the preceding topic.\nKeep responses very short.`,
-  temperature: 0.7,
   input_audio_transcription: {
     model: "whisper-1",
     language: "en",
@@ -140,28 +137,20 @@ const micSessionConfig_AuxAssistant = {
   },
   turn_detection: {
     type: "server_vad",
-    silence_duration_ms: 600,
-    create_response: true,
-    interrupt_response: false
+    silence_duration_ms: 600
   },
   input_audio_format: "pcm16",
 };
 
 const speakerSessionConfig_Transcription = {
-  model: "gpt-4o-mini-realtime-preview-2024-12-17", // Match mic's model for consistency
-  modalities: ["text"],
-  instructions: "Transcribe system audio with high accuracy and completeness. Capture all spoken content fully.",
-  temperature: 0.7,
   input_audio_transcription: {
     model: "whisper-1",
     language: "en",
   },
   turn_detection: {
     type: "server_vad",
-    silence_duration_ms: 700, // increased to avoid splitting quick utterances
-    create_response: false,
-    interrupt_response: false
-  }, // Enable VAD to detect audio for transcription
+    silence_duration_ms: 700
+  },
   input_audio_format: "pcm16",
 };
 
@@ -508,9 +497,8 @@ const TopControls: React.FC<TopControlsProps> = memo(({
 
   // Define connectMic after all its dependencies are defined
   const connectMic = useCallback(async () => {
-    if (micConnectionStatus === 'connecting' || micConnectionStatus === 'connected') {
-      return;
-    }
+    // Always disconnect before attempting a new connection to avoid stale state
+    connectionManager.disconnect('mic');
     // Don't set local state, rely on prop
     onMicStatusChange('connecting'); // Notify parent
     try {
@@ -518,13 +506,11 @@ const TopControls: React.FC<TopControlsProps> = memo(({
       const devices = await navigator.mediaDevices.enumerateDevices();
       const micDevice = devices.find(device =>
         device.kind === 'audioinput' &&
-        // Adjust this label if needed based on your system's exact name
         (device.label.includes('MacBook Pro Microphone') || device.label.includes('Built-in Microphone'))
       );
 
       if (!micDevice) {
         console.warn('[Device Selection] Specific MacBook Pro Microphone not found, using default input.');
-        // Fallback to default if specific device isn't found
       }
 
       const micConstraints: MediaStreamConstraints = {
@@ -533,41 +519,39 @@ const TopControls: React.FC<TopControlsProps> = memo(({
 
       // Get the raw microphone stream
       const rawMicStream = await navigator.mediaDevices.getUserMedia({ audio: micConstraints.audio });
-      rawMicStreamRef.current = rawMicStream; // Store raw stream for level meter
+      rawMicStreamRef.current = rawMicStream;
 
       // Get the raw audio track
       const rawMicTrack = rawMicStream.getAudioTracks()[0];
       if (!rawMicTrack) {
         throw new Error("No audio track found in the microphone stream.");
       }
-      micTrackRef.current = rawMicTrack; // Store raw track ref
+      micTrackRef.current = rawMicTrack;
 
-      // Attempting to connect mic with raw track...
       await connectionManager.connect(
         'mic',
-        rawMicTrack, // Pass the raw track
-        rawMicStream, // Pass the raw stream
+        rawMicTrack,
+        rawMicStream,
         {
           onMessage: handleMicMessage,
           onStateChange: handleMicStateChange,
           onError: handleMicError,
         },
-        micSessionConfig_AuxAssistant // Pass the mic config
+        micSessionConfig_AuxAssistant
       );
 
-      // Enable the track if it wasn't muted before connection
       if (!isMicrophoneMuted) {
         rawMicTrack.enabled = true;
       } else {
-        rawMicTrack.enabled = false; // Ensure it respects the muted state
+        rawMicTrack.enabled = false;
       }
 
     } catch (error) {
       console.error("Failed to connect microphone:", error);
       const err = error instanceof Error ? error : new Error(String(error));
-      handleMicError(err); // Use the existing error handler
+      handleMicError(err);
     }
-  }, [micConnectionStatus, handleMicMessage, handleMicStateChange, handleMicError, isMicrophoneMuted, onMicStatusChange]);
+  }, [handleMicMessage, handleMicStateChange, handleMicError, isMicrophoneMuted, onMicStatusChange]);
 
   // Update the ref after connectMic is defined
   useEffect(() => {
@@ -586,34 +570,28 @@ const TopControls: React.FC<TopControlsProps> = memo(({
   }, [micConnectionStatus, onMicStatusChange]);
 
   const connectSpeaker = useCallback(async () => {
-    if (speakerConnectionStatus === 'connecting' || speakerConnectionStatus === 'connected') {
-      return;
-    }
+    // Always disconnect before attempting a new connection to avoid stale state
+    connectionManager.disconnect('speaker');
     setSpeakerConnectionStatus('connecting');
-    onSpeakerStatusChange('connecting'); // Notify parent
+    onSpeakerStatusChange('connecting');
     try {
-      const devices = await navigator.mediaDevices.enumerateDevices()
+      const devices = await navigator.mediaDevices.enumerateDevices();
 
-      // Look specifically for BlackHole 2ch as audioinput
       const blackholeDevice = devices.find(device =>
         device.kind === 'audioinput' &&
         device.label.includes('BlackHole 2ch') &&
         device.label.includes('Virtual')
       );
 
-      if (blackholeDevice) {
-        // Found BlackHole device
-      } else {
+      if (!blackholeDevice) {
         console.warn('[Device Selection] BlackHole 2ch (Virtual) device not found. Available audioinput devices:');
         devices
           .filter(device => device.kind === 'audioinput')
           .forEach(device => console.warn(`- ${device.label} (ID: ${device.deviceId})`));
-
         throw new Error('Required audio device "BlackHole 2ch (Virtual)" not found. Please ensure it is properly installed and configured.');
       }
 
       const speakerConstraints: MediaStreamConstraints = {
-        // Use the specific BlackHole device ID
         audio: {
           deviceId: { exact: blackholeDevice.deviceId },
           echoCancellation: false,
@@ -622,37 +600,34 @@ const TopControls: React.FC<TopControlsProps> = memo(({
         }
       };
 
-      // Get the raw speaker stream
       const rawSpeakerStream = await navigator.mediaDevices.getUserMedia(speakerConstraints);
-      rawSpeakerStreamRef.current = rawSpeakerStream; // Store raw stream
+      rawSpeakerStreamRef.current = rawSpeakerStream;
 
-      // Get the raw audio track
       const rawSpeakerTrack = rawSpeakerStream.getAudioTracks()[0];
       if (!rawSpeakerTrack) {
         throw new Error("No audio track found in the speaker stream.");
       }
 
-      speakerTrackRef.current = rawSpeakerTrack; // Store raw track ref
+      speakerTrackRef.current = rawSpeakerTrack;
 
-      // Attempting to connect speaker with raw track...
       await connectionManager.connect(
         'speaker',
-        rawSpeakerTrack, // Pass the raw track
-        rawSpeakerStream, // Pass the raw stream
+        rawSpeakerTrack,
+        rawSpeakerStream,
         {
           onMessage: handleSpeakerMessage,
           onStateChange: handleSpeakerStateChange,
           onError: handleSpeakerError,
         },
-        speakerSessionConfig_Transcription // Pass the speaker config
+        speakerSessionConfig_Transcription
       );
 
     } catch (error) {
       console.error("Failed to connect speaker:", error);
       const err = error instanceof Error ? error : new Error(String(error));
-      handleSpeakerError(err); // Use the existing error handler
+      handleSpeakerError(err);
     }
-  }, [speakerConnectionStatus, handleSpeakerMessage, handleSpeakerStateChange, handleSpeakerError, onSpeakerStatusChange]);
+  }, [handleSpeakerMessage, handleSpeakerStateChange, handleSpeakerError, onSpeakerStatusChange]);
 
   // Update the ref after connectSpeaker is defined
   useEffect(() => {
@@ -722,8 +697,7 @@ const TopControls: React.FC<TopControlsProps> = memo(({
         connectSpeaker();
       }
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [triggerConnect]);
+  }, [triggerConnect, connectMic, connectSpeaker, micConnectionStatus, speakerConnectionStatus]);
 
   useEffect(() => {
     if (triggerDisconnect > 0) {
@@ -736,8 +710,7 @@ const TopControls: React.FC<TopControlsProps> = memo(({
         disconnectSpeaker();
       }
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [triggerDisconnect]);
+  }, [triggerDisconnect, disconnectMic, disconnectSpeaker, micConnectionStatus, speakerConnectionStatus]);
 
   // add ref for debounce timer to batch rapid transcript updates
   const debounceRef = useRef<NodeJS.Timeout | null>(null);
@@ -801,34 +774,19 @@ const TopControls: React.FC<TopControlsProps> = memo(({
 
   // Helper functions for button props
   const getStatusButtonStyle = (status: WebRTCConnectionStatus): string => {
-    if (theme === 'dark') {
-      switch (status) {
-        case 'connected':
-          return 'bg-green-700 text-green-100 hover:bg-green-600 border-green-600';
-        case 'connecting':
-          return 'bg-yellow-700 text-yellow-100 animate-pulse border-yellow-600';
-        case 'disconnected':
-          return 'bg-gray-700 text-gray-300 hover:bg-gray-600 border-gray-600';
-        case 'failed':
-        case 'error':
-          return 'bg-red-700 text-red-100 hover:bg-red-600 border-red-600';
-        default:
-          return 'bg-gray-700 text-gray-400 border-gray-600';
-      }
-    } else {
-      switch (status) {
-        case 'connected':
-          return 'bg-green-100 text-green-700 hover:bg-green-200 border-green-300';
-        case 'connecting':
-          return 'bg-yellow-100 text-yellow-700 animate-pulse border-yellow-300';
-        case 'disconnected':
-          return 'bg-gray-100 text-gray-600 hover:bg-gray-200 border-gray-300';
-        case 'failed':
-        case 'error':
-          return 'bg-red-100 text-red-700 hover:bg-red-200 border-red-300';
-        default:
-          return 'bg-gray-100 text-gray-400 border-gray-300';
-      }
+    // Since theme is always dark, we only need dark theme styles
+    switch (status) {
+      case 'connected':
+        return 'bg-green-600 text-white hover:bg-green-500 border-green-700'; // Brighter green, white text
+      case 'connecting':
+        return 'bg-yellow-600 text-white animate-pulse border-yellow-700'; // Brighter yellow, white text
+      case 'disconnected':
+        return 'bg-slate-700 text-slate-300 hover:bg-slate-600 border-slate-600';
+      case 'failed':
+      case 'error':
+        return 'bg-red-600 text-white hover:bg-red-500 border-red-700'; // Brighter red, white text
+      default:
+        return 'bg-slate-700 text-slate-400 border-slate-600';
     }
   };
 
@@ -875,78 +833,49 @@ const TopControls: React.FC<TopControlsProps> = memo(({
 
   // Helper function for mic button props
   const getMicButtonProps = () => {
-    if (theme === 'dark') {
-      switch (micConnectionStatus) {
-        case 'connected':
-          return { className: 'border-green-600 bg-green-700 text-green-100 hover:bg-green-600', disabled: false };
-        case 'connecting':
-          return { className: 'border-yellow-600 bg-yellow-700 text-yellow-100 cursor-wait', disabled: true };
-        case 'disconnected':
-          return { className: 'border-gray-600 bg-gray-700 text-gray-300 hover:bg-gray-600', disabled: false };
-        case 'failed':
-        case 'error':
-          return { className: 'border-red-600 bg-red-700 text-red-100 hover:bg-red-600', disabled: false };
-        default:
-          return { className: 'border-gray-600 bg-gray-700 text-gray-300', disabled: true };
-      }
-    } else {
-      switch (micConnectionStatus) {
-        case 'connected':
-          return { className: 'border-green-300 bg-green-100 text-green-700 hover:bg-green-200', disabled: false };
-        case 'connecting':
-          return { className: 'border-yellow-300 bg-yellow-100 text-yellow-700 cursor-wait', disabled: true };
-        case 'disconnected':
-          return { className: 'border-gray-300 bg-gray-100 text-gray-600 hover:bg-gray-200', disabled: false };
-        case 'failed':
-        case 'error':
-          return { className: 'border-red-300 bg-red-100 text-red-700 hover:bg-red-200', disabled: false };
-        default:
-          return { className: 'border-gray-300 bg-gray-100 text-gray-600', disabled: true };
-      }
+    // Dark theme only
+    switch (micConnectionStatus) {
+      case 'connected':
+        return { className: 'border-green-700 bg-green-600 text-white hover:bg-green-500', disabled: false };
+      case 'connecting':
+        return { className: 'border-yellow-700 bg-yellow-600 text-white cursor-wait', disabled: true };
+      case 'disconnected':
+        return { className: 'border-slate-600 bg-slate-700 text-slate-300 hover:bg-slate-600', disabled: false };
+      case 'failed':
+      case 'error':
+        return { className: 'border-red-700 bg-red-600 text-white hover:bg-red-500', disabled: false };
+      default:
+        return { className: 'border-slate-600 bg-slate-700 text-slate-300', disabled: true };
     }
   };
 
   // Helper function for speaker button props
   const getSpeakerButtonProps = () => {
-    if (theme === 'dark') {
-      switch (speakerConnectionStatus) {
-        case 'connected':
-          return { className: 'border-green-600 bg-green-700 text-green-100 hover:bg-green-600', disabled: false };
-        case 'connecting':
-          return { className: 'border-yellow-600 bg-yellow-700 text-yellow-100 cursor-wait', disabled: true };
-        case 'disconnected':
-          return { className: 'border-gray-600 bg-gray-700 text-gray-300 hover:bg-gray-600', disabled: false };
-        case 'failed':
-        case 'error':
-          return { className: 'border-red-600 bg-red-700 text-red-100 hover:bg-red-600', disabled: false };
-        default:
-          return { className: 'border-gray-600 bg-gray-700 text-gray-300', disabled: true };
-      }
-    } else {
-      switch (speakerConnectionStatus) {
-        case 'connected':
-          return { className: 'border-green-300 bg-green-100 text-green-700 hover:bg-green-200', disabled: false };
-        case 'connecting':
-          return { className: 'border-yellow-300 bg-yellow-100 text-yellow-700 cursor-wait', disabled: true };
-        case 'disconnected':
-          return { className: 'border-gray-300 bg-gray-100 text-gray-600 hover:bg-gray-200', disabled: false };
-        case 'failed':
-        case 'error':
-          return { className: 'border-red-300 bg-red-100 text-red-700 hover:bg-red-200', disabled: false };
-        default:
-          return { className: 'border-gray-300 bg-gray-100 text-gray-600', disabled: true };
-      }
+    // Dark theme only
+    switch (speakerConnectionStatus) {
+      case 'connected':
+        return { className: 'border-green-700 bg-green-600 text-white hover:bg-green-500', disabled: false };
+      case 'connecting':
+        return { className: 'border-yellow-700 bg-yellow-600 text-white cursor-wait', disabled: true };
+      case 'disconnected':
+        return { className: 'border-slate-600 bg-slate-700 text-slate-300 hover:bg-slate-600', disabled: false };
+      case 'failed':
+      case 'error':
+        return { className: 'border-red-700 bg-red-600 text-white hover:bg-red-500', disabled: false };
+      default:
+        return { className: 'border-slate-600 bg-slate-700 text-slate-300', disabled: true };
     }
   };
 
   // --- Helper Functions for Mute button ---
   const getMuteButtonStyle = () => {
+    // Dark theme only
     if (micConnectionStatus !== "connected") {
-      return theme === 'dark' ? 'bg-gray-700 text-gray-400 border-gray-600' : 'bg-gray-100 text-gray-400 border-gray-300';
+      return 'bg-slate-700 text-slate-400 border-slate-600';
     }
     return isMicrophoneMuted
-      ? (theme === 'dark' ? 'bg-red-700 text-red-100 border-red-600 hover:bg-red-600' : 'bg-red-100 text-red-600 border-red-300 hover:bg-red-200')
-      : (theme === 'dark' ? 'bg-green-700 text-green-100 border-green-600 hover:bg-green-600' : 'bg-green-100 text-green-600 border-green-300 hover:bg-green-200');
+      ? 'bg-red-600 text-white border-red-700 hover:bg-red-500'
+      : 'bg-green-600 text-white border-green-700 hover:bg-green-500';
   };
 
   const getMuteIconPath = () => {
@@ -957,24 +886,18 @@ const TopControls: React.FC<TopControlsProps> = memo(({
 
   // --- Helper function for Chat Bubble ---
   const getStatusColor = (status: ChatStatus) => {
-    if (theme === 'dark') {
-      if (status === "processing") return "bg-orange-600";
-      if (status === "done") return "bg-green-600";
-      if (status === "error") return "bg-red-600";
-      return "bg-gray-700"; // Dark mode idle color
-    } else {
-      if (status === "processing") return "bg-orange-400";
-      if (status === "done") return "bg-green-500";
-      if (status === "error") return "bg-red-400";
-      return "bg-gray-200"; // Light mode idle color
-    }
+    // Dark theme only
+    if (status === "processing") return "bg-yellow-600 text-white";
+    if (status === "done") return "bg-green-600 text-white";
+    if (status === "error") return "bg-red-600 text-white";
+    return "bg-slate-700 text-slate-300"; // Idle color
   };
 
 
   return (
     <>
       {/* Container with theme-aware styling */}
-      <div className={`border-b ${theme === 'dark' ? 'border-gray-800 bg-gray-900' : 'border-gray-200 bg-white'} flex items-center justify-between overflow-hidden`} style={{ height: 48 }}>
+      <div className={`border-b ${theme === 'dark' ? 'border-slate-800 bg-slate-900' : 'border-slate-300 bg-slate-100'} flex items-center justify-between overflow-hidden`} style={{ height: 48 }}>
         {/* Logo/Title section */}
         <div className="flex items-center h-full">
           <div
@@ -1000,7 +923,7 @@ const TopControls: React.FC<TopControlsProps> = memo(({
               style={{ height: '100%', width: 'auto' }}
               priority
             />
-            <span className={`ml-2 font-extrabold text-2xl tracking-wide ${appConnectionState === 'CONNECTED' ? 'text-green-500' : (theme === 'dark' ? 'text-gray-100' : 'text-gray-700')}`} style={{ letterSpacing: 2 }}>JARVIS</span>
+            <span className={`ml-2 font-extrabold text-2xl tracking-wide ${appConnectionState === 'CONNECTED' ? 'text-green-500' : (theme === 'dark' ? 'text-slate-100' : 'text-slate-700')}`} style={{ letterSpacing: 2 }}>JARVIS</span>
           </div>
         </div>
 
@@ -1009,7 +932,7 @@ const TopControls: React.FC<TopControlsProps> = memo(({
           {/* Chat Status Indicator */}
           <div
             title={`Chat Status: ${chatStatus}`}
-            className={`rounded-full flex items-center justify-center h-9 w-9 ${getStatusColor(chatStatus)} border ${theme === 'dark' ? 'border-gray-600' : 'border-gray-300'}`}
+            className={`rounded-full flex items-center justify-center h-9 w-9 ${getStatusColor(chatStatus)} border ${theme === 'dark' ? 'border-slate-700' : 'border-slate-400'}`}
           >
             <svg width={16} height={16} fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24">
                <path d="M12 4.5c-4.473 0-8 3.41-8 7.5 0 1.696.6 3.263 1.62 4.525a1 1 0 0 1 .206.814 14.712 14.712 0 0 1-.37 1.501 15.17 15.17 0 0 0 1.842-.4 1 1 0 0 1 .745.08A8.371 8.371 0 0 0 12 19.5c4.473 0 8-3.41 8-7.5s-3.527-7.5-8-7.5ZM2 12c0-5.3 4.532-9.5 10-9.5S22 6.7 22 12s-4.532 9.5-10 9.5c-1.63 0-3.174-.371-4.539-1.032a17.88 17.88 0 0 1-3.4.53 1 1 0 0 1-.995-1.357c.29-.755.534-1.496.704-2.242A9.137 9.137 0 0 1 2 12Z"></path>
@@ -1034,8 +957,8 @@ const TopControls: React.FC<TopControlsProps> = memo(({
             title="Capture Screen for Code Question"
             className={`rounded-full flex items-center justify-center transition-colors h-9 w-9 ${
               isCapturing
-                ? theme === 'dark' ? 'bg-yellow-600 cursor-wait text-white' : 'bg-yellow-400 cursor-wait text-gray-800'
-                : theme === 'dark' ? 'bg-blue-700 hover:bg-blue-600 text-white' : 'bg-blue-500 hover:bg-blue-600 text-white'
+                ? theme === 'dark' ? 'bg-yellow-600 cursor-wait text-white' : 'bg-yellow-400 cursor-wait text-slate-800' // Retain light theme for consistency if ever re-enabled
+                : theme === 'dark' ? 'bg-sky-600 hover:bg-sky-500 text-white' : 'bg-sky-500 hover:bg-sky-600 text-white'
             }`}
             disabled={isCapturing}
           >
@@ -1054,9 +977,9 @@ const TopControls: React.FC<TopControlsProps> = memo(({
             onClick={onCycleViewRequest} // Call the passed-in handler
             title="Cycle View (Alt+Space)"
             className={`rounded-full flex items-center justify-center transition-colors h-9 w-9 border ${
-              theme === 'dark'
-                ? 'bg-gray-700 text-gray-300 hover:bg-gray-600 border-gray-600'
-                : 'bg-gray-100 text-gray-600 hover:bg-gray-200 border-gray-300'
+              theme === 'dark' // Only dark theme styles needed
+                ? 'bg-slate-700 text-slate-300 hover:bg-slate-600 border-slate-600'
+                : 'bg-slate-300 text-slate-600 hover:bg-slate-200 border-slate-400' // Retain for consistency
             }`}
           >
             {/* Cycle Icon SVG */}
@@ -1070,9 +993,9 @@ const TopControls: React.FC<TopControlsProps> = memo(({
             onClick={() => setIsSettingsOpen(true)}
             title="Settings"
             className={`rounded-full flex items-center justify-center transition-colors h-9 w-9 border ${
-              theme === 'dark'
-                ? 'bg-gray-700 text-gray-300 hover:bg-gray-600 border-gray-600'
-                : 'bg-gray-100 text-gray-600 hover:bg-gray-200 border-gray-300'
+              theme === 'dark' // Only dark theme styles needed
+                ? 'bg-slate-700 text-slate-300 hover:bg-slate-600 border-slate-600'
+                : 'bg-slate-300 text-slate-600 hover:bg-slate-200 border-slate-400' // Retain for consistency
             }`}
           >
             <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -1086,13 +1009,13 @@ const TopControls: React.FC<TopControlsProps> = memo(({
       {/* Placeholder for Settings Modal - Render conditionally */}
       {isSettingsOpen && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className={`p-6 rounded-lg shadow-xl ${theme === 'dark' ? 'bg-gray-800 text-white' : 'bg-white text-black'}`}>
+          <div className={`p-6 rounded-lg shadow-xl ${theme === 'dark' ? 'bg-slate-800 text-slate-200' : 'bg-slate-100 text-slate-800'}`}>
             <h2 className="text-xl font-semibold mb-4">Settings</h2>
             {/* Modal content will go here */}
             <p>Settings content placeholder...</p>
             <button
               onClick={() => setIsSettingsOpen(false)}
-              className={`mt-4 px-4 py-2 rounded ${theme === 'dark' ? 'bg-gray-600 hover:bg-gray-500' : 'bg-gray-200 hover:bg-gray-300'}`}
+              className={`mt-4 px-4 py-2 rounded ${theme === 'dark' ? 'bg-slate-600 hover:bg-slate-500 text-slate-200' : 'bg-slate-300 hover:bg-slate-400 text-slate-800'}`}
             >
               Close
             </button>

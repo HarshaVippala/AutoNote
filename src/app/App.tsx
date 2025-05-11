@@ -5,10 +5,10 @@ import { useSearchParams } from "next/navigation";
 import { v4 as uuidv4 } from "uuid";
 import Image from "next/image";
 import { createParser } from 'eventsource-parser';
-import { logger } from '@/app/api/realtime-assistant-webRTC/webRTCConnectionManager';
+import { logger } from '@/lib/logger';
 
 // Set logger level at the beginning
-logger.setLevel('ERROR');
+logger.setLevel('INFO'); // Changed from ERROR to INFO to see diagnostic logs
 
 // UI components
 // UI components
@@ -97,7 +97,7 @@ function AppContent({
   const { theme } = useTheme();
 
   return (
-      <div className={`text-base flex flex-col h-screen w-screen ${theme === 'dark' ? 'bg-gray-800 text-gray-200' : 'bg-gray-100 text-gray-800'} relative`}>
+      <div className={`text-base flex flex-col h-screen w-screen ${theme === 'dark' ? 'bg-slate-900 text-slate-200' : 'bg-slate-100 text-slate-800'} relative`}>
         <TopControls
           appConnectionState={connectionState}
           isMicrophoneMuted={isMicrophoneMuted}
@@ -114,7 +114,7 @@ function AppContent({
           onCycleViewRequest={onCycleViewRequest}
         />
         <div className="flex flex-col flex-1 gap-1 overflow-hidden">
-          <div className={`flex-1 ${theme === 'dark' ? 'bg-gray-900' : 'bg-white'} overflow-hidden flex flex-col`}>
+          <div className={`flex-1 ${theme === 'dark' ? 'bg-slate-900' : 'bg-slate-100'} overflow-hidden flex flex-col`}>
             <DraggablePanelLayout
               theme={theme}
               activeTabKey={activeTabKey ?? ''} // Use prop
@@ -167,7 +167,9 @@ function App() {
   const [conversationId, setConversationId] = useState<string>(() => uuidv4());
   const [currentTranscript, setCurrentTranscript] = useState<string>(""); // State for accumulating transcript deltas
   const [lastMicTranscript, setLastMicTranscript] = useState<string>(""); // State for the last completed mic transcript
-
+  const lastResponseIdRef = useRef(lastResponseId);
+  const lastProcessedFunctionCallDetailsRef = useRef<LocalTabData['functionCall'] | null>(null);
+ 
   // --- Callbacks modifying App state ---
   const handleMicStatusUpdate = useCallback((status: WebRTCConnectionStatus) => {
     setMicConnectionStatus(status);
@@ -205,6 +207,10 @@ function App() {
     setCycleViewTrigger(c => c + 1);
   }, []);
 
+  useEffect(() => {
+    lastResponseIdRef.current = lastResponseId;
+  }, [lastResponseId]);
+ 
   // --- Main Processing Logic (Handles Realtime Events) ---
   const handleProcessTurn = useCallback(async (event: any) => {
     if (!event || !event.type) {
@@ -247,20 +253,49 @@ function App() {
         const currentResponseId = uuidv4(); // Generate unique ID for this potential response
 
         // --- Prepare NEW Payload ---
-        const payload = {
+        logger.info(`[App] Preparing payload. Current lastResponseId from ref: ${lastResponseIdRef.current}`);
+
+        let toolOutputsArray = undefined;
+        logger.info(`[App] Payload Prep: lastResponseIdRef.current = ${lastResponseIdRef.current}`);
+        logger.info(`[App] Payload Prep: lastProcessedFunctionCallDetailsRef.current = ${JSON.stringify(lastProcessedFunctionCallDetailsRef.current)}`);
+        if (lastResponseIdRef.current && lastProcessedFunctionCallDetailsRef.current) {
+          logger.info(`[App] Using lastProcessedFunctionCallDetailsRef for tool_outputs. call_id: ${lastProcessedFunctionCallDetailsRef.current.call_id}, item_id (fc_id): ${lastProcessedFunctionCallDetailsRef.current.id}`);
+          toolOutputsArray = [{
+            id: lastProcessedFunctionCallDetailsRef.current.call_id, // Use 'id' as key, with 'call_id' as value
+            output: lastProcessedFunctionCallDetailsRef.current.arguments
+          }];
+        } else {
+          if (lastResponseIdRef.current) {
+            logger.warn(`[App] previousResponseId exists (${lastResponseIdRef.current}), but no lastProcessedFunctionCallDetailsRef.current. Not sending tool_outputs.`);
+          }
+        }
+
+        const payload: any = {
           // Speaker's transcript is the main trigger
           transcript: speakerTranscript,
           // Include last user (mic) transcript for context
           lastUserTranscript: lastMicTranscript,
           conversationId,
-          // Include previous response ID if available for proper follow-up handling
-          ...(lastResponseId ? { previousResponseId: lastResponseId } : {}),
-          // questionType and model can be omitted if relying on backend classification
         };
 
-        let responseData: any = null; // Declare responseData for later use
+        if (lastResponseIdRef.current) {
+          payload.previousResponseId = lastResponseIdRef.current;
+        }
 
-        // --- Initiate the API call to the backend --- 
+        if (toolOutputsArray) {
+          payload.tool_outputs = toolOutputsArray;
+          logger.info('[App] tool_outputs field explicitly added to payload.');
+        } else if (lastResponseIdRef.current && lastProcessedFunctionCallDetailsRef.current) {
+            logger.warn('[App] toolOutputsArray was NOT constructed for payload, despite lastResponseId and lastProcessedFunctionCallDetailsRef being present. This is unexpected.');
+        }
+        // questionType and model can be omitted if relying on backend classification
+        logger.info('[App] API Request Payload:', JSON.stringify(payload, null, 2));
+
+        let finalResponseDataFromStream: any = null; // Will hold data from 'completed' event
+        let responseDataToProcess: any = null; // Declare here to be accessible in both stream/non-stream paths
+        let backendContextTypeFromEvent: string | null = null; // Declare here for wider scope
+
+        // --- Initiate the API call to the backend ---
         try {
           // --- API Call ---
           const response = await fetch('/api/responses', {
@@ -285,6 +320,7 @@ function App() {
       let accumulatedFunctionArgs: { [key: number]: string } = {};
       let currentFunctionCalls: { [key: number]: any } = {};
       let streamCreatedTabKey: string | null = null;
+      let backendContextTypeFromEvent: string | null = null; // Declare here
 
       // --- Stream Processing ---
       if (contentType && contentType.includes('application/jsonl') && response.body) {
@@ -307,9 +343,11 @@ function App() {
                 case 'function_call_start': {
                   const funcIndexStart = event.index ?? 0; // Use event.index from backend
                   currentFunctionCalls[funcIndexStart] = {
-                    name: event.name, // Fix
-                    id: event.id,     // Fix
-                    call_id: event.call_id, // Fix
+                    type: 'function_call', // Add type here for fallback construction
+                    status: 'streaming', // Initial status
+                    name: event.name,
+                    id: event.id,
+                    call_id: event.call_id,
                     arguments: '',
                     tabKey: null,
                     isFollowUp: false,
@@ -378,6 +416,7 @@ function App() {
                         analysis: JSON.stringify({ status: "streaming" }, null, 2),
                         structuredAnalysis: { status: "streaming" }, 
                         responseId: currentResponseId,
+                        previous_response_id: lastResponseId === null ? undefined : lastResponseId, // Handle null
                         // Keep this structure for storing data, but use correct accessors
                         functionCall: { id: event.id, call_id: event.call_id, name: event.name, arguments: '' },
                         followUps: []
@@ -392,7 +431,7 @@ function App() {
                   break;
                 }
                 case 'function_call_delta': {
-                  const funcIndexDelta = event.output_index ?? 0;
+                  const funcIndexDelta = event.index ?? 0;
                   if (currentFunctionCalls[funcIndexDelta] && event.delta) {
                     accumulatedFunctionArgs[funcIndexDelta] += event.delta;
                     currentFunctionCalls[funcIndexDelta].arguments = accumulatedFunctionArgs[funcIndexDelta];
@@ -454,8 +493,12 @@ function App() {
                   break;
                 }
                 case 'function_call_done': {
-                  const funcIndexDone = event.output_index ?? 0;
+                  const funcIndexDone = event.index ?? 0;
                   if (currentFunctionCalls[funcIndexDone] && event.item?.arguments) {
+                    // Update status for the specific function call
+                    currentFunctionCalls[funcIndexDone].status = event.item.status || 'completed';
+                    currentFunctionCalls[funcIndexDone].arguments = event.item.arguments; // Ensure final arguments are stored
+
                     const finalArgsString = event.item.arguments;
                     const updateKey = currentFunctionCalls[funcIndexDone].isFollowUp
                       ? currentFunctionCalls[funcIndexDone].targetTabKey
@@ -532,7 +575,11 @@ function App() {
                 }
                 case 'completed': {
                   logger.info('[Stream] Completed event received.');
-                  const responseData = event.response;
+                  finalResponseDataFromStream = event.response; // Capture the definitive final response
+                  // Extract questionTypeForContext from the completed event
+                  backendContextTypeFromEvent = event.questionTypeForContext; // Assign here
+                  logger.info(`[App Stream] Received questionTypeForContext from backend: ${backendContextTypeFromEvent}`);
+
                   Object.entries(currentFunctionCalls).forEach(([indexStr, call]) => {
                      const funcIndex = parseInt(indexStr, 10);
                      if (call.isFollowUp && call.targetTabKey) {
@@ -562,224 +609,298 @@ function App() {
               }
             } catch (parseError) { logger.error('[Stream] Error parsing JSON line:', line, parseError); }
           }
+        } // End of while (true) loop at line 572
+
+        // This logic is now *inside* the 'if (contentType && ...)' block from line 291, after the while loop
+        if (finalResponseDataFromStream) {
+            logger.info("[Stream] Using response data from 'completed' event for responseDataToProcess.");
+            responseDataToProcess = finalResponseDataFromStream;
+        } else {
+            logger.info("[Stream] 'completed' event not received or data missing. Constructing fallback response for responseDataToProcess.");
+            const fallbackOutput = Object.values(currentFunctionCalls).map((call: any) => ({
+                ...call,
+                type: 'function_call',
+                status: call.status || 'completed'
+            }));
+            responseDataToProcess = { id: currentResponseId, output: fallbackOutput };
         }
+        logger.info('[App] Final data to process (from stream):', responseDataToProcess);
 
-        if (!responseData) {
-          logger.info("[Stream] ended without 'completed' event. Constructing partial response.");
-          Object.entries(currentFunctionCalls).forEach(([indexStr, call]) => {
-             const funcIndex = parseInt(indexStr, 10);
-             if (call.isFollowUp && call.targetTabKey) {
-                try {
-                   const finalArgs = JSON.parse(accumulatedFunctionArgs[funcIndex]);
-                   setTabData(prevTabData => prevTabData.map(tab => {
-                      if (tab.key === call.targetTabKey) {
-                         let updatedFollowUps = tab.followUps || [];
-                         const currentFollowUpIndex = updatedFollowUps.length - 1;
-                         if (currentFollowUpIndex >= 0 && JSON.stringify(updatedFollowUps[currentFollowUpIndex]) !== JSON.stringify(finalArgs)) { updatedFollowUps[currentFollowUpIndex] = finalArgs; }
-                         else if (currentFollowUpIndex < 0) { updatedFollowUps = [finalArgs]; }
-                         logger.info(`[Stream Fallback] Finalizing follow-up for tab ${call.targetTabKey}`, finalArgs);
-                         return { ...tab, followUps: updatedFollowUps };
-                      }
-                      return tab;
-                   }));
-                } catch (e) { logger.error("Error parsing final follow-up args on fallback:", e); }
-             }
-          });
-          responseData = { id: currentResponseId, output: Object.values(currentFunctionCalls) };
-        }
-        logger.info('[App] Final processed data from stream:', responseData);
-
-      } else {
-        // --- Handle Non-Streamed Response ---
-        logger.info('[App] Processing non-streamed response...');
-        responseData = await response.json();
-        logger.info('[App] Received complete response data (non-streamed):', responseData);
-      }
-
-      // --- Common Logic after getting responseData ---
-      if (!responseData) { throw new Error("Failed to get response data."); }
-
-      setChatStatus('done');
-      setPreviousChatSuccess(true);
-      const finalResponseId = responseData.id || currentResponseId;
-      setLastResponseId(finalResponseId);
-
-      // --- Final Tab Processing & Breadcrumb Logic ---
-      let isCodeResponse = false; let isBehavioralResponse = false; let isGeneralResponse = true;
-      let isFollowUpResponse = false;
-      let tabLabel = ''; let tabLanguage = 'plaintext'; let tabCode = ''; let tabAnalysis = '';
-      let tabStructuredAnalysis: any = undefined; let tabFilename = ''; let functionCallData = null;
-      let breadcrumbSummary = 'Response processed.'; let breadcrumbPreview = '';
-      let tentativeFilename = `Response-${tabCounter}`;
-
-      // Check if responseData.output exists and is an array before processing
-      if (responseData.output && Array.isArray(responseData.output) && responseData.output.length > 0) {
-          const functionCallItem = responseData.output.find((item: any) => item.type === 'function_call');
-          const messageItem = responseData.output.find((item: any) => item.type === 'message' && item.role === 'assistant');
-          let responseText = messageItem?.content?.[0]?.type === 'text' ? (messageItem.content[0].text.value || '') : '';
-
-          if (functionCallItem) {
-            setCurrentFunctionName(functionCallItem.name);
-            try {
-              const finalArgs = JSON.parse(functionCallItem.arguments);
-              tabStructuredAnalysis = finalArgs;
-              functionCallData = { id: functionCallItem.id, call_id: functionCallItem.call_id, name: functionCallItem.name, arguments: functionCallItem.arguments };
-
-              // Check if this is a follow-up based on headers or metadata from backend
-              // Check if the response has a "meta" field indicating it was a follow-up
-              const possibleFollowUp = responseData.meta?.isFollowUp || 
-                                     (responseData.lastQuestionType === "BEHAVIORAL_QUESTION" && 
-                                      functionCallItem.name === 'format_behavioral_star_answer');
-              
-              logger.info(`[App] Response metadata:`, responseData.meta);
-              logger.info(`[App] Last question type:`, responseData.lastQuestionType);
-
-              if (functionCallItem.name === 'format_comprehensive_code') {
-                isCodeResponse = true; isGeneralResponse = false; setLastBehavioralTabData(null);
-                tabLanguage = finalArgs.lang || 'plaintext'; tabCode = finalArgs.cd || ''; tabAnalysis = JSON.stringify(finalArgs, null, 2);
-                tabLabel = `${tabLanguage} Snippet`; tentativeFilename = `Code: ${tabLanguage}`;
-                breadcrumbSummary = `Code: ${tabLanguage}`; breadcrumbPreview = tabCode.substring(0, 100) + '...';
-              } else if (functionCallItem.name === 'format_behavioral_star_answer') {
-                isBehavioralResponse = true; isGeneralResponse = false; setLastCodeTabData(null);
-                
-                // Check if we have a previous behavioral tab AND either the backend told us it's a follow-up
-                // OR our frontend detected it could be a follow-up
-                if (lastBehavioralTabData !== null && (possibleFollowUp || responseData.lastQuestionType === "BEHAVIORAL_QUESTION")) { 
-                  isFollowUpResponse = true; 
-                  logger.info(`[App] Identified behavioral follow-up for tab: ${lastBehavioralTabData.key}`);
-                  logger.info(`[App] Follow-up detection:`, {
-                    possibleFollowUp,
-                    lastQuestionType: responseData.lastQuestionType,
-                    hasLastBehavioralTab: !!lastBehavioralTabData
-                  });
-                }
-                
-                tabLanguage = 'markdown'; tabAnalysis = JSON.stringify(finalArgs, null, 2);
-                tabLabel = `STAR: ${finalArgs.situation?.substring(0, 15) || 'Response'}...`; tentativeFilename = tabLabel;
-                breadcrumbSummary = `Behavioral: ${finalArgs.situation?.substring(0, 50)}...`; breadcrumbPreview = `Situation: ${finalArgs.situation?.substring(0, 50)}...`;
-                tabCode = `Situation: ${finalArgs.situation || ''}\nTask: ...`;
-              } else if (functionCallItem.name === 'format_simple_explanation' && finalArgs.explanation) {
-                 isGeneralResponse = true; setLastBehavioralTabData(null); setLastCodeTabData(null);
-                 const explanationText = finalArgs.explanation;
-                 addTranscriptMessage(uuidv4(), 'assistant', explanationText);
-                 tentativeFilename = `Explanation: ${explanationText.substring(0, 20)}...`;
-                 breadcrumbSummary = explanationText.substring(0, 150) + '...'; breadcrumbPreview = explanationText.substring(0, 100) + '...';
-              } else { // Unknown function
-                isGeneralResponse = true; setLastBehavioralTabData(null); setLastCodeTabData(null);
-                const errorMessage = `Processed unknown function call: ${functionCallItem.name}`;
-                addTranscriptMessage(uuidv4(), 'assistant', errorMessage); tentativeFilename = `Error-UnknownFunction`;
-                breadcrumbSummary = errorMessage; breadcrumbPreview = errorMessage.substring(0, 100) + '...';
-              }
-            } catch (parseError) { // Error parsing final arguments
-              isGeneralResponse = true; setLastBehavioralTabData(null); setLastCodeTabData(null);
-              const errorMessage = `Error parsing final tool arguments for ${functionCallItem?.name || 'unknown function'}: ${(parseError as Error).message}`;
-              addTranscriptMessage(uuidv4(), 'assistant', errorMessage); tentativeFilename = `Error-Parsing`;
-              breadcrumbSummary = errorMessage; breadcrumbPreview = errorMessage.substring(0, 100) + '...';
-              isCodeResponse = false; isBehavioralResponse = false; functionCallData = null; tabStructuredAnalysis = undefined;
-            }
-          } else if (responseText) { // General text response
-             isGeneralResponse = true; setLastBehavioralTabData(null); setLastCodeTabData(null);
-             addTranscriptMessage(uuidv4(), 'assistant', responseText);
-             tentativeFilename = `Response: ${responseText.substring(0, 20)}...`;
-             breadcrumbSummary = responseText.substring(0, 150) + '...'; breadcrumbPreview = responseText.substring(0, 100) + '...';
-          } else { // Neither function call nor text
-            isGeneralResponse = true; setLastBehavioralTabData(null); setLastCodeTabData(null);
-            const errorMessage = `Received response with no actionable output.`;
-            addTranscriptMessage(uuidv4(), 'assistant', errorMessage); tentativeFilename = `Error-NoOutput`;
-            breadcrumbSummary = errorMessage; breadcrumbPreview = errorMessage.substring(0, 100) + '...';
+      } else { // This 'else' pairs with 'if (contentType && ...)' at line 291, for non-streamed responses
+        logger.info('[App] Processing non-streamed response for responseDataToProcess...');
+        responseDataToProcess = await response.json();
+        logger.info('[App] Received complete response data (non-streamed) for responseDataToProcess:', responseDataToProcess);
+      } // This closes the else for non-streamed, and also the 'if (contentType && ...)' block from line 291
+    
+          // --- Common Logic after getting responseDataToProcess ---
+          // This section (from line 619 in the file) should be OUTSIDE the if/else for stream/non-stream, but INSIDE the main try
+          if (!responseDataToProcess) { throw new Error("Failed to get response data."); }
+    
+          setChatStatus('done');
+          setPreviousChatSuccess(true);
+          const finalResponseId = responseDataToProcess.id || currentResponseId;
+          
+          // Update responseId on the specific last tab states if they correspond to the current response cycle
+          if (lastCodeTabData && lastCodeTabData.responseId === currentResponseId) {
+            setLastCodeTabData(prev => prev ? { ...prev, responseId: finalResponseId } : null);
+            logger.info(`[App] Updated lastCodeTabData (key: ${lastCodeTabData.key}) responseId to finalResponseId: ${finalResponseId}`);
           }
-      } else if (responseData.text && typeof responseData.text === 'string') { // Fallback simple text
-        isGeneralResponse = true; setLastBehavioralTabData(null); setLastCodeTabData(null);
-        const responseText = responseData.text; addTranscriptMessage(uuidv4(), 'assistant', responseText);
-        tentativeFilename = `Response: ${responseText.substring(0, 20)}...`;
-        breadcrumbSummary = responseText.substring(0, 150) + '...'; breadcrumbPreview = responseText.substring(0, 100) + '...';
-      } else { // No recognizable output
-        isGeneralResponse = true; setLastBehavioralTabData(null); setLastCodeTabData(null);
-        const errorMessage = `Received response with no recognizable output.`;
-        addTranscriptMessage(uuidv4(), 'assistant', errorMessage); tentativeFilename = `Error-NoRecognizableOutput`;
-        breadcrumbSummary = errorMessage; breadcrumbPreview = errorMessage.substring(0, 100) + '...';
-      }
+          if (lastBehavioralTabData && lastBehavioralTabData.responseId === currentResponseId) {
+            setLastBehavioralTabData(prev => prev ? { ...prev, responseId: finalResponseId } : null);
+            logger.info(`[App] Updated lastBehavioralTabData (key: ${lastBehavioralTabData.key}) responseId to finalResponseId: ${finalResponseId}`);
+          }
 
-      tabFilename = tentativeFilename;
+          // Also update the responseId in the main tabData array for the tab created by this stream, if any.
+          // This ensures consistency if the tab is neither the lastCode nor lastBehavioral tab but was just created.
+          if (streamCreatedTabKey) {
+            setTabData(prevTabData =>
+              prevTabData.map(tab =>
+                tab.key === streamCreatedTabKey && tab.responseId !== finalResponseId
+                  ? { ...tab, responseId: finalResponseId }
+                  : tab
+              )
+            );
+            logger.info(`[App] Updated tabData for streamCreatedTabKey (key: ${streamCreatedTabKey}) responseId to finalResponseId: ${finalResponseId}`);
+          }
 
-      // --- Final Tab State Update & Creation ---
-      let breadcrumbAdded = false;
-      if (isFollowUpResponse && lastBehavioralTabData && tabStructuredAnalysis) {
-         setTabData(prevTabData => prevTabData.map(tab => {
-            if (tab.key === lastBehavioralTabData.key) {
-               logger.info(`[App] Appending follow-up to tab ${tab.key}`);
-               const newFollowUps = [...(tab.followUps || []), tabStructuredAnalysis as StarData];
-               return { ...tab, followUps: newFollowUps, responseId: finalResponseId };
-            }
-            return tab;
-         }));
-         setActiveTabKey(lastBehavioralTabData.key);
-         addTranscriptBreadcrumb(`Appended follow-up to ${lastBehavioralTabData.filename}`, { analysisSummary: breadcrumbSummary, codePreview: breadcrumbPreview });
-         breadcrumbAdded = true;
+          setLastResponseId(finalResponseId);
+ 
+          // --- Final Tab Processing & Breadcrumb Logic ---
+          let isCodeResponse = false; let isBehavioralResponse = false; let isGeneralResponse = true;
+          let isFollowUpResponse = false;
+          let tabLabel = ''; let tabLanguage = 'plaintext'; let tabCode = ''; let tabAnalysis = '';
+          let tabStructuredAnalysis: any = undefined; let tabFilename = ''; let functionCallData = null;
+          let breadcrumbSummary = 'Response processed.'; let breadcrumbPreview = '';
+          let tentativeFilename = `Response-${tabCounter}`;
+    
+          // Check if responseDataToProcess.output exists and is an array before processing
+          if (responseDataToProcess.output && Array.isArray(responseDataToProcess.output) && responseDataToProcess.output.length > 0) {
+              const functionCallItem = responseDataToProcess.output.find((item: any) => item.type === 'function_call');
+              const messageItem = responseDataToProcess.output.find((item: any) => item.type === 'message' && item.role === 'assistant');
+              let responseText = messageItem?.content?.[0]?.type === 'text' ? (messageItem.content[0].text.value || '') : '';
+    
+              if (functionCallItem) {
+                setCurrentFunctionName(functionCallItem.name);
+                try {
+                  logger.info('[App] Processing functionCallItem:', JSON.stringify(functionCallItem, null, 2));
+                  const finalArgs = JSON.parse(functionCallItem.arguments);
+                  logger.info('[App] Parsed finalArgs for function call:', JSON.stringify(finalArgs, null, 2));
+                  tabStructuredAnalysis = finalArgs;
+                  functionCallData = { id: functionCallItem.id, call_id: functionCallItem.call_id, name: functionCallItem.name, arguments: functionCallItem.arguments };
+                  lastProcessedFunctionCallDetailsRef.current = functionCallData; // Store details of this successful function call
+                  logger.info(`[App] Stored lastProcessedFunctionCallDetailsRef: call_id=${functionCallData.call_id}`);
+ 
+                  // Check if this is a follow-up based on headers or metadata from backend
+                  // Use backendContextType for determining follow-up logic if available
+                  const contextTypeForFollowUp = backendContextTypeFromEvent || responseDataToProcess.lastQuestionType;
+                  logger.info(`[App] Using contextTypeForFollowUp: ${contextTypeForFollowUp}`);
 
-      } else if (streamCreatedTabKey) {
-         logger.info("[App] Post-stream finalization block for streamCreatedTabKey skipped state update, tab state should be final from deltas.", streamCreatedTabKey);
+                  const possibleFollowUp = responseDataToProcess.meta?.isFollowUp ||
+                                         (contextTypeForFollowUp === "BEHAVIORAL_QUESTION" &&
+                                          functionCallItem.name === 'format_behavioral_star_answer');
+                  
+                  logger.info(`[App] Response metadata:`, responseDataToProcess.meta);
+                  logger.info(`[App] Last question type (from responseDataToProcess):`, responseDataToProcess.lastQuestionType);
+                  logger.info(`[App] Backend context type from event:`, backendContextTypeFromEvent);
+    
+                  if (functionCallItem.name === 'format_comprehensive_code') {
+                    isCodeResponse = true; isGeneralResponse = false; setLastBehavioralTabData(null);
+                    tabLanguage = finalArgs.lang || 'plaintext'; tabCode = finalArgs.cd || ''; tabAnalysis = JSON.stringify(finalArgs, null, 2);
+                    tabLabel = `${tabLanguage} Snippet`; tentativeFilename = `Code: ${tabLanguage}`;
+                    breadcrumbSummary = `Code: ${tabLanguage}`; breadcrumbPreview = tabCode.substring(0, 100) + '...';
+                  } else if (functionCallItem.name === 'format_behavioral_star_answer') {
+                    isBehavioralResponse = true; isGeneralResponse = false; setLastCodeTabData(null);
+                    // Simplified: The backend now determines if it's a follow-up STAR or new.
+                    // Client just processes it as a behavioral response, potentially creating a new tab
+                    // or updating an existing one if streaming logic handles that.
+                    // The 'isFollowUpResponse' logic here for behavioral might need re-evaluation
+                    // if the backend doesn't explicitly signal "this STAR is a follow-up to tab X".
+                    // For now, assume any 'format_behavioral_star_answer' might create a new tab
+                    // or be handled by streaming updates to an existing one.
+                    // The key is that it's NOT a 'format_simple_explanation'.
+                    
+                    // Example: if it's a true follow-up that appends to an existing behavioral tab (handled by streaming/tab update logic)
+                    // then isFollowUpResponse might still be relevant for the final tab state update section.
+                    // However, for routing to general window, this path is for STAR answers, not simple text.
+                    if (lastBehavioralTabData !== null && (possibleFollowUp || contextTypeForFollowUp === "BEHAVIORAL_QUESTION")) {
+                         isFollowUpResponse = true; // This might still be useful for final tab updates if it's an append.
+                         logger.info(`[App] Identified potential behavioral follow-up context for tab: ${lastBehavioralTabData.key}`);
+                    }
+                    // The actual STAR content (situation, task, etc.) will be in finalArgs
+                    // and used to populate a behavioral tab.
+                    tabLanguage = 'markdown';
+                    tabCode = `Situation: ${finalArgs.situation?.substring(0,80) || ''}...`; // Placeholder for tab list
+                    tabAnalysis = JSON.stringify(finalArgs, null, 2);
+                    tabLabel = `STAR Answer`;
+                    tentativeFilename = `Behavioral: STAR`;
+                    breadcrumbSummary = `Behavioral: ${finalArgs.situation?.substring(0,50) || 'STAR Answer'}...`;
+                    breadcrumbPreview = `Situation: ${finalArgs.situation?.substring(0,100) || ''}...`;
 
-         // We don't need to update the tab data again here, just update references
-         const finalTab = tabData.find(t => t.key === streamCreatedTabKey);
-         if (finalTab) {
-            if (isBehavioralResponse) { setLastBehavioralTabData(finalTab); }
-            else if (isCodeResponse) { setLastCodeTabData(finalTab); }
-         }
-         
-         addTranscriptBreadcrumb(`Generated ${tabFilename}`, { analysisSummary: breadcrumbSummary, codePreview: breadcrumbPreview });
-         breadcrumbAdded = true;
+                  } else if (functionCallItem.name === 'format_simple_explanation' && finalArgs.explanation) {
+                       isGeneralResponse = true; // This is key for showing in general transcript
+                       isCodeResponse = false; isBehavioralResponse = false; // Not a code or behavioral tab response
+                       const explanationText = finalArgs.explanation;
+                       
+                       // Clear specific tab contexts if this explanation is general / not tied to them.
+                       // Based on new directive, model decides context, so client might not need to be as aggressive here.
+                       // However, if an explanation is truly general, clearing these makes sense.
+                       // Let's assume for now that 'format_simple_explanation' means it's for the general transcript.
+                       setLastCodeTabData(null);
+                       setLastBehavioralTabData(null);
+                       
+                       addTranscriptMessage(uuidv4(), 'assistant', explanationText);
+                       tentativeFilename = `Explanation: ${explanationText.substring(0, 20)}...`;
+                       breadcrumbSummary = explanationText.substring(0, 150) + '...'; breadcrumbPreview = explanationText.substring(0, 100) + '...';
+                       setActiveTabKey(null); // Crucial: Switch to main transcript view
 
-      } else if ((isCodeResponse || isBehavioralResponse) && !isFollowUpResponse) {
-         // Increment the counter FIRST for unique keys
-         const nextTabCount = tabCounter + 1;
-         const newTabKey = `response-${uuidv4()}`; // Use UUID for guaranteed uniqueness
-         const newTab: LocalTabData = { key: newTabKey, filename: tabFilename, language: tabLanguage, code: tabCode, analysis: tabAnalysis, structuredAnalysis: tabStructuredAnalysis, responseId: finalResponseId, functionCall: functionCallData ?? undefined, followUps: [] };
-         logger.info(`[App] Creating new tab:`, newTab);
-         setTabData(prev => [...prev, newTab]);
-         setActiveTabKey(newTabKey);
-         setTabCounter(nextTabCount); // Use the same incremented value
-         if (isBehavioralResponse) { setLastBehavioralTabData(newTab); setLastCodeTabData(null); }
-         else if (isCodeResponse) { setLastCodeTabData(newTab); setLastBehavioralTabData(null); }
-         addTranscriptBreadcrumb(`Generated ${tabFilename}`, { analysisSummary: breadcrumbSummary, codePreview: breadcrumbPreview });
-         breadcrumbAdded = true;
+                  } else { // Unknown function call name
+                      isGeneralResponse = true; setLastBehavioralTabData(null); setLastCodeTabData(null); setActiveTabKey(null);
+                      const unknownFuncErrorMessage = `Processed unknown function call: ${functionCallItem.name}`;
+                      addTranscriptMessage(uuidv4(), 'assistant', unknownFuncErrorMessage); tentativeFilename = `Error-UnknownFunction`;
+                      breadcrumbSummary = unknownFuncErrorMessage; breadcrumbPreview = unknownFuncErrorMessage.substring(0, 100) + '...';
+                  } // Closes the 'else' for unknown function
+                } // Closes the 'try' block from line 684
+                  catch (parseError) { // Error parsing final arguments
+                    isGeneralResponse = true; setLastBehavioralTabData(null); setLastCodeTabData(null); setActiveTabKey(null);
+                    lastProcessedFunctionCallDetailsRef.current = null; // Clear on error
+                    logger.info(`[App] Cleared lastProcessedFunctionCallDetailsRef (parseError for finalArgs).`);
+                    const errorMessage = `Error parsing final tool arguments for ${functionCallItem?.name || 'unknown function'}: ${(parseError as Error).message}`;
+                    addTranscriptMessage(uuidv4(), 'assistant', errorMessage); tentativeFilename = `Error-Parsing`;
+                    breadcrumbSummary = errorMessage; breadcrumbPreview = errorMessage.substring(0, 100) + '...';
+                    isCodeResponse = false; isBehavioralResponse = false; functionCallData = null; tabStructuredAnalysis = undefined;
+                  } // Closes 'catch'
+                } // Closes 'if (functionCallItem)' from line 682
+                else if (responseText) { // General text response, if no functionCallItem
+                   isGeneralResponse = true; setLastBehavioralTabData(null); setLastCodeTabData(null); setActiveTabKey(null);
+                   lastProcessedFunctionCallDetailsRef.current = null; // Clear if it's a text response
+                   logger.info(`[App] Cleared lastProcessedFunctionCallDetailsRef (responseText).`);
+           addTranscriptMessage(uuidv4(), 'assistant', responseText);
+           tentativeFilename = `Response: ${responseText.substring(0, 20)}...`;
+           breadcrumbSummary = responseText.substring(0, 150) + '...'; breadcrumbPreview = responseText.substring(0, 100) + '...';
+        } else { // Neither function call nor text
+          isGeneralResponse = true; setLastBehavioralTabData(null); setLastCodeTabData(null); setActiveTabKey(null);
+          lastProcessedFunctionCallDetailsRef.current = null; // Clear if no actionable output
+          logger.info(`[App] Cleared lastProcessedFunctionCallDetailsRef (no actionable output).`);
+          const errorMessage = `Received response with no actionable output.`;
+          addTranscriptMessage(uuidv4(), 'assistant', errorMessage); tentativeFilename = `Error-NoOutput`;
+          breadcrumbSummary = errorMessage; breadcrumbPreview = errorMessage.substring(0, 100) + '...';
+        }
+    } else if (responseDataToProcess.text && typeof responseDataToProcess.text === 'string') { // Fallback simple text
+      isGeneralResponse = true; setLastBehavioralTabData(null); setLastCodeTabData(null); setActiveTabKey(null);
+      lastProcessedFunctionCallDetailsRef.current = null; // Clear for fallback simple text
+      logger.info(`[App] Cleared lastProcessedFunctionCallDetailsRef (fallback simple text).`);
+      const responseText = responseDataToProcess.text; addTranscriptMessage(uuidv4(), 'assistant', responseText);
+      tentativeFilename = `Response: ${responseText.substring(0, 20)}...`;
+      breadcrumbSummary = responseText.substring(0, 150) + '...'; breadcrumbPreview = responseText.substring(0, 100) + '...';
+    } else { // No recognizable output
+      isGeneralResponse = true; setLastBehavioralTabData(null); setLastCodeTabData(null); setActiveTabKey(null);
+      lastProcessedFunctionCallDetailsRef.current = null; // Clear for no recognizable output
+      logger.info(`[App] Cleared lastProcessedFunctionCallDetailsRef (no recognizable output).`);
+      const errorMessage = `Received response with no recognizable output.`;
+      addTranscriptMessage(uuidv4(), 'assistant', errorMessage); tentativeFilename = `Error-NoRecognizableOutput`;
+      breadcrumbSummary = errorMessage; breadcrumbPreview = errorMessage.substring(0, 100) + '...';
+    }
 
-      } else if (isGeneralResponse) {
-         setLastBehavioralTabData(null);
-         setLastCodeTabData(null);
-         if (!breadcrumbAdded) {
-            addTranscriptBreadcrumb(`Generated ${tabFilename}`, { analysisSummary: breadcrumbSummary, codePreview: breadcrumbPreview });
-         }
-      }
+    tabFilename = tentativeFilename;
 
-    } catch (error) { // Main catch block
+    // --- Final Tab State Update & Creation ---
+    let breadcrumbAdded = false;
+    if (isFollowUpResponse && lastBehavioralTabData && tabStructuredAnalysis) {
+       setTabData(prevTabData => prevTabData.map(tab => {
+          if (tab.key === lastBehavioralTabData.key) {
+             logger.info(`[App] Appending follow-up to tab ${tab.key}`);
+             const newFollowUps = [...(tab.followUps || []), tabStructuredAnalysis as StarData];
+             return { ...tab, followUps: newFollowUps, responseId: finalResponseId };
+          }
+          return tab;
+       }));
+       setActiveTabKey(lastBehavioralTabData.key); // Keep behavioral tab active for its follow-up
+       addTranscriptBreadcrumb(`Appended follow-up to ${lastBehavioralTabData.filename}`, { analysisSummary: breadcrumbSummary, codePreview: breadcrumbPreview });
+       breadcrumbAdded = true;
+
+    } else if (streamCreatedTabKey) {
+       logger.info("[App] Post-stream finalization block for streamCreatedTabKey skipped state update, tab state should be final from deltas.", streamCreatedTabKey);
+
+       // We don't need to update the tab data again here, just update references
+       const finalTab = tabData.find(t => t.key === streamCreatedTabKey);
+       if (finalTab) {
+          if (isBehavioralResponse) { setLastBehavioralTabData(finalTab); }
+          else if (isCodeResponse) { setLastCodeTabData(finalTab); }
+       }
+       // setActiveTabKey(streamCreatedTabKey) is already called when tab is created
+       addTranscriptBreadcrumb(`Generated ${tabFilename}`, { analysisSummary: breadcrumbSummary, codePreview: breadcrumbPreview });
+       breadcrumbAdded = true;
+
+    } else if ((isCodeResponse || isBehavioralResponse) && !isFollowUpResponse) {
+       // Increment the counter FIRST for unique keys
+       const nextTabCount = tabCounter + 1;
+       const newTabKey = `response-${uuidv4()}`; // Use UUID for guaranteed uniqueness
+       const newTab: LocalTabData = { key: newTabKey, filename: tabFilename, language: tabLanguage, code: tabCode, analysis: tabAnalysis, structuredAnalysis: tabStructuredAnalysis, responseId: finalResponseId, previous_response_id: lastResponseId === null ? undefined : lastResponseId, functionCall: functionCallData ?? undefined, followUps: [] };
+       logger.info(`[App] Creating new tab:`, newTab);
+       setTabData(prev => [...prev, newTab]);
+       setActiveTabKey(newTabKey);
+       setTabCounter(nextTabCount); // Use the same incremented value
+       if (isBehavioralResponse) { setLastBehavioralTabData(newTab); setLastCodeTabData(null); }
+       else if (isCodeResponse) { setLastCodeTabData(newTab); setLastBehavioralTabData(null); }
+       addTranscriptBreadcrumb(`Generated ${tabFilename}`, { analysisSummary: breadcrumbSummary, codePreview: breadcrumbPreview });
+       breadcrumbAdded = true;
+
+    } else if (isGeneralResponse) {
+       // For general responses, ensure activeTabKey is null to show Main View
+       setActiveTabKey(null);
+       setLastBehavioralTabData(null);
+       setLastCodeTabData(null);
+       if (!breadcrumbAdded) {
+          addTranscriptBreadcrumb(`Generated ${tabFilename}`, { analysisSummary: breadcrumbSummary, codePreview: breadcrumbPreview });
+       }
+    }
+    // This brace now correctly closes the 'if (responseDataToProcess.output && ...)' block from L677
+    // or the 'else if (responseDataToProcess.text && ...)' from L764
+    // or the 'else' from L771, ensuring all tab processing is within these conditions.
+    } // This closes the main 'if/else if/else' chain for responseDataToProcess
+    // The main 'try' block (from L299) is now properly closed by the brace above.
+    catch (error) { // Main catch block
       logger.error('[App] Error fetching or processing response:', error);
       const errorMessage = error instanceof Error ? error.message : String(error);
       addTranscriptMessage(uuidv4(), 'assistant', `Error fetching response: ${errorMessage}`);
       setChatStatus('error');
       setPreviousChatSuccess(false);
       setLastBehavioralTabData(null); setLastCodeTabData(null);
-    } finally {
+    } // Closes catch (error)
+    finally {
        // Remove conversation history update from here, as context is managed by OpenAI/backend
-     }
+     } // Closes finally
         logger.info("[DEBUG] Successfully reached end of speaker completion IF block.");
      break; // End of .completed case
    }
    // <<<<<<<<<<<<<<<<<<<<<<<<<<<< END OF ADDED FETCH CALL >>>>>>>>>>>>>>>>>>>>>>>>>>
    default:
      // logger.info(`[App] Ignoring event type: ${event.type}`);
-     break;
- }
-}, [
-   addTranscriptMessage, addTranscriptBreadcrumb, setChatStatus, setPreviousChatSuccess,
-   tabCounter, lastResponseId, conversationId,
-   lastBehavioralTabData, lastCodeTabData,
-   setActiveTabKey, setTabData, setTabCounter, setLastResponseId, setCurrentFunctionName,
-   setLastBehavioralTabData, setLastCodeTabData,
-   // Add new state dependencies for mic transcript storage
-   lastMicTranscript, setLastMicTranscript,
-   setCurrentTranscript
-]);
+      break; // This is the break for the default case of the switch statement
+    } // This curly brace closes the switch statement (which started on line 215)
+  }, // This curly brace closes the async function body (which started on line 209)
+  [ // This square bracket starts the dependency array for useCallback
+    addTranscriptMessage,
+    addTranscriptBreadcrumb,
+    setChatStatus,
+    setPreviousChatSuccess,
+    tabCounter,
+    lastResponseId,
+    lastBehavioralTabData,
+    lastCodeTabData,
+    setActiveTabKey,
+    setTabData,
+    setTabCounter,
+    setLastResponseId,
+    setCurrentFunctionName,
+    setLastBehavioralTabData,
+    setLastCodeTabData,
+    lastMicTranscript,
+    setCurrentTranscript,
+    conversationId,
+    tabData, // Added tabData to dependency array
+  ] // This square bracket closes the dependency array
+) // This parenthesis closes the useCallback hook call
   // Auto-connect on mount
   useEffect(() => {
     logger.info("App: Auto-connecting on component mount...");

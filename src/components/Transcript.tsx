@@ -205,7 +205,7 @@ const Transcript: React.FC<TranscriptProps> = ({
         >
           {/* Main conversation container - full width now */}
           <div 
-            className={`h-full flex flex-col w-full ${theme === 'dark' ? 'bg-gray-800 text-gray-200' : 'bg-white text-gray-800'}`}
+            className={`h-full flex flex-col w-full ${theme === 'dark' ? 'bg-slate-900 text-slate-200' : 'bg-slate-100 text-slate-800'}`}
           >
             {/* Remove the top bar with JARVIS label */}
             <div className="relative flex-1 overflow-hidden">
@@ -240,14 +240,14 @@ const Transcript: React.FC<TranscriptProps> = ({
                   const marginTop = (isUser && isPrevUser) || (!isUser && isPrevAssistant) ? 'mt-0' : 'mt-1'; // Consistent gap between groups
                   const marginBottom = (isUser && isNextUser) || (!isUser && isNextAssistant) ? 'mb-0' : 'mb-1'; // Consistent gap at end of group
                   
-                  const containerClasses = `${baseContainer} ${isUser ? "items-end" : "items-start"} ${marginTop} ${marginBottom}`;
+                  const containerClasses = `${baseContainer} ${isUser ? "items-end" : "flex-col"} ${marginTop} ${marginBottom}`;
                   
                   // adjust border radius for grouped bubbles
                   // Removed complex logic, apply standard rounding always for now
-                  const bubbleBase = `max-w-lg p-3 ${isUser ? "bg-gray-900 text-gray-100" : theme === 'dark' ? "bg-gray-700 text-gray-200" : "bg-gray-100 text-black"} rounded-lg`; // Simpler rounding
+                  const bubbleBase = `max-w-lg p-3 ${isUser ? "bg-sky-600 text-white" : theme === 'dark' ? "bg-slate-800 text-slate-200" : "bg-slate-200 text-slate-800"} rounded-lg`;
                   
                   const isBracketedMessage = title.startsWith("[") && title.endsWith("]");
-                  const messageStyle = isBracketedMessage ? "italic text-gray-400" : "";
+                  const messageStyle = isBracketedMessage ? "italic text-slate-400" : "";
                   const displayTitle = isBracketedMessage ? title.slice(1, -1) : title;
 
                   // Get agent initials for assistant messages
@@ -288,13 +288,13 @@ const Transcript: React.FC<TranscriptProps> = ({
                           <div key={itemId} className={adjustedContainerClasses}>
                             <div className="relative">
                               <button
-                                className={`w-4 h-4 flex items-center justify-center ${theme === 'dark' ? 'bg-gray-600 text-gray-300 hover:bg-gray-500' : 'bg-gray-300 text-gray-700 hover:bg-gray-400'} rounded-full shadow transition p-0 m-0`}
+                                className={`w-4 h-4 flex items-center justify-center ${theme === 'dark' ? 'bg-slate-700 text-slate-300 hover:bg-slate-600' : 'bg-slate-300 text-slate-700 hover:bg-slate-400'} rounded-full shadow transition p-0 m-0`}
                                 style={{ minHeight: 0, minWidth: 0, fontSize: 10 }}
                                 onClick={() => setExpandedUserMessages((prev) => ({ ...prev, [idx]: true }))}
                                 title="Show your input group"
                               >
                                 <span className="sr-only">Show your input group</span>
-                                <svg width="10" height="10" viewBox="0 0 20 20" fill="none"><circle cx="10" cy="10" r="8" fill={theme === 'dark' ? '#9CA3AF' : '#4B5563'} /></svg>
+                                <svg width="10" height="10" viewBox="0 0 20 20" fill="none"><circle cx="10" cy="10" r="8" fill={theme === 'dark' ? '#64748b' : '#475569'} /></svg>
                               </button>
                             </div>
                           </div>
@@ -307,7 +307,7 @@ const Transcript: React.FC<TranscriptProps> = ({
                         return (
                           <div key={itemId} className={adjustedContainerClasses}>
                             <div
-                              className="max-w-lg p-3 bg-blue-600 text-white rounded-xl cursor-pointer"
+                              className="max-w-lg p-3 bg-sky-600 text-white rounded-xl cursor-pointer"
                               style={{ fontSize: fontSize, lineHeight: 1.2 }}
                               onClick={() => setExpandedUserMessages((prev) => ({ ...prev, [idx]: false }))}
                               title="Hide your input group"
@@ -320,31 +320,27 @@ const Transcript: React.FC<TranscriptProps> = ({
                       // for user messages that are not the start of a group, render nothing (handled by group rendering)
                       if (!showDot) return null;
                     } else {
-                      // For assistant messages - no need to check for code now
+                      // For assistant messages
+                      const showSeparator = !isPrevAssistant && prev !== null;
                       return (
                         <div key={itemId} className={containerClasses}>
-                          <div className="relative">
-                            {/* Agent initials bubble positioned outside at top left */}
-                            {!isUser && agentInitials && (
-                              <div className="absolute -left-3 -top-3 z-10">
-                                <div className={`text-[9px] font-bold ${item.agentName === 'Aux' ? 'bg-blue-500' : 'bg-teal-700'} text-white rounded-full w-5 h-5 flex items-center justify-center shadow border ${theme === 'dark' ? 'border-gray-700' : 'border-white'}`}>
-                                  {item.agentName === 'Aux' ? 'AX' : 'GA'}
-                                </div>
-                              </div>
-                            )}
-                            <div 
-                              className={`max-w-xl p-3 rounded-xl font-bold ${item.agentName === 'Aux' ? 'bg-blue-500/90' : 'bg-[#18181b]'}`} 
-                              style={{ color: '#fff', position: 'relative' }}
+                          {showSeparator && (
+                            <hr className={`mb-2 w-full ${theme === 'dark' ? 'border-slate-700' : 'border-slate-300'}`} />
+                          )}
+                          <div className="relative w-full"> {/* Wrapper for the message content, added w-full */}
+                            {/* GA Bubble Removed */}
+                            <div
+                              className={`w-full p-2 rounded-xl font-bold ${item.agentName === 'Aux' ? 'bg-sky-700/90' : 'bg-slate-800'}`}
+                              style={{ color: '#e2e8f0', position: 'relative' }}
                             >
-                              {/* Show agent name as a small label if provided */}
                               {item.agentName && (
-                                <div className="text-[10px] uppercase tracking-wider opacity-75 mb-1">
+                                <div className="text-[10px] uppercase tracking-wider text-slate-400 mb-1">
                                   {item.agentName === 'Aux' ? '👉 Quick Response' : 'Main Assistant'}
                                 </div>
                               )}
                               
                               <div className={`whitespace-pre-wrap ${messageStyle}`}
-                                  style={{ fontSize: fontSize, lineHeight: 1.5 }}>
+                                  style={{ fontSize: '12px', lineHeight: '1.4' }}>
                                 <ReactMarkdown>{displayTitle}</ReactMarkdown>
                               </div>
                             </div>
@@ -361,7 +357,7 @@ const Transcript: React.FC<TranscriptProps> = ({
                     return (
                       <div
                         key={itemId}
-                        className={`flex justify-center ${theme === 'dark' ? 'text-gray-400' : 'text-gray-500'} text-sm italic font-mono`}
+                        className={`flex justify-center ${theme === 'dark' ? 'text-slate-500' : 'text-slate-500'} text-sm italic font-mono`}
                       >
                         Unknown item type: {type}{" "}
                         <span className="ml-2 text-xs">{timestamp}</span>
@@ -379,7 +375,7 @@ const Transcript: React.FC<TranscriptProps> = ({
                   <button
                     onClick={sendMessageWithScreenshot}
                     disabled={!canSend || !userText.trim()}
-                    className={`${theme === 'dark' ? 'bg-gray-700 hover:bg-gray-600' : 'bg-gray-200 hover:bg-gray-300'} rounded-l-full p-1.5 h-[34px] border ${theme === 'dark' ? 'border-gray-600' : 'border-gray-300'} flex items-center justify-center disabled:opacity-50`}
+                    className={`${theme === 'dark' ? 'bg-slate-700 hover:bg-slate-600' : 'bg-slate-300 hover:bg-slate-400'} rounded-l-full p-1.5 h-[34px] border ${theme === 'dark' ? 'border-slate-600' : 'border-slate-400'} flex items-center justify-center disabled:opacity-50`}
                     title="Send message with screenshot"
                   >
                     <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16">
@@ -394,7 +390,7 @@ const Transcript: React.FC<TranscriptProps> = ({
                     value={userText}
                     onChange={(e) => setUserText(e.target.value)}
                     onKeyDown={handleKeyDown}
-                    className={`flex-1 px-3 py-1.5 focus:outline-none text-sm border-y ${theme === 'dark' ? 'border-gray-600 bg-gray-700 text-gray-200' : 'border-gray-200 bg-white text-gray-800'}`}
+                    className={`flex-1 px-3 py-1.5 focus:outline-none text-sm border-y ${theme === 'dark' ? 'border-slate-600 bg-slate-700 text-slate-200 placeholder-slate-400' : 'border-slate-300 bg-white text-slate-800 placeholder-slate-500'}`}
                     placeholder="Type a message..."
                     autoFocus
                   />
@@ -407,14 +403,14 @@ const Transcript: React.FC<TranscriptProps> = ({
                         onSendMessage();
                       }}
                       disabled={!canSend || !userText.trim()}
-                      className={`${theme === 'dark' ? 'bg-blue-600' : 'bg-gray-900'} text-white rounded-r-full p-1.5 h-[34px] border ${theme === 'dark' ? 'border-blue-600' : 'border-gray-900'} border-l-0 disabled:opacity-50 flex items-center justify-center`}
+                      className={`${theme === 'dark' ? 'bg-sky-600 hover:bg-sky-700' : 'bg-sky-500 hover:bg-sky-600'} text-white rounded-r-full p-1.5 h-[34px] border ${theme === 'dark' ? 'border-sky-600 hover:border-sky-700' : 'border-sky-500 hover:border-sky-600'} border-l-0 disabled:opacity-50 flex items-center justify-center`}
                     >
                       <SendHorizonal size={16} />
                     </button>
                   ) : (
                     <button
                       onClick={() => setIsInputExpanded(false)}
-                      className={`${theme === 'dark' ? 'bg-gray-600 text-gray-200' : 'bg-gray-400 text-gray-800'} rounded-r-full p-1.5 h-[34px] border ${theme === 'dark' ? 'border-gray-600' : 'border-gray-400'} border-l-0 flex items-center justify-center`}
+                      className={`${theme === 'dark' ? 'bg-slate-600 text-slate-200' : 'bg-slate-400 text-slate-800'} rounded-r-full p-1.5 h-[34px] border ${theme === 'dark' ? 'border-slate-600' : 'border-slate-400'} border-l-0 flex items-center justify-center`}
                     >
                       <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="currentColor" viewBox="0 0 16 16">
                         <path fillRule="evenodd" d="M8 4a.5.5 0 0 1 .5.5v5.793l2.146-2.147a.5.5 0 0 1 .708.708l-3 3a.5.5 0 0 1-.708 0l-3-3a.5.5 0 1 1 .708-.708L7.5 10.293V4.5A.5.5 0 0 1 8 4z"/>
@@ -425,7 +421,7 @@ const Transcript: React.FC<TranscriptProps> = ({
               ) : (
                 <button
                   onClick={() => setIsInputExpanded(true)}
-                  className={`${theme === 'dark' ? 'bg-blue-600 hover:bg-blue-700' : 'bg-gray-900 hover:bg-gray-800'} text-white rounded-full p-2 absolute bottom-2 right-2`}
+                  className={`${theme === 'dark' ? 'bg-sky-600 hover:bg-sky-700' : 'bg-sky-500 hover:bg-sky-600'} text-white rounded-full p-2 absolute bottom-2 right-2`}
                   title="Open keyboard"
                 >
                   <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" fill="currentColor" viewBox="0 0 16 16">

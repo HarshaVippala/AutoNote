@@ -45,12 +45,12 @@ const EnhancedAnalysisPane: FC<EnhancedAnalysisPaneProps> = ({
   const renderStarSectionContent = (content: string | undefined, index: number) => {
     if (!content) return null;
     const bgColor = index % 2 === 0
-      ? (theme === 'dark' ? 'bg-gray-800' : 'bg-gray-50')
-      : (theme === 'dark' ? 'bg-gray-850' : 'bg-white');
+      ? (theme === 'dark' ? 'bg-slate-800' : 'bg-slate-50') // slate-800 for dark
+      : (theme === 'dark' ? 'bg-slate-700' : 'bg-white'); // slate-700 for dark (slightly different for alternation)
 
     return (
       <div key={index} className={`p-3 ${bgColor}`}>
-        <p className="text-xs whitespace-pre-wrap break-words text-justify">{content}</p>
+        <p className={`text-xs whitespace-pre-wrap break-words text-justify ${theme === 'dark' ? 'text-slate-300' : 'text-slate-700'}`}>{content}</p>
       </div>
     );
   };
@@ -59,8 +59,8 @@ const EnhancedAnalysisPane: FC<EnhancedAnalysisPaneProps> = ({
   const renderStarResponse = (starData: StarData, isFollowUp: boolean = false) => {
     const sections: (keyof StarData)[] = ['situation', 'task', 'action', 'result'];
     return (
-      <div className={`border rounded ${theme === 'dark' ? 'border-gray-700' : 'border-gray-300'} overflow-hidden`}>
-        {isFollowUp && <h4 className={`text-xs font-bold p-2 border-b ${theme === 'dark' ? 'bg-gray-700 text-gray-300 border-gray-600' : 'bg-gray-200 text-gray-700 border-gray-300'}`}>Follow-up:</h4>}
+      <div className={`border rounded ${theme === 'dark' ? 'border-slate-700' : 'border-slate-300'} overflow-hidden`}>
+        {isFollowUp && <h4 className={`text-xs font-bold p-2 border-b ${theme === 'dark' ? 'bg-slate-700 text-slate-300 border-slate-600' : 'bg-slate-200 text-slate-700 border-slate-300'}`}>Follow-up:</h4>}
         {sections.map((key, index) => renderStarSectionContent(starData[key], index))}
       </div>
     );
@@ -76,31 +76,31 @@ const EnhancedAnalysisPane: FC<EnhancedAnalysisPaneProps> = ({
     // Determine how to render the content based on the key and value type
     if (key === 'cd' && typeof value === 'string') {
       // Render code using <pre>
-      contentElement = <pre className={`text-xs font-mono p-2 rounded whitespace-pre-wrap break-words ${theme === 'dark' ? 'bg-gray-700 text-gray-300' : 'bg-gray-200 text-gray-800'}`}>{value}</pre>;
+      contentElement = <pre className={`text-xs font-mono p-2 rounded whitespace-pre-wrap break-words ${theme === 'dark' ? 'bg-slate-700 text-slate-300' : 'bg-slate-200 text-slate-800'}`}>{value}</pre>;
     } else if (key === 'cmplx' && typeof value === 'object' && value !== null && 't' in value && 's' in value) {
       // Render complexity object nicely
       contentElement = (
         <div className="space-y-2">
-          <div className={`p-2 rounded ${theme === 'dark' ? 'bg-gray-800' : 'bg-gray-100'}`}>
+          <div className={`p-2 rounded ${theme === 'dark' ? 'bg-slate-800 text-slate-200' : 'bg-slate-100 text-slate-800'}`}>
             <p className="whitespace-pre-wrap break-words font-semibold">Time Complexity: <span className="font-bold">{value.t}</span></p>
-            <p className="whitespace-pre-wrap break-words text-xs mt-1 ml-4 opacity-80">
-              {value.t.includes('O(n + m)') 
-                ? 'Where n and m are the lengths of the two input arrays. The algorithm processes each element exactly once.' 
-                : value.t.includes('O(n)') 
+            <p className={`whitespace-pre-wrap break-words text-xs mt-1 ml-4 ${theme === 'dark' ? 'text-slate-400' : 'text-slate-600'}`}>
+              {value.t.includes('O(n + m)')
+                ? 'Where n and m are the lengths of the two input arrays. The algorithm processes each element exactly once.'
+                : value.t.includes('O(n)')
                   ? 'Where n is the total number of elements across all inputs. Linear time as we process each element once.'
-                  : value.t.includes('O(1)') 
+                  : value.t.includes('O(1)')
                     ? 'Constant time operations regardless of input size.'
                     : ''}
             </p>
           </div>
-          <div className={`p-2 rounded ${theme === 'dark' ? 'bg-gray-800' : 'bg-gray-100'}`}>
+          <div className={`p-2 rounded ${theme === 'dark' ? 'bg-slate-800 text-slate-200' : 'bg-slate-100 text-slate-800'}`}>
             <p className="whitespace-pre-wrap break-words font-semibold">Space Complexity: <span className="font-bold">{value.s}</span></p>
-            <p className="whitespace-pre-wrap break-words text-xs mt-1 ml-4 opacity-80">
-              {value.s.includes('O(n + m)') 
-                ? 'Where n and m are the lengths of the two input arrays. We create a new output array to store all elements.' 
-                : value.s.includes('O(n)') 
+            <p className={`whitespace-pre-wrap break-words text-xs mt-1 ml-4 ${theme === 'dark' ? 'text-slate-400' : 'text-slate-600'}`}>
+              {value.s.includes('O(n + m)')
+                ? 'Where n and m are the lengths of the two input arrays. We create a new output array to store all elements.'
+                : value.s.includes('O(n)')
                   ? 'Where n is the total number of elements. We need space proportional to the input size.'
-                  : value.s.includes('O(1)') 
+                  : value.s.includes('O(1)')
                     ? 'Constant space usage regardless of input size.'
                     : ''}
             </p>
@@ -109,21 +109,21 @@ const EnhancedAnalysisPane: FC<EnhancedAnalysisPaneProps> = ({
       );
     } else if (Array.isArray(value)) {
       // Render arrays as lists
-      contentElement = <ul className="list-disc list-inside space-y-1">{value.map((item: any, index: number) => <li key={index} className="break-words">{typeof item === 'object' ? <pre className={`text-xs font-mono p-1 rounded whitespace-pre-wrap break-words ${theme === 'dark' ? 'bg-gray-700' : 'bg-gray-200'}`}>{JSON.stringify(item, null, 2)}</pre> : String(item)}</li>)}</ul>;
+      contentElement = <ul className="list-disc list-inside space-y-1">{value.map((item: any, index: number) => <li key={index} className={`break-words ${theme === 'dark' ? 'text-slate-300' : 'text-slate-700'}`}>{typeof item === 'object' ? <pre className={`text-xs font-mono p-1 rounded whitespace-pre-wrap break-words ${theme === 'dark' ? 'bg-slate-700 text-slate-300' : 'bg-slate-200 text-slate-700'}`}>{JSON.stringify(item, null, 2)}</pre> : String(item)}</li>)}</ul>;
     } else if (typeof value === 'object' && value !== null) {
        // Render other objects by mapping key-value pairs
-       contentElement = Object.entries(value).map(([subKey, subValue]) => <p key={subKey} className="whitespace-pre-wrap break-words ml-2"><strong className="capitalize">{subKey}:</strong> {String(subValue)}</p>);
+       contentElement = Object.entries(value).map(([subKey, subValue]) => <p key={subKey} className={`whitespace-pre-wrap break-words ml-2 ${theme === 'dark' ? 'text-slate-300' : 'text-slate-700'}`}><strong className="capitalize">{subKey}:</strong> {String(subValue)}</p>);
     } else {
       // Render plain strings or other types
-      contentElement = <p className="whitespace-pre-wrap break-words">{String(value)}</p>;
+      contentElement = <p className={`whitespace-pre-wrap break-words ${theme === 'dark' ? 'text-slate-300' : 'text-slate-700'}`}>{String(value)}</p>;
     }
 
     // Return the rendered field
     return (
       <div key={key} className="mb-3">
-        <h3 className={`text-xs font-semibold mb-1 ${theme === 'dark' ? 'text-blue-400' : 'text-blue-600'}`}>{title}:</h3>
-        <div className="text-xs ml-1">{contentElement}</div>
-        <hr className={`my-2 opacity-50 last:hidden ${theme === 'dark' ? 'border-gray-600' : 'border-gray-300'}`} />
+        <h3 className={`text-xs font-semibold mb-1 ${theme === 'dark' ? 'text-sky-400' : 'text-sky-600'}`}>{title}:</h3>
+        <div className={`text-xs ml-1 ${theme === 'dark' ? 'text-slate-300' : 'text-slate-700'}`}>{contentElement}</div>
+        <hr className={`my-2 opacity-50 last:hidden ${theme === 'dark' ? 'border-slate-700' : 'border-slate-300'}`} />
       </div>
     );
   };
@@ -133,7 +133,7 @@ const EnhancedAnalysisPane: FC<EnhancedAnalysisPaneProps> = ({
     if (!activeTab) {
       return (
          <div className="flex-1 flex items-center justify-center text-gray-500 h-full">
-             <p className={`text-xs italic ${theme === 'dark' ? 'text-gray-400' : 'text-gray-600'}`}>Select a tab to see analysis.</p>
+             <p className={`text-xs italic ${theme === 'dark' ? 'text-slate-500' : 'text-slate-400'}`}>Select a tab to see analysis.</p>
          </div>
       );
     }
@@ -142,7 +142,7 @@ const EnhancedAnalysisPane: FC<EnhancedAnalysisPaneProps> = ({
     if (activeTab.structuredAnalysis && typeof activeTab.structuredAnalysis === 'object' && 'status' in activeTab.structuredAnalysis && activeTab.structuredAnalysis.status === 'streaming') {
       return (
         <div className="flex-1 flex items-center justify-center text-gray-500 h-full">
-          <p className={`text-xs italic ${theme === 'dark' ? 'text-gray-400' : 'text-gray-600'}`}>Streaming response...</p>
+          <p className={`text-xs italic ${theme === 'dark' ? 'text-slate-500' : 'text-slate-400'}`}>Streaming response...</p>
         </div>
       );
     }
@@ -163,11 +163,11 @@ const EnhancedAnalysisPane: FC<EnhancedAnalysisPaneProps> = ({
           <div className="flex-shrink-0 mb-4">
             {renderStarResponse(originalStarData)}
           </div>
-          <hr className={`my-2 border-t-2 ${theme === 'dark' ? 'border-gray-600' : 'border-gray-300'}`} />
+          <hr className={`my-2 border-t-2 ${theme === 'dark' ? 'border-slate-700' : 'border-slate-300'}`} />
           <div className="flex-1 overflow-y-auto pt-4 pr-2">
             {followUpData.length > 0 ? (
               <>
-                <h3 className={`text-sm font-semibold mb-3 ${theme === 'dark' ? 'text-gray-200' : 'text-gray-800'}`}>Follow-up Responses</h3>
+                <h3 className={`text-sm font-semibold mb-3 ${theme === 'dark' ? 'text-slate-200' : 'text-slate-800'}`}>Follow-up Responses</h3>
                 <div className="space-y-4">
                   {followUpData.map((followUp, index) => (
                     <div key={`followup-${index}`}>
@@ -177,7 +177,7 @@ const EnhancedAnalysisPane: FC<EnhancedAnalysisPaneProps> = ({
                 </div>
               </>
             ) : (
-              <p className={`text-xs italic ${theme === 'dark' ? 'text-gray-500' : 'text-gray-400'}`}>No follow-up responses yet.</p>
+              <p className={`text-xs italic ${theme === 'dark' ? 'text-slate-500' : 'text-slate-400'}`}>No follow-up responses yet.</p>
             )}
           </div>
         </div>
@@ -211,41 +211,41 @@ const EnhancedAnalysisPane: FC<EnhancedAnalysisPaneProps> = ({
             if (key === 'analysis' && typeof value === 'string') {
               content = (
                 <div className="mb-2">
-                  <h3 className={`text-xs font-semibold mb-1 ${theme === 'dark' ? 'text-blue-400' : 'text-blue-600'}`}>Analysis:</h3>
-                  <p className="whitespace-pre-wrap break-words">{value}</p>
+                  <h3 className={`text-xs font-semibold mb-1 ${theme === 'dark' ? 'text-sky-400' : 'text-sky-600'}`}>Analysis:</h3>
+                  <p className={`whitespace-pre-wrap break-words ${theme === 'dark' ? 'text-slate-300' : 'text-slate-700'}`}>{value}</p>
                 </div>
               );
             } else if (key === 'tol' && typeof value === 'string') {
-              content = <p className="whitespace-pre-wrap break-words">{value}</p>;
+              content = <p className={`whitespace-pre-wrap break-words ${theme === 'dark' ? 'text-slate-300' : 'text-slate-700'}`}>{value}</p>;
             } else if (key === 'cq' && Array.isArray(value)) {
               content = value.length > 0 ? (
                 <ul className="list-disc list-inside">
-                  {value.map((item, i) => <li key={i} className="whitespace-pre-wrap break-words">{item}</li>)}
+                  {value.map((item, i) => <li key={i} className={`whitespace-pre-wrap break-words ${theme === 'dark' ? 'text-slate-300' : 'text-slate-700'}`}>{item}</li>)}
                 </ul>
               ) : null;
             } else if (key === 'cmplx' && typeof value === 'object' && 't' in value && 's' in value) {
               content = (
                 <div className="space-y-2">
-                  <div className={`p-2 rounded ${theme === 'dark' ? 'bg-gray-800' : 'bg-gray-100'}`}>
+                  <div className={`p-2 rounded ${theme === 'dark' ? 'bg-slate-800 text-slate-200' : 'bg-slate-100 text-slate-800'}`}>
                     <p className="whitespace-pre-wrap break-words font-semibold">Time Complexity: <span className="font-bold">{value.t}</span></p>
-                    <p className="whitespace-pre-wrap break-words text-xs mt-1 ml-4 opacity-80">
-                      {value.t.includes('O(n + m)') 
-                        ? 'Where n and m are the lengths of the two input arrays. The algorithm processes each element exactly once.' 
-                        : value.t.includes('O(n)') 
+                    <p className={`whitespace-pre-wrap break-words text-xs mt-1 ml-4 ${theme === 'dark' ? 'text-slate-400' : 'text-slate-600'}`}>
+                      {value.t.includes('O(n + m)')
+                        ? 'Where n and m are the lengths of the two input arrays. The algorithm processes each element exactly once.'
+                        : value.t.includes('O(n)')
                           ? 'Where n is the total number of elements across all inputs. Linear time as we process each element once.'
-                          : value.t.includes('O(1)') 
+                          : value.t.includes('O(1)')
                             ? 'Constant time operations regardless of input size.'
                             : ''}
                     </p>
                   </div>
-                  <div className={`p-2 rounded ${theme === 'dark' ? 'bg-gray-800' : 'bg-gray-100'}`}>
+                  <div className={`p-2 rounded ${theme === 'dark' ? 'bg-slate-800 text-slate-200' : 'bg-slate-100 text-slate-800'}`}>
                     <p className="whitespace-pre-wrap break-words font-semibold">Space Complexity: <span className="font-bold">{value.s}</span></p>
-                    <p className="whitespace-pre-wrap break-words text-xs mt-1 ml-4 opacity-80">
-                      {value.s.includes('O(n + m)') 
-                        ? 'Where n and m are the lengths of the two input arrays. We create a new output array to store all elements.' 
-                        : value.s.includes('O(n)') 
+                    <p className={`whitespace-pre-wrap break-words text-xs mt-1 ml-4 ${theme === 'dark' ? 'text-slate-400' : 'text-slate-600'}`}>
+                      {value.s.includes('O(n + m)')
+                        ? 'Where n and m are the lengths of the two input arrays. We create a new output array to store all elements.'
+                        : value.s.includes('O(n)')
                           ? 'Where n is the total number of elements. We need space proportional to the input size.'
-                          : value.s.includes('O(1)') 
+                          : value.s.includes('O(1)')
                             ? 'Constant space usage regardless of input size.'
                             : ''}
                     </p>
@@ -256,7 +256,7 @@ const EnhancedAnalysisPane: FC<EnhancedAnalysisPaneProps> = ({
               content = (
                 <div className="space-y-2">
                   {value.map((tc, i) => (
-                    <div key={i} className={`p-2 rounded ${theme === 'dark' ? 'bg-gray-800' : 'bg-gray-100'}`}>
+                    <div key={i} className={`p-2 rounded ${theme === 'dark' ? 'bg-slate-800 text-slate-200' : 'bg-slate-100 text-slate-800'}`}>
                       <p className="whitespace-pre-wrap break-words"><strong>Input:</strong> {tc.in}</p>
                       <p className="whitespace-pre-wrap break-words"><strong>Output:</strong> {tc.out}</p>
                     </div>
@@ -264,21 +264,21 @@ const EnhancedAnalysisPane: FC<EnhancedAnalysisPaneProps> = ({
                 </div>
               );
             } else if (key === 'ec' && typeof value === 'string') {
-              content = <p className="whitespace-pre-wrap break-words">{value}</p>;
+              content = <p className={`whitespace-pre-wrap break-words ${theme === 'dark' ? 'text-slate-300' : 'text-slate-700'}`}>{value}</p>;
             } else if (key === 'opt' && typeof value === 'string') {
-              content = <p className="whitespace-pre-wrap break-words">{value}</p>;
+              content = <p className={`whitespace-pre-wrap break-words ${theme === 'dark' ? 'text-slate-300' : 'text-slate-700'}`}>{value}</p>;
             } else {
               // Fallback for any other type
               content = typeof value === 'object' ? 
-                <pre className={`text-xs font-mono rounded whitespace-pre-wrap break-words ${theme === 'dark' ? 'bg-gray-700 text-gray-300' : 'bg-gray-200 text-gray-800'}`}>{JSON.stringify(value, null, 2)}</pre> : 
-                <p className="whitespace-pre-wrap break-words">{String(value)}</p>;
+                <pre className={`text-xs font-mono rounded whitespace-pre-wrap break-words ${theme === 'dark' ? 'bg-slate-700 text-slate-300' : 'bg-slate-200 text-slate-700'}`}>{JSON.stringify(value, null, 2)}</pre> :
+                <p className={`whitespace-pre-wrap break-words ${theme === 'dark' ? 'text-slate-300' : 'text-slate-700'}`}>{String(value)}</p>;
             }
             
             return (
               <div key={key} className="mb-4">
                 {content}
                 {index < fieldOrder.length - 1 && (
-                  <hr className={`my-3 ${theme === 'dark' ? 'border-gray-700' : 'border-gray-300'}`} />
+                  <hr className={`my-3 ${theme === 'dark' ? 'border-slate-700' : 'border-slate-300'}`} />
                 )}
               </div>
             );
@@ -291,8 +291,8 @@ const EnhancedAnalysisPane: FC<EnhancedAnalysisPaneProps> = ({
        // Explanation is usually added directly to transcript, show fallback here
        return (
          <div className="w-full p-3">
-           <h3 className={`text-xs font-semibold mb-1 ${theme === 'dark' ? 'text-blue-400' : 'text-blue-600'}`}>Explanation:</h3>
-           <p className="text-xs whitespace-pre-wrap break-words text-justify">
+           <h3 className={`text-xs font-semibold mb-1 ${theme === 'dark' ? 'text-sky-400' : 'text-sky-600'}`}>Explanation:</h3>
+           <p className={`text-xs whitespace-pre-wrap break-words text-justify ${theme === 'dark' ? 'text-slate-300' : 'text-slate-700'}`}>
              {(analysisData as any)?.explanation || 'Explanation content not found.'}
            </p>
          </div>
@@ -310,12 +310,12 @@ const EnhancedAnalysisPane: FC<EnhancedAnalysisPaneProps> = ({
          }
        } catch (e) {
          console.warn('[AnalysisPane] Failed to parse fallback analysis string, rendering raw:', activeTab?.analysis);
-         return <pre className={`text-xs whitespace-pre-wrap font-mono p-3 ${theme === 'dark' ? 'text-gray-300' : 'text-gray-700'}`}>{activeTab?.analysis}</pre>;
+         return <pre className={`text-xs whitespace-pre-wrap font-mono p-3 ${theme === 'dark' ? 'text-slate-300' : 'text-slate-700'}`}>{activeTab?.analysis}</pre>;
        }
     }
 
     // Final fallback if no data is available
-    return <p className={`text-xs italic p-3 ${theme === 'dark' ? 'text-gray-400' : 'text-gray-600'}`}>No analysis available for this tab.</p>;
+    return <p className={`text-xs italic p-3 ${theme === 'dark' ? 'text-slate-500' : 'text-slate-400'}`}>No analysis available for this tab.</p>;
   }; // End of renderMainContent
 
   // --- Component Return ---

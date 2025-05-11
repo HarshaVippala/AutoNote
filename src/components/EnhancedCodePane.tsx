@@ -60,7 +60,7 @@ const EnhancedCodePane: React.FC<EnhancedCodePaneProps> = ({
           <div className="flex-1 overflow-y-auto overflow-x-auto mt-1">
             {activeTab ? (
               activeTab.code === "Streaming..." ? (
-                <div className={`p-4 text-xs italic ${theme === 'dark' ? 'text-gray-400' : 'text-gray-600'}`}>Streaming code...</div>
+                <div className={`p-4 text-xs italic ${theme === 'dark' ? 'text-slate-400' : 'text-slate-500'}`}>Streaming code...</div>
               ) :
               activeTab.language === 'markdown' ? (
                 <div className="p-2">
@@ -75,9 +75,10 @@ const EnhancedCodePane: React.FC<EnhancedCodePaneProps> = ({
                   language={activeTab.language}
                   style={codeStyle}
                   customStyle={{ 
-                    background: 'transparent', 
-                    fontSize: '0.45rem', 
-                    margin: 0, 
+                    background: theme === 'dark' ? '#1e293b' : '#f1f5f9', // slate-800 or slate-100
+                    color: theme === 'dark' ? '#e2e8f0' : '#1e293b', // slate-200 or slate-800 for text
+                    fontSize: '0.45rem',
+                    margin: 0,
                     padding: '0.35rem',
                     lineHeight: '1.2',
                     maxHeight: '100%',
@@ -87,19 +88,18 @@ const EnhancedCodePane: React.FC<EnhancedCodePaneProps> = ({
                   wrapLines={true}
                   showLineNumbers={false}
                 >
-                  {/* Apply preprocessing to code before rendering */}
                   {preprocessCode(activeTab.code)}
                 </SyntaxHighlighter>
               )
             ) : (
-              <div className={`p-4 text-center ${theme === 'dark' ? 'text-gray-400' : 'text-gray-600'}`}>
+              <div className={`p-4 text-center ${theme === 'dark' ? 'text-slate-400' : 'text-slate-500'}`}>
                 No code tab selected or available.
               </div>
             )}
           </div>
         </div>
       ) : (
-        <div className={`p-4 text-center ${theme === 'dark' ? 'text-gray-400' : 'text-gray-600'}`}>
+        <div className={`p-4 text-center ${theme === 'dark' ? 'text-slate-400' : 'text-slate-500'}`}>
           No code tabs available.
         </div>
       )}

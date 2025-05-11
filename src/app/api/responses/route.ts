@@ -1,12 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod'; // Import zod for schema definition and validation
 import { zodToJsonSchema } from 'zod-to-json-schema'; // Helper to convert Zod schema to JSON schema
-import OpenAI from "openai"; // Use the standard import for value
-import type { ChatCompletionTool } from 'openai/resources/chat/completions'; // Keep for type safety if needed elsewhere
-// Removed Vercel AI SDK imports
+import OpenAI from "openai";
+import type { ChatCompletionTool } from 'openai/resources/chat/completions';
+import { logger } from '../../../lib/logger'; // Import the shared logger
 
 // Initialize OpenAI client using environment variables
-// Ensure your OPENAI_API_KEY is set in your .env file
 const openaiSDK = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
 });
@@ -185,16 +184,18 @@ export async function POST(req: NextRequest) {
         previousResponseId // Optional: ID of the previous response for follow-up context
     } = body;
 
+    logger.info('[API /api/responses] Request body:', body); // Log incoming request body
+
     // Validate required fields
     if (!transcript || typeof transcript !== 'string' || !conversationId) {
-        console.warn('[API Route] Invalid request: Missing or invalid speaker transcript/conversationId.', { transcript, conversationId });
-        return NextResponse.json({ error: "Valid speaker transcript (string) and conversationId are required" }, { status: 400 });
-    }
-    // Validate optional lastUserTranscript
-    if (lastUserTranscript && typeof lastUserTranscript !== 'string') {
-       console.warn('[API Route] Invalid request: lastUserTranscript provided but not a string.', { lastUserTranscript });
-       return NextResponse.json({ error: "If provided, lastUserTranscript must be a string" }, { status: 400 });
-    }
+            logger.warn('[API Route] Invalid request: Missing or invalid speaker transcript/conversationId.', { transcript, conversationId });
+            return NextResponse.json({ error: "Valid speaker transcript (string) and conversationId are required" }, { status: 400 });
+        }
+        // Validate optional lastUserTranscript
+        if (lastUserTranscript && typeof lastUserTranscript !== 'string') {
+           logger.warn('[API Route] Invalid request: lastUserTranscript provided but not a string.', { lastUserTranscript });
+           return NextResponse.json({ error: "If provided, lastUserTranscript must be a string" }, { status: 400 });
+        }
 
     // --- Context Management ---
     // Retrieve context first to check for follow-ups
@@ -206,7 +207,7 @@ export async function POST(req: NextRequest) {
 
     // --- Determine Question Type and Model (based on SPEAKER transcript) ---
     let determinedQuestionType: string | null = null;
-    let determinedModel: string | null = null;
+    let classifiedTypeFromCurrentTranscript: string | null = null;
 
     const selectModelBasedOnType = (type: string): string => {
         switch (type) {
@@ -219,66 +220,95 @@ export async function POST(req: NextRequest) {
         }
     };
 
-    // If it's a follow-up, use the previous question type
-    if (isFollowUp && context?.lastQuestionType) {
-        determinedQuestionType = context.lastQuestionType;
-        determinedModel = selectModelBasedOnType(determinedQuestionType || "BEHAVIORAL_QUESTION");
-    }
-    // If explicit question type provided and not a follow-up, use it
-    else if (initialQuestionType) {
-        determinedQuestionType = initialQuestionType;
-        determinedModel = initialModel || (typeof determinedQuestionType === 'string' ? selectModelBasedOnType(determinedQuestionType) : selectModelBasedOnType("GENERAL_QUESTION"));
-    }
-    // Otherwise classify the transcript
-    else {
-        try {
-            // **MODIFIED**: Classify the SPEAKER'S transcript with improved few-shot examples
-            const classificationPrompt = `Classify the following system audio transcript into one category: CODE_QUESTION, BEHAVIORAL_QUESTION, or GENERAL_QUESTION.
-
+    // Step 1: Initial Classification of the current transcript
+    try {
+        const classificationPrompt = `Classify the following system audio transcript into one category: CODE_QUESTION, BEHAVIORAL_QUESTION, or GENERAL_QUESTION.
 Examples:
 - "Write a function to reverse a linked list" → CODE_QUESTION
 - "Tell me about your experience handling a difficult team situation" → BEHAVIORAL_QUESTION
 - "What is binary search?" → GENERAL_QUESTION
 - "Explain how quicksort works" → GENERAL_QUESTION
 - "Implement a binary search tree in Python" → CODE_QUESTION
-
 Classification guidelines:
 - CODE_QUESTION: Requests to write, implement, or debug specific code
 - BEHAVIORAL_QUESTION: Questions about personal experiences or situational responses
 - GENERAL_QUESTION: Requests for explanations, concepts, or information (including algorithm explanations)
-
 Respond ONLY with the category name. Transcript: "${transcript}"`;
-            const classificationResponse = await openaiSDK.chat.completions.create({
-                model: "gpt-4o-mini",
-                messages: [{ role: "user", content: classificationPrompt }],
-                max_tokens: 15,
-                temperature: 0,
-            });
-            const classifiedType = classificationResponse.choices[0]?.message?.content?.trim();
+        const classificationResponse = await openaiSDK.chat.completions.create({
+            model: "gpt-4o-mini", // Using a fast model for classification
+            messages: [{ role: "user", content: classificationPrompt }],
+            max_tokens: 15,
+            temperature: 0,
+        });
+        const ct = classificationResponse.choices[0]?.message?.content?.trim();
+        if (ct && ["CODE_QUESTION", "BEHAVIORAL_QUESTION", "GENERAL_QUESTION"].includes(ct)) {
+            classifiedTypeFromCurrentTranscript = ct;
+        } else {
+            classifiedTypeFromCurrentTranscript = "GENERAL_QUESTION"; // Default if classification is not one of the expected
+        }
+        logger.info(`[API Route] Initial classification of current transcript: "${transcript}" -> ${classifiedTypeFromCurrentTranscript}`);
+    } catch (classificationError) {
+        logger.error('[API Route] Classification error:', classificationError);
+        classifiedTypeFromCurrentTranscript = "GENERAL_QUESTION"; // Default on error
+    }
 
-            if (classifiedType && ["CODE_QUESTION", "BEHAVIORAL_QUESTION", "GENERAL_QUESTION"].includes(classifiedType)) {
-                determinedQuestionType = classifiedType;
-                determinedModel = selectModelBasedOnType(determinedQuestionType);
-            } else {
-                determinedQuestionType = "GENERAL_QUESTION"; // Default
-                determinedModel = selectModelBasedOnType(determinedQuestionType);
-            }
-        } catch (classificationError) {
-             console.error('[API Route] Classification error:', classificationError);
-             determinedQuestionType = "GENERAL_QUESTION";
-             determinedModel = selectModelBasedOnType(determinedQuestionType);
+    // Step 2: Determine determinedQuestionType based on initial input, follow-up status, and classification
+    if (initialQuestionType) {
+        determinedQuestionType = initialQuestionType;
+        logger.info(`[API Route] Using initialQuestionType from request: ${determinedQuestionType}`);
+    } else if (isFollowUp && context?.lastQuestionType) {
+        if (classifiedTypeFromCurrentTranscript &&
+            classifiedTypeFromCurrentTranscript !== "GENERAL_QUESTION" &&
+            classifiedTypeFromCurrentTranscript !== context.lastQuestionType) {
+            determinedQuestionType = classifiedTypeFromCurrentTranscript;
+            logger.info(`[API Route] Follow-up: Current classification (${determinedQuestionType}) overrides lastQuestionType (${context.lastQuestionType}).`);
+        } else if (classifiedTypeFromCurrentTranscript && classifiedTypeFromCurrentTranscript === "GENERAL_QUESTION" && context.lastQuestionType !== "GENERAL_QUESTION" && transcript.length < 30) {
+            determinedQuestionType = context.lastQuestionType;
+            logger.info(`[API Route] Follow-up: Short general query, sticking with last specific QuestionType: ${determinedQuestionType}`);
+        } else {
+            determinedQuestionType = context.lastQuestionType;
+            logger.info(`[API Route] Follow-up: Using lastQuestionType: ${determinedQuestionType}. Current classification was: ${classifiedTypeFromCurrentTranscript}`);
+        }
+    } else {
+        determinedQuestionType = classifiedTypeFromCurrentTranscript; // Will be "GENERAL_QUESTION" if null
+        logger.info(`[API Route] Not a follow-up or no lastQuestionType. Using current classification: ${determinedQuestionType}`);
+    }
+let questionTypeForContext = determinedQuestionType; // Store the type before potential override for context
+
+// Override: any follow-up after a behavioral STAR should be treated as general, unless this is a new code question
+if (isFollowUp && context?.lastQuestionType === "BEHAVIORAL_QUESTION" && classifiedTypeFromCurrentTranscript !== "CODE_QUESTION") {
+    determinedQuestionType = "GENERAL_QUESTION";
+    logger.info('[API Route] Overriding behavioral follow-up to GENERAL_QUESTION (non-code).');
+}
+
+// Step 3: Apply Override for Explanations (modifies determinedQuestionType for current call)
+if (body.tool_outputs && Array.isArray(body.tool_outputs) && body.tool_outputs.length > 0) {
+    const explanationKeywords = ["explain", "time complexity", "what is this", "how does this work", "can you clarify", "what's the complexity", "what does this do"];
+    const lowerTranscript = transcript.toLowerCase();
+    if (explanationKeywords.some(kw => lowerTranscript.includes(kw))) {
+        if (determinedQuestionType === "CODE_QUESTION" || determinedQuestionType === "BEHAVIORAL_QUESTION") {
+            logger.info(`[API Route] Overriding ${determinedQuestionType} for current call to GENERAL_QUESTION for explanation with tool_outputs.`);
+            determinedQuestionType = "GENERAL_QUESTION"; // This is for the current API call's tool selection
         }
     }
+}
 
-    // Ensure both are non-null after all logic
-    if (!determinedQuestionType) {
-        determinedQuestionType = "GENERAL_QUESTION";
-    }
-    if (!determinedModel) {
-         // determinedQuestionType is guaranteed to be a string here
-         determinedModel = selectModelBasedOnType(determinedQuestionType);
-    }
+// Step 4: Final Fallback for determinedQuestionType (for current call)
+if (!determinedQuestionType) {
+    logger.warn("[API Route] determinedQuestionType for current call was unexpectedly null, defaulting to GENERAL_QUESTION.");
+    determinedQuestionType = "GENERAL_QUESTION";
+}
+// Ensure questionTypeForContext also has a fallback if it was initially null
+if (!questionTypeForContext) {
+    questionTypeForContext = "GENERAL_QUESTION";
+}
 
+
+// Step 5: Set determinedModel ONCE based on the final determinedQuestionType (for current call)
+const determinedModel = selectModelBasedOnType(determinedQuestionType);
+logger.info(`[API Route] Final determinedQuestionType (for API call): ${determinedQuestionType}, questionTypeForContext: ${questionTypeForContext}, Final determinedModel: ${determinedModel}`);
+
+// --- Prepare Message History for API Call ---
     // --- Prepare Message History for API Call ---
     let messagesForApi: ChatMessage[] = [...assistantHistory]; // Start with assistant history
 
@@ -297,6 +327,13 @@ Respond ONLY with the category name. Transcript: "${transcript}"`;
 
     // Limit context window (e.g., last 10 effective messages: user, system, assistant)
     const limitedMessagesForApi = messagesForApi.slice(-10);
+
+    // --- Logging: Classification and Tool/Model Selection ---
+    logger.info(`[API Route] Classification result:`, {
+        determinedQuestionType,
+        determinedModel,
+        isFollowUp
+    });
 
     // --- Refine System Prompt ---
     // System prompt guides the response based on the *speaker's* transcript being the main trigger
@@ -318,9 +355,23 @@ Respond ONLY with the category name. Transcript: "${transcript}"`;
   The code should be production-quality with descriptive variable names and thorough inline comments explaining the approach.`;
             break;
         case "BEHAVIORAL_QUESTION":
-            systemPromptContent = `You are an expert AI behavioral interview assistant. Respond to the behavioral question in the SYSTEM_AUDIO_TRANSCRIPT using the STAR method (format_behavioral_star_answer). Consider preceding user message and resume context (if available in history).`;
+            systemPromptContent = `You are an expert AI behavioral interview assistant. Respond using the STAR method (format_behavioral_star_answer) to the behavioral question in the SYSTEM_AUDIO_TRANSCRIPT. Use first-person "I" to emphasize your individual contributions. Structure your response as follows:
+
+- **Situation (~50 words)**: Clearly outline the context.
+- **Task (~50 words)**: Define the objectives or challenges faced.
+- **Action (~150 words)**: Detail the specific technical steps you took, incorporating relevant industry-specific terminology and explaining them as needed.
+- **Result (~50 words)**: Quantify and clearly convey the outcomes of your actions with realistic metrics.
+- **Reflection (~50 words)**: Briefly discuss the lessons learned and how you applied them in subsequent scenarios.
+
+Ensure the entire response is concise, around 350 words, and technically accurate without exaggeration. Consider preceding user messages and resume context.`;
             break;
         case "GENERAL_QUESTION":
+            if (isFollowUp && questionTypeForContext === "BEHAVIORAL_QUESTION") {
+                systemPromptContent = `You are an expert AI assistant. This is a follow-up to a previous behavioral STAR scenario provided in context. Using that prior scenario context, precisely answer the user's question in the SYSTEM_AUDIO_TRANSCRIPT with clear, specific technical details and references. Clarify any vague points from the original scenario and focus on providing the exact issue details.`;
+            } else {
+                systemPromptContent = `You are an expert AI assistant. Provide a concise answer to the query or statement in the SYSTEM_AUDIO_TRANSCRIPT using format_simple_explanation. Consider any immediately preceding user message for context.`;
+            }
+            break;
         default:
             systemPromptContent = `You are an expert AI assistant. Provide a concise answer to the query or statement in the SYSTEM_AUDIO_TRANSCRIPT using format_simple_explanation. Consider any immediately preceding user message for context.`;
             break;
@@ -329,7 +380,7 @@ Respond ONLY with the category name. Transcript: "${transcript}"`;
     const systemPromptForApi = { role: "system", content: [{ type: 'input_text', text: systemPromptContent }] };
 
     // --- Prepare final input for the API call ---
-    const apiInput: OpenAI.Responses.ResponseInput = [
+    let apiInput: OpenAI.Responses.ResponseInput = [
       systemPromptForApi as any,
       ...(limitedMessagesForApi.map((msg: ChatMessage) => {
         // Only include role and content, strip function_call
@@ -340,34 +391,87 @@ Respond ONLY with the category name. Transcript: "${transcript}"`;
       }) as any[])
     ];
 
-    // **MODIFIED**: Filter tools based on type and set tool_choice to 'required'
+    // If tool_outputs were sent by the client, format them and append to apiInput
+    if (body.tool_outputs && Array.isArray(body.tool_outputs) && body.tool_outputs.length > 0) {
+      const formattedToolOutputs = body.tool_outputs.map((toolOut: any) => ({
+        type: "function_call_output",
+        call_id: toolOut.id, // Client sends 'id' which contains the call_id
+        output: typeof toolOut.output === 'string' ? toolOut.output : JSON.stringify(toolOut.output)
+      }));
+      apiInput = [...apiInput, ...formattedToolOutputs as any[]]; // Append to the input messages
+      logger.info('[API Route] Appended formatted tool_outputs to apiInput:', formattedToolOutputs);
+    }
+
+    // --- Logging: Tool and API Call Parameters ---
     let finalTool: any;
-    let toolChoice: any = 'required'; // Force tool usage
+    let toolChoice: any = 'required'; // Default to force tool usage
+    let toolsForApiCall: any[] = []; // Declare toolsForApiCall here
 
     switch(determinedQuestionType) {
         case "CODE_QUESTION":
             finalTool = comprehensiveTool;
+            // toolChoice remains 'required' which will pick the only tool.
             break;
         case "BEHAVIORAL_QUESTION":
             finalTool = behavioralStarTool;
+            // For behavioral, we want to provide file_search AND force the behavioralStarTool.
+            toolsForApiCall = [
+                finalTool,
+                {
+                    type: "file_search",
+                    vector_store_ids: ['vs_6806911f19a081918abcc7bbb8410f5f']
+                }
+            ];
+            // Specifically choose the function tool by name.
+            toolChoice = { type: "function", name: finalTool.name };
+            logger.info('[API Route] Added file_search to tools and set tool_choice for BEHAVIORAL_QUESTION.');
+            // No need to return here, toolsForApiCall is set, loop will assign it later if not behavioral.
             break;
         case "GENERAL_QUESTION":
         default:
             finalTool = simpleExplanationTool;
+            // toolChoice remains 'required'
             break;
     }
 
-    const toolsForApiCall = [finalTool]; // Array containing only the chosen tool
+    // If toolsForApiCall wasn't set in the BEHAVIORAL_QUESTION case, set it now.
+    // This ensures toolsForApiCall is always an array.
+    if (!Array.isArray(toolsForApiCall) || toolsForApiCall.length === 0) {
+        toolsForApiCall = [finalTool];
+    }
+
+    logger.info(`[API Route] Tool/model selection:`, {
+        tool: finalTool?.name,
+        model: determinedModel,
+        toolChoice,
+        previousResponseId
+    });
+    logger.info(`[API Route] API input preview:`, {
+        systemPrompt: systemPromptContent,
+        messages: limitedMessagesForApi.map(m => ({ role: m.role, content: m.content }))
+    });
+
+    // build params for Responses API call
+    const openAiApiParams: any = {
+        model: determinedModel!,
+        store: true,
+        input: apiInput, // apiInput now contains tool_outputs if they were provided
+        tools: toolsForApiCall,
+        stream: true
+    };
+    // only force tool_choice for non-behavioral; let model choose when using file_search for behavioral
+    if (determinedQuestionType !== "BEHAVIORAL_QUESTION") {
+        openAiApiParams.tool_choice = toolChoice;
+    }
+
+    if (previousResponseId) {
+        openAiApiParams.previous_response_id = previousResponseId;
+    }
+    // tool_outputs are now part of apiInput, so no separate top-level parameter needed here.
+    logger.info('[API Route] Calling openai.responses.create with params:', JSON.stringify(openAiApiParams, null, 2));
 
     // Call OpenAI Responses API
-    const stream = await openaiSDK.responses.create({
-            model: determinedModel!,
-            input: apiInput,
-            tools: toolsForApiCall,
-            tool_choice: toolChoice,
-            ...(previousResponseId ? { previous_response_id: previousResponseId } : {}),
-            stream: true
-    });
+    const stream = await openaiSDK.responses.create(openAiApiParams);
 
     // --- Stream Processing (Mostly unchanged, but context saving logic simplified) ---
     const readableStream = new ReadableStream({
@@ -375,7 +479,7 @@ Respond ONLY with the category name. Transcript: "${transcript}"`;
         const encoder = new TextEncoder();
         const enqueueJsonLine = (data: object) => {
           try { controller.enqueue(encoder.encode(JSON.stringify(data) + '\n')); }
-          catch (e) { console.warn("[Stream] Failed to enqueue data:", e); }
+          catch (e) { logger.warn("[Stream] Failed to enqueue data:", e); }
         };
 
         let assistantResponseArgs = "";
@@ -394,78 +498,83 @@ Respond ONLY with the category name. Transcript: "${transcript}"`;
                   assistantResponseArgs += event.delta;
                   enqueueJsonLine({ type: 'function_call_delta', index: event.output_index, delta: event.delta });
                 }
-                break;
-              case 'response.output_item.done':
-                 if (event.item?.type === 'function_call') {
-                    finalAssistantMessage = event.item; // Capture final item
-                    enqueueJsonLine({ type: 'function_call_done', index: event.output_index, item: event.item });
-                 }
-                 break;
-              case 'response.output_text.delta':
-                if (event.text_delta?.value) {
-                  enqueueJsonLine({ type: 'text_delta', delta: event.text_delta.value });
-                }
-                break;
-              case 'response.completed':
-                enqueueJsonLine({ type: 'completed', response: event.response });
-                break;
-              case 'error':
-                console.error('[API Route] Stream error event:', event.error);
-                enqueueJsonLine({ type: 'error', error: { message: event.error?.message, code: event.error?.code } });
-                controller.error(new Error(event.error?.message || 'Unknown stream error'));
-                return;
-              default: break; // Ignore others
+                case 'response.output_item.done':
+                   case 'response.output_item.done':
+                      if (event.item?.type === 'function_call') {
+                         logger.info(`[API Stream] Function call done for tool: ${event.item.name}, Args: ${event.item.arguments}`, event.item);
+                         finalAssistantMessage = event.item;
+                         enqueueJsonLine({ type: 'function_call_done', index: event.output_index, item: event.item });
+                      }
+                      break;
+                   case 'response.output_text.delta':
+                     // This case might be relevant if the explanation comes as plain text
+                     logger.info('[API Stream] Text delta:', event.text_delta?.value);
+                     if (event.text_delta?.value) {
+                       enqueueJsonLine({ type: 'text_delta', delta: event.text_delta.value });
+                     }
+                     break;
+                   case 'response.completed':
+                    logger.info('[API Stream] Response completed. Final response object:', JSON.stringify(event.response, null, 2));
+                    // Include questionTypeForContext in the completed event payload
+                    enqueueJsonLine({ type: 'completed', response: event.response, questionTypeForContext: questionTypeForContext });
+               break;
+             case 'error':
+                case 'error':
+                    logger.error('[API Route] Stream error event:', event.error);
+                    enqueueJsonLine({ type: 'error', error: { message: event.error?.message, code: event.error?.code } });
+                    controller.error(new Error(event.error?.message || 'Unknown stream error'));
+            controller.error(new Error(event.error?.message || 'Unknown stream error'));
+            return; // Exit on stream error
+        // default: break; // Removed duplicate default
+    }
+  }
+} catch (streamError) { // This catch is for the for-await loop
+  logger.error('[API Route] Error processing stream (outer catch):', streamError);
+  // Do not try to enqueue here if the controller might already be errored from an inner 'case error'
+  controller.error(streamError); // Ensure controller is errored
+} finally { // This finally is for the for-await loop's try
+  // --- Context Saving (Save only the assistant's response) ---
+  try {
+    // Re-fetch context to ensure we have the latest before modifying
+    let finalContext = await getConversationContext(conversationId) || { messages: [], lastQuestionType: null };
+
+    if (finalAssistantMessage && finalAssistantMessage.type === 'function_call') {
+        const assistantMessageToSave: ChatMessage = {
+            role: 'assistant',
+            content: [], // Use empty array instead of null
+            function_call: {
+                name: finalAssistantMessage.name,
+                arguments: assistantResponseArgs // Use accumulated args
             }
-          }
-        } catch (streamError) {
-          console.error('[API Route] Error processing stream:', streamError);
-          enqueueJsonLine({ type: 'error', error: { message: (streamError instanceof Error ? streamError.message : String(streamError)) } });
-          controller.error(streamError);
-        } finally {
-          // --- Context Saving (Save only the assistant's response) ---
-          try {
-            // Re-fetch context to ensure we have the latest before modifying
-            let finalContext = await getConversationContext(conversationId) || { messages: [], lastQuestionType: null };
+        };
+        // Add only the assistant message to the history for saving
+        finalContext.messages.push(assistantMessageToSave);
+        finalContext.lastQuestionType = questionTypeForContext; // Use pre-override type for context
+        logger.info(`[API Route] Saving context with lastQuestionType: ${questionTypeForContext}`);
+        await saveConversationContext(conversationId, finalContext);
+    } else {
+       // Optionally save text responses if accumulated
+    }
+     // Note: We are NOT saving user/system transcripts here, relying on OpenAI's session state.
+  } catch (saveError) {
+     logger.error("[Context] Error saving context:", saveError);
+  }
+  controller.close();
+} // End of finally for stream processing try
+}, // End of start(controller) method
+cancel(reason) {
+logger.warn('[API Route] Stream cancelled:', reason);
+}
+}); // End of ReadableStream constructor
+  return new Response(readableStream, {
+    headers: { 'Content-Type': 'application/jsonl; charset=utf-8', 'X-Content-Type-Options': 'nosniff' },
+  });
 
-            if (finalAssistantMessage && finalAssistantMessage.type === 'function_call') {
-                const assistantMessageToSave: ChatMessage = {
-                    role: 'assistant',
-                    content: [], // Use empty array instead of null
-                    function_call: {
-                        name: finalAssistantMessage.name,
-                        arguments: assistantResponseArgs // Use accumulated args
-                    }
-                };
-                // Add only the assistant message to the history for saving
-                finalContext.messages.push(assistantMessageToSave);
-                finalContext.lastQuestionType = determinedQuestionType; // Update last question type
-                await saveConversationContext(conversationId, finalContext);
-            } else {
-               // Optionally save text responses if accumulated
-            }
-             // Note: We are NOT saving user/system transcripts here, relying on OpenAI's session state.
-
-          } catch (saveError) {
-             console.error("[Context] Error saving context:", saveError);
-          }
-
-          controller.close();
-        }
-      },
-      cancel(reason) {
-        console.warn('[API Route] Stream cancelled:', reason);
-      }
-    });
-
-    return new Response(readableStream, {
-      headers: { 'Content-Type': 'application/jsonl; charset=utf-8', 'X-Content-Type-Options': 'nosniff' },
-    });
-
-  } catch (error) {
-    console.error('[API Route] Top-level error:', error);
+} catch (error) {
+    logger.error('[API Route] Top-level error:', error);
     if (error instanceof OpenAI.APIError) {
       return new Response(JSON.stringify({ error: error.message, details: error.code }), { status: error.status, headers: { 'Content-Type': 'application/json' } });
     }
     return new Response(JSON.stringify({ error: 'Failed request', details: (error instanceof Error ? error.message : String(error)) }), { status: 500, headers: { 'Content-Type': 'application/json' } });
-  }
-}
+  } // Closes main try-catch of POST
+} // Closes POST function

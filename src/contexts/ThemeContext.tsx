@@ -42,8 +42,8 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     root.setAttribute('data-theme', 'dark');
     
     // Update the body styles directly for immediate effect
-    document.body.style.backgroundColor = '#0a0a0a';
-    document.body.style.color = '#ededed';
+    document.body.style.backgroundColor = '#0f172a'; // slate-900
+    document.body.style.color = '#e2e8f0'; // slate-200
     
     // Broadcast theme change event for any non-React parts of the app
     const event = new CustomEvent('themechange', { detail: { theme: 'dark' } });
